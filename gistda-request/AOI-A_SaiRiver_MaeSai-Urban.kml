@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>AOI-A · แนวแม่น้ำสาย เขตเมืองแม่สาย (ทีม revenge)</name><description>ขอบเขตพื้นที่ขอข้อมูล D1, D2, D4, D6</description>
+<Placemark><name>AOI-A · แนวแม่น้ำสาย เขตเมืองแม่สาย–ท่าขี้เหล็ก (4 ชุมชนเฝ้าระวัง)</name><description>ใช้กับ: D1 ภาพ THEOS-2 ก่อน–หลังน้ำท่วม 2567 · D2 ภาพ THEOS-2 ปัจจุบัน 2569 · D4 ขอบเขตน้ำท่วม (พื้นที่เน้น) · D6 ชั้นอาคาร
+ขอบเขต: กรอบสี่เหลี่ยม 20.405–20.475°N, 99.83–99.965°E ≈ 109 ตร.กม. (≈14 × 8 กม.)
+ครอบคลุม: แม่น้ำสายช่วงที่เป็นเส้นพรมแดน จากบ้านถ้ำผาจมถึงจุดบรรจบแม่น้ำรวก ตลิ่งฝั่งไทย (ต.แม่สาย, ต.เวียงพางคำ) และฝั่งท่าขี้เหล็ก
+พิกัด WGS84 (EPSG:4326) · จัดทำ 25 ก.ย. 2569 · ทีม revenge</description>
+<Style><LineStyle><color>ff3c00ff</color><width>3</width></LineStyle><PolyStyle><color>3c3c00ff</color></PolyStyle></Style>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>99.83000,20.40500,0 99.96500,20.40500,0 99.96500,20.47500,0 99.83000,20.47500,0 99.83000,20.40500,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+<Folder><name>สถานีวัดน้ำ</name>
+<Placemark><name>STN0029 · สถานีบ้านแม่สาย (บ้านถ้ำผาจม)</name><description>ระดับน้ำแม่น้ำสาย — ค่า W ใน SFVI (ระดับวิกฤต 4.20 ม.) · จุดออกของลุ่มน้ำ AOI-B
+หน่วยงาน: กรมทรัพยากรน้ำ
+พิกัดจากคลังข้อมูลน้ำแห่งชาติ (thaiwater.net)</description>
+<Style><IconStyle><color>ff00ffff</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>
+<Point><coordinates>99.87170,20.44460,0</coordinates></Point></Placemark>
+<Placemark><name>MYA002 · สถานีบ้านดอยต่อคำ (Lawtawkhan)</name><description>ระดับน้ำ+ฝน ฝั่งเมียนมา ก่อนเข้าแม่สาย
+หน่วยงาน: มูลนิธิอาสาเพื่อนพึ่ง (ภาฯ) ยามยาก สภากาชาดไทย
+พิกัดจากคลังข้อมูลน้ำแห่งชาติ (thaiwater.net)</description>
+<Style><IconStyle><color>ff00ffff</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>
+<Point><coordinates>99.86230,20.44350,0</coordinates></Point></Placemark>
+<Placemark><name>MYA004 · สถานีสะพานมิตรภาพแม่น้ำสายแห่งที่ 1</name><description>ระดับน้ำ+ฝน กลางเมืองแม่สาย–ท่าขี้เหล็ก
+หน่วยงาน: มูลนิธิอาสาเพื่อนพึ่ง (ภาฯ) ยามยาก สภากาชาดไทย
+พิกัดจากคลังข้อมูลน้ำแห่งชาติ (thaiwater.net)</description>
+<Style><IconStyle><color>ff00ffff</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>
+<Point><coordinates>99.88050,20.44450,0</coordinates></Point></Placemark>
+<Placemark><name>MYA003 · สถานีสะพานอูทูนอ่อง บ้านสบสาย</name><description>ระดับน้ำ+ฝน ใกล้จุดบรรจบแม่น้ำรวก
+หน่วยงาน: มูลนิธิอาสาเพื่อนพึ่ง (ภาฯ) ยามยาก สภากาชาดไทย
+พิกัดจากคลังข้อมูลน้ำแห่งชาติ (thaiwater.net)</description>
+<Style><IconStyle><color>ff00ffff</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>
+<Point><coordinates>99.95350,20.47150,0</coordinates></Point></Placemark>
+</Folder>
+<Folder><name>ชุมชนเฝ้าระวัง (โดยประมาณ)</name>
+<Placemark><name>ชุมชนเกาะทราย (ม.7 ต.แม่สาย)</name><description>ตำแหน่งโดยประมาณ: ค่าเฉลี่ยพิกัดถนน/ซอยในชุมชนจาก OpenStreetMap — ใช้อ้างอิงเท่านั้น
+(ชุมชนสายลมจอย ต.เวียงพางคำ ยังไม่พบพิกัดในแหล่งเปิด)</description>
+<Style><IconStyle><color>ff3c00ff</color><scale>0.9</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>
+<Point><coordinates>99.88315,20.44326,0</coordinates></Point></Placemark>
+<Placemark><name>ชุมชนไม้ลุงขน (ต.แม่สาย)</name><description>ตำแหน่งโดยประมาณ: ค่าเฉลี่ยพิกัดถนน/ซอยในชุมชนจาก OpenStreetMap — ใช้อ้างอิงเท่านั้น
+(ชุมชนสายลมจอย ต.เวียงพางคำ ยังไม่พบพิกัดในแหล่งเปิด)</description>
+<Style><IconStyle><color>ff3c00ff</color><scale>0.9</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>
+<Point><coordinates>99.88702,20.44006,0</coordinates></Point></Placemark>
+<Placemark><name>ชุมชนเหมืองแดง (ต.แม่สาย)</name><description>ตำแหน่งโดยประมาณ: ค่าเฉลี่ยพิกัดถนน/ซอยในชุมชนจาก OpenStreetMap — ใช้อ้างอิงเท่านั้น
+(ชุมชนสายลมจอย ต.เวียงพางคำ ยังไม่พบพิกัดในแหล่งเปิด)</description>
+<Style><IconStyle><color>ff3c00ff</color><scale>0.9</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>
+<Point><coordinates>99.88963,20.44008,0</coordinates></Point></Placemark>
+</Folder>
+</Document></kml>

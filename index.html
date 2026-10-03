@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050912" />
+    <title>THEOS-2 MAE SAI COMMAND — Geospatial Decision Simulator</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #050912; color: #cbd8ee;
+        font-family: 'Segoe UI', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif; }
+      #devnotice { display: none; }
+      #devnotice.show { display: grid; place-items: center; height: 100%; padding: 24px; box-sizing: border-box; }
+      .card { max-width: 620px; border: 1px solid rgba(56,189,248,.3); background: rgba(255,255,255,.035);
+        border-radius: 10px; padding: 26px 30px; box-shadow: 0 0 40px -14px rgba(56,189,248,.7); }
+      .card h1 { margin: 0 0 6px; font-size: 17px; letter-spacing: .12em; color: #fff; }
+      .card .sub { margin: 0 0 18px; font-size: 12px; letter-spacing: .16em; color: rgba(125,211,252,.55); }
+      .card p { font-size: 14px; line-height: 1.65; margin: 0 0 14px; }
+      .card b { color: #7dd3fc; }
+      code { display: block; margin: 8px 0 16px; padding: 10px 14px; border-radius: 6px;
+        background: rgba(0,0,0,.45); border: 1px solid rgba(56,189,248,.2);
+        font-family: Consolas, monospace; font-size: 13px; color: #7CFFA0; }
+      .hr { height: 1px; background: linear-gradient(90deg, rgba(56,189,248,.4), transparent); margin: 18px 0; }
+      .th { font-size: 13px; color: #94a3b8; line-height: 1.8; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- Shown only when this file is opened directly from disk (file://), where the
+         dev-server module entry below cannot load. Prevents a blank white screen. -->
+    <div id="devnotice">
+      <div class="card">
+        <h1>MAE SAI COMMAND</h1>
+        <p class="sub">THIS IS THE DEVELOPMENT ENTRY FILE — IT NEEDS THE DEV SERVER</p>
+        <p>You opened <b>index.html</b> straight from the folder. This file only points at the
+           source code, so nothing can render without Vite running.</p>
+        <p><b>Option 1 — run it (development):</b></p>
+        <code>npm install<br />npm run dev</code>
+        <p><b>Option 2 — open the finished build (no server needed):</b></p>
+        <code>npm run build</code>
+        <p>then double-click <b>dist\index.html</b> — a single self-contained file that runs
+           offline with no install.</p>
+        <div class="hr"></div>
+        <p class="th">
+          คุณเปิดไฟล์ <b>index.html</b> ตัวนี้ตรง ๆ จากโฟลเดอร์ ซึ่งเป็นไฟล์สำหรับตอนพัฒนา จึงขึ้นจอขาว<br />
+          ให้รัน <b>npm run dev</b> แล้วเปิด <b>http://localhost:5173</b><br />
+          หรือรัน <b>npm run build</b> แล้วดับเบิลคลิกไฟล์ <b>dist\index.html</b> ซึ่งเปิดได้เลยโดยไม่ต้องมีเซิร์ฟเวอร์
+        </p>
+      </div>
+    </div>
+
+    <script>
+      // If React has not mounted shortly after load, we are not being served by Vite.
+      setTimeout(function () {
+        var root = document.getElementById('root')
+        if (!root || root.children.length === 0) {
+          document.getElementById('devnotice').className = 'show'
+        }
+      }, 1200)
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
