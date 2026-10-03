@@ -26,7 +26,8 @@ node record-demo.mjs   # Playwright อัดวิดีโอเดโม 1920
 - **ห้ามดับเบิลคลิก `index.html` ที่ root** — เป็น entry ของ Vite จะขึ้นการ์ดแจ้งเตือนแทนจอขาว
 - คีย์ลัด: `1`/`2`/`3` สลับองก์ · `Space` เดิน/หยุดนาฬิกาภารกิจ
 - Viewport ที่ทดสอบแล้ว: 1280×720 ถึง 1920×1080 (ไม่ได้ออกแบบให้ reflow ต่ำกว่า 1280 — เป็นจอ kiosk)
-- ⚠️ **สถานะเครื่อง ณ 2026-10-03:** ยังไม่ได้ติดตั้ง Node.js / npm / git บนระบบใหม่ (`node_modules/` ยังอยู่) ต้องติดตั้ง Node LTS ก่อนจึงจะ dev/build ได้ · โฟลเดอร์นี้**ยังไม่เป็น git repo**
+- **เครื่องมือบนเครื่อง (ติดตั้งผ่าน winget 2026-10-03):** Node.js 24.19 LTS + npm 11 · Git 2.55 · VS Code 1.140 (+ Tailwind CSS IntelliSense) · Playwright Chromium + ffmpeg 9.0 (สำหรับ `record-demo.mjs`)
+- **Git:** GitHub repo **private** `TEAMNAJAA/maesai-command` (branch `main`) · `.gitignore` ตัด `node_modules/` และ `recordings/` (วิดีโอ ~83 MB) ออก · repo มีใบสมัครที่มีเบอร์โทร/อีเมลสมาชิก **ห้ามเปลี่ยนเป็น public**
 
 ## 3. โครงสร้างไฟล์
 
