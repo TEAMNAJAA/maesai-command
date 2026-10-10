@@ -8,3 +8,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 )
+
+// The app mounted, so the "needs the dev server" fallback card in index.html is not needed.
+document.getElementById('devnotice')?.remove()

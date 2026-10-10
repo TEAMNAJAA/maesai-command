@@ -3,20 +3,14 @@
 **Multi-Sensor Geospatial Serious Game & Integrated Disaster Decision Support System**
 ระบบภารกิจจำลองสถานการณ์และสนับสนุนการตัดสินใจบริหารจัดการอุทกภัยแม่สาย
 
-Interactive command-centre prototype for *The GEO Quest 2026* (GISTDA). The learner plays the
-Mae Sai District Flood Incident Command Post across three acts, deciding under evidence that is
-never complete.
+Interactive command-centre simulator for *The GEO Quest 2026* (GISTDA) — ทีม revenge.
+The learner is the Mae Sai EOC commander across three acts, deciding under evidence that is never complete.
 
 ---
 
 ## Run
 
-> ⚠️ **Do not double-click the `index.html` in the project root.** That is the Vite development
-> entry — it only points at `src/main.jsx` and cannot render on its own, so you get a white screen.
-> (It now shows an instruction card instead of a blank page if you try.)
-> อย่าดับเบิลคลิก `index.html` ที่อยู่ในโฟลเดอร์หลัก — เป็นไฟล์สำหรับตอนพัฒนา จะขึ้นจอขาว
-
-**Option 1 — development server**
+> ⚠️ Do not double-click the `index.html` in the project root — it is the Vite dev entry.
 
 ```bash
 npm install
@@ -26,99 +20,38 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5173.
+Open http://localhost:5173 — add `?demo` to skip the briefing and pre-test (presentation mode; the log session is flagged as a demo and excluded from the Sandbox statistics).
 
-**Option 2 — standalone build (for exhibition, classroom, or judging)**
+**Standalone build (booth / classroom / judging):**
 
 ```bash
 npm run build
 ```
 
-This produces **one single file**: `dist/index.html` (~744 KB). HTML, CSS, JavaScript, fonts and
-every graphic are inlined — there are zero external requests. Double-click it and it runs from
-`file://` with no server, no install, no login and no internet, which is exactly what the proposal
-requires for booth and classroom use. You can email it or put it on a USB stick as-is.
+Produces one self-contained file, `dist/index.html` (~2.6 MB): code, the AOI GeoJSON, 15,851 real GISTDA building footprints, the SRTM relief and the OpenStreetMap roads are all inlined. Double-click it — it runs offline; with internet it also loads the GISTDA sphere imagery and routing.
 
-**Keyboard:** `1` / `2` / `3` jump between acts · `Space` runs or pauses the mission clock.
+**Keyboard:** `1` `2` `3` jump between acts · `Space` runs / pauses the mission clock · `Ctrl+Shift+L` opens the teacher log.
 
-**Tested viewports:** 1280×720, 1366×768, 1600×1000 and 1920×1080 — no horizontal overflow, no
-collapsed panels. Below ~1280 wide the layout is not designed to reflow; it is a desktop /
-touchscreen kiosk interface.
+**Sphere API key:** the team key is set in `src/config/missionConfig.js` (override with `VITE_SPHERE_API_KEY` in `.env.local`). Online, the town view uses sphere `thailand_images` as the basemap and evacuation routes come from sphere Routing; offline everything falls back to bundled data. The key ships inside the build — keep the repo private.
 
 ---
 
-## Demo / recording script
+## Player flow
 
-Every step below is verified working end to end. `NEXT ACT ▶` in the top bar carries the run
-forward, so the whole demo can be driven without touching the act switcher.
+1. **Mission Briefing** — role (ผู้บัญชาการ EOC แม่สาย), the 3 acts, the decision rules, optional player code.
+2. **Pre-test** (5 questions) → **Act I → Act II → Act III** → **Post-test** with the improvement score.
 
-**ACT I — T−48 h**
-1. Press `I` (or key `1`).
-2. Left panel: `THEOS-2 Optical` and `Sphere Elevation` are ticked on open. Untick/re-tick freely —
-   a layer is charged once per round, so re-ticking is free.
-3. Click any pulsing red marker on the river. The `Missing Flood Wall` card pops up anchored to it,
-   with that marker's ID and gap length. Click again (or ✕) to close.
-4. Right panel `OVERVIEW`: `SANDBAGS (BIG BAG)` → −800 AP, `GROUND PATROL` → −250 AP.
-5. Press `NEXT ACT ▶`.
+| Act | Window | Map | What the learner decides |
+| --- | --- | --- | --- |
+| **I** เฝ้าระวัง | T−48 → T−0 h | Real AOI-B catchment (SRTM relief) with THEOS-2 swaths placed on the real map; real AOI-A town | Which sectors to image (L, N), which layers to buy, which communities to evacuate and when — or hold |
+| **II** วิกฤต | T+0 → T+36 h | SAR scene / AOI-A town with flood band and closed streets | Radar handover, Sphere routing to high ground, triage of the 4 communities |
+| **III** ฟื้นฟู | T+36 h → | Before/after slider (town + per roof) | Roof-by-roof relief: ฿9,000 / +฿10,000 / reject / ground survey |
 
-**ACT II — T+0 h**
-1. Screen flips to SAR radar; optical layers show `CLOUD COVER 100%` struck through.
-2. `SAR Flood Extent` is already on — untick/re-tick to show the sensor handover.
-3. Click the flashing red ✕ on the road. It expands the route card: debris run-out, detection time,
-   which community is cut off, exits remaining. `COMPUTE DETOUR` calls the Sphere Routing API.
-4. Right panel `OVERVIEW` → `TACTICAL ACTIONS` → `EVACUATION ALERT` (800 AP).
-   Trust drops **42% → 12%** — the late-warning branch, −30 once, per the proposal.
-   Hover the `TRUST INDEX` gauge for the breakdown of why it moved.
-5. Press `NEXT ACT ▶`.
-
-**ACT III — AAR**
-1. After Action Review loads.
-2. Drag the centre handle across the before/after image. `CHANGE DETECTION` overlays the change
-   polygons.
-3. Right panel `RELIEF BUDGET · งบเยียวยา` shows ฿9,000 flat + ฿10,000 mud top-up + ฿1,500 survey,
-   with live totals. `Open Roof-by-Roof Adjudication` jumps to the `DECISIONS` tab where the rates
-   are actually applied.
-
-`Reset mission` (↺, top right) returns everything to a clean T−48 state for another take.
-
-## Where everything lives
-
-The entire application is one self-contained file: **`src/App.jsx`**. No images, no fonts, no
-external requests — the terrain, SAR backscatter, drainage network and building footprints are all
-generated procedurally from a seeded PRNG so they are identical on every run.
-
-| Section | Contents |
-| --- | --- |
-| 1 · Mission constants | Every threshold from the proposal, in one editable block |
-| 2 · Utilities | Seeded PRNG, Catmull-Rom smoothing, clock formatting |
-| 3 · Procedural terrain | SVG filter defs, optical / mud / SAR scenes |
-| 4 · UI atoms | Panel, provenance chip, arc gauge, sparkline, meter |
-| 5 · Game engine | `useEngine()` — the state machine |
-| 6–11 | Map canvas, layer catalogue, top bar, Act 1 & 2 shell |
-| 12 | Act 3 After Action Review |
-| 13 | Root |
-
-Accuracy note from the proposal is honoured: station critical levels and relief rates are **not**
-hard-coded through the logic — they sit in the constants block at the top of the file and can be
-revised without touching behaviour.
+Screen layout: **left** = assessment (live SFVI · river gauge · trust), **centre** = map (view switcher, zoom/pan, 3D tilt), **right** = command panel (tabs). Both side rails collapse. A guided hint box follows the player's state (toggle with the bulb icon).
 
 ---
 
-## The three acts
-
-| Act | Window | Question the learner must answer |
-| --- | --- | --- |
-| **I** — Seeing the Unseen Upstream<br>มองต้นน้ำที่มองไม่เห็น | T−48 → T−0 h | Where do I point a limited number of THEOS-2 swaths inside a catchment I have no jurisdiction over — and do I warn? |
-| **II** — The Day Clouds Covered the Basin<br>วันที่เมฆบังทั้งลุ่มน้ำ | T+0 → T+36 h | Optical is blind. Which of the four watch communities gets the resources first? |
-| **III** — Water Recedes, Mud Remains<br>เมื่อน้ำลดแต่โคลนยังอยู่ | T+36 h → | Which roofs are paid, which are refused, and who pays for the roofs the evidence cannot resolve? |
-
-The **Act Switcher** in the top navigation moves between them at any time. An act entered for the
-first time via the switcher is seeded with presentation-fidelity values (Act II opens at 1,250 AP /
-42% trust / 100% cloud); an act reached by actually playing carries the learner's real state forward.
-
----
-
-## Decision rule as implemented
+## Decision rules as implemented (`src/lib/sim.js`)
 
 ```
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P
@@ -126,55 +59,66 @@ SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P
 
 | | Definition | Provenance |
 | --- | --- | --- |
-| **W** | Ban Tham Pha Chom level ÷ 4.20 m critical | วัดจริง — measured |
-| **R** | Ban Jotada (Myanmar) accumulated rainfall, normalised | วัดจริง — measured |
-| **L** | New landslide scars found in the catchment | วัดจากภาพ — image-derived |
-| **N** | 1 − (current channel width ÷ 150 m) | วัดจากภาพ — image-derived |
-| **P** | Households inside each community's flood reach | ค่าสถานการณ์ — scenario |
+| **W** | Ban Tham Pha Chom level ÷ 4.20 m | วัดจริง |
+| **R** | Ban Jotada accumulated rain ÷ 250 mm | วัดจริง |
+| **L** | Landslide scars found by THEOS-2 swaths ÷ 17 | วัดจากภาพ THEOS-2 |
+| **N** | 1 − measured channel width ÷ 150 m | วัดจากภาพ THEOS-2 |
+| **P** | Real GISTDA roofs inside the flood reach ÷ all roofs of the community | วัดจากภาพ + ค่าสถานการณ์ (flood reach is modelled until radar extents arrive) |
 
-**Veto 1** — level ≥ 4.20 m ⇒ evacuate immediately, waiting for the next image pass stops being a
-legal option. Fires once, banners the whole HUD.
+- **Veto 1** — level ≥ 4.20 m: red alert, evacuate now; "hold" is disabled.
+- **Cloud rule** — cloud > 60 % or optical evidence > 48 h: L weight × 0.4, confidence flagged low. THEOS-2 passes under heavy cloud return no ground pixels. At 100 % cloud (act II) optical layers lock and the radar / routing alert appears.
+- **Narrow channel** — measured width < half of 150 m lowers the preparedness band by 0.20 m.
+- **Per-community justification** — an evacuation order is evidence-backed if the gauge is at the preparedness band (4.01 m) or every selected community has SFVI ≥ 0.62; otherwise it is a false alarm (−5 / −15 / −40). First order in act II = late warning (−30).
+- **Hold** — advances 3 h and shows the dual comparison: households exposed if ordered now vs after waiting, water depth and mud in each community.
 
-**Veto 2** — cloud cover, or optical evidence older than 48 h ⇒ L's weight is cut to 0.08 and the
-confidence readout is flagged. Visible live in the SFVI panel.
-
-**Tie-break** — equal scores go to the community with fewer remaining exit routes. Sai Lom Joy and
-Koh Sai are deliberately tuned to tie at identical P, so the rule has to do real work; Sai Lom Joy
-wins on its single exit road.
-
-**Trust model** — false alarms compound **−5 / −15 / −40**; a late warning costs **−30** once, but
-with real casualties. There is no strategy that always wins, which is the point.
-
-**Always available** — “ยังไม่สั่งการ รอภาพรอบหน้า”. The clock advances three hours and the cost of
-waiting for better evidence goes on the record.
+The river level, rain and cloud are functions of mission time (scenario hydrograph in `missionConfig.js → HYDRO`): the player changes who is warned, not the water. Flood arrival per community and evacuation time per exit drive the exposure figures.
 
 ---
 
-## Data provenance
+## Where everything lives
 
-Every number carries one of four tags, per the proposal's rule that nothing on screen may look
-equally real:
+| Path | Contents |
+| --- | --- |
+| `src/config/missionConfig.js` | **All tunables**: SFVI weights, thresholds (4.20 / 4.01 m), cloud rule, trust, relief rates, game costs, hydrograph, event dates, **data paths**, sphere URLs, scoring weights, Sandbox criteria |
+| `src/config/scenarioData.js` | Communities, sectors, layers, roofs, quiz, lessons, provenance badges |
+| `src/lib/sim.js` | Pure model: hydrograph, SFVI, exposure, hold comparison, relief, mission score |
+| `src/lib/buildings.js` | Real GISTDA roofs: flood reach, community assignment, live P, roof cases for act III |
+| `src/lib/geo.js` | Web-Mercator projection, AOI access, OSM layers, offline router (Dijkstra) |
+| `src/lib/sphere.js` | sphere Routing / Elevation / tiles with graceful fallback |
+| `src/lib/evalLogger.js` | Sandbox logger (localStorage) + CSV export |
+| `src/engine/useEngine.js` | State machine for the 3 acts |
+| `src/map/` | `GeoMap` (real geography), `MapCanvas` (views, tilt, callouts), `terrain` (procedural scenes) |
+| `src/panels/` | Left assessment rail, right command rail, top bar / stepper / hint / log |
+| `src/modals/modals.jsx` | Briefing, pre/post test, Veto 1 alert, cloud rule, hold comparison, teacher panel |
+| `src/aar/AarShell.jsx` | Act III review |
+| `src/data/` | Bundled offline data: `osm_maesai.geojson`, `dem_aoi_a/b.jpg + .json` |
+| `scripts/` | `fetch-osm.mjs`, `build-dem.mjs`, `extract-buildings.mjs` (national BD_footprintTH → Mae Sai) — regenerate `src/data/` |
+| `gistda-request/` | Application documents and AOI files (`MaeSai_AOI_ALL.geojson` is loaded by the app) |
 
-| Tag | Thai | Meaning |
-| --- | --- | --- |
-| `MEASURED` | วัดจริง | Ground gauging station, Dept. of Water Resources |
-| `IMAGE` | วัดจากภาพ | Analysed from THEOS-2 Level 3 Ortho |
-| `RADAR` | เรดาร์ | RADARSAT-2 via GISTDA เช็คน้ำ / Disaster Platform |
-| `SCENARIO` | ค่าสถานการณ์ | Simulated by the team — not measured |
+### Plugging in GISTDA data
+
+1. Put the file in `src/data/` (convert Shapefile → GeoJSON EPSG:4326 with QGIS or mapshaper).
+2. Uncomment / add the `import` at the top of `missionConfig.js` and set the matching `DATA` slot: `radarFlood`, `landslides`, `buildings`, `theosImagery.before/after`.
+3. `npm run build`. Flood polygons replace the simulated flood band and drive the offline router; THEOS-2 before/after images replace the procedural slider.
 
 ---
 
-## Export
+## Teacher log (Sandbox Test)
 
-`EXPORT REPORT` in Act III writes a UTF-8 BOM CSV containing final state, the SFVI factor
-breakdown, the full roof-by-roof adjudication with outcomes, and the decision log — the teacher-mode
-class record described in the proposal.
+The discreet database icon (top-right) or `Ctrl+Shift+L` opens the logger. It stores every session on the machine and checks the team's pass criteria: ≥ 70 % of players open ≥ 3 layers before deciding, post-test gain ≥ 30 %, briefing < 10 min. **Export Log CSV** writes one row per player (pre/post for a paired t-test) and one row per decision.
 
----
+## Demo recording
 
-## Deliberate deviations from the mock-ups
+```bash
+npm run build
+```
 
-The mock-ups show a **6.35 m** river level. The proposal fixes the Ban Tham Pha Chom critical level
-at **4.20 m**, and that number drives W, Veto 1, and the warning band. Since the document is the
-source of truth for game logic, the gauge runs on the 4.20 m scale and opens at 3.62 m. Everything
-else — layout, palette, panel copy, alert strings, AAR figures — follows the mock-ups.
+```bash
+node record-demo.mjs
+```
+
+Drives `dist/index.html?demo` through all three acts at 1920×1080 and writes `recordings/run-<timestamp>/maesai-demo.webm`. Existing videos are never deleted. Exits with code 2 if the page logs any error.
+
+## Data sources & credits
+
+Building footprints: GISTDA BD_footprintTH · Imagery & routing: GISTDA sphere · AOI boundaries: ทีม revenge (DEM-derived) · Relief: AWS Terrain Tiles (SRTM) · Roads/rivers: © OpenStreetMap contributors (ODbL) · Flood figures: GISTDA RADARSAT-2 (10, 12 Sep 2024) · Relief rates: Cabinet resolution 17 Sep 2024. Community locations other than those in the AOI file, household counts, flood stages and roof cases are **scenario values** and carry the grey badge.

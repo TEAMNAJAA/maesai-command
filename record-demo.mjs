@@ -1,21 +1,24 @@
 /* ══════════════════════════════════════════════════════════════════════════
    MAE SAI COMMAND — automated demo recording
-   Drives the built single-file app and records a 1920×1080 walkthrough
-   following the three-act presentation script.
+   Drives the built single-file app (dist/index.html?demo — skips the briefing
+   and pre-test, and flags the log session as a demo) and records a 1920×1080
+   walkthrough of the three acts.
 
-     node record-demo.mjs
+     npm run build
+     node record-demo.mjs                 → recordings/run-<timestamp>/maesai-demo.webm
+     RECORD_OUT=my-folder node record-demo.mjs
 
-   Output: recordings/maesai-demo.webm  (+ .mp4 when ffmpeg is available)
+   Existing videos are never deleted: every run writes to its own folder.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { chromium } from 'playwright'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { mkdirSync, readdirSync, renameSync, rmSync, existsSync } from 'node:fs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const APP = pathToFileURL(join(HERE, 'dist', 'index.html')).href
-const OUT = join(HERE, 'recordings')
+const APP = pathToFileURL(join(HERE, 'dist', 'index.html')).href + '?demo'
+const OUT = resolve(HERE, process.env.RECORD_OUT || join('recordings', `run-${new Date().toISOString().slice(0, 19).replace(/\D/g, '')}`))
 const W = 1920, H = 1080
 
 const t0 = Date.now()
@@ -87,9 +90,10 @@ async function click(page, locator, opts = {}) {
   return p
 }
 
+
 async function main() {
-  rmSync(OUT, { recursive: true, force: true })
   mkdirSync(OUT, { recursive: true })
+  const errors = []
 
   const browser = await chromium.launch({
     args: ['--allow-file-access-from-files', '--force-device-scale-factor=1', '--hide-scrollbars'],
@@ -100,87 +104,63 @@ async function main() {
     recordVideo: { dir: OUT, size: { width: W, height: H } },
   })
   const page = await ctx.newPage()
+  page.on('pageerror', (e) => errors.push(String(e)))
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 
   await page.goto(APP, { waitUntil: 'load' })
-  await page.waitForSelector('text=MAE SAI COMMAND', { timeout: 20000 })
+  await page.waitForSelector('[data-rail="command"]', { timeout: 20000 })
   await page.evaluate(CURSOR_JS)
   await glide(page, W / 2, H / 2, 2)
   await wait(2200)                                     // let the HUD settle on camera
 
-  /* Scoped locators */
-  const cmd = page.locator('.panel', { hasText: 'COMMAND INTERFACE' })
-  const actI = page.locator('button[title*="SEEING THE UNSEEN"]')
-  const actII = page.locator('button[title*="THE DAY CLOUDS"]')
-  const actIII = page.locator('button[title*="WATER RECEDES"]')
+  const tab = (id) => page.locator(`[data-rail="command"] [data-tab="${id}"]`)
+  const view = (id) => page.locator(`[data-view="${id}"]`)
 
   /* ══════════ SEGMENT 1 · ACT I — T−48 Hrs ══════════ */
-  mark('SEGMENT 1 · ACT I begins')
-  await click(page, actI, { after: 1100 })
+  mark('SEGMENT 1 · ACT I begins (real AOI-B catchment)')
 
-  // 1 · layers — untick then re-tick so the toggle is visible on camera
-  const theos = page.locator('button', { hasText: 'THEOS-2 Optical' }).first()
-  const elev = page.locator('button', { hasText: 'Sphere Elevation' }).first()
-  await click(page, theos, { after: 520 })
-  await click(page, theos, { after: 900 })
-  await click(page, elev, { after: 520 })
-  await click(page, elev, { after: 1300 })
-  mark('  layers toggled')
+  // 1 · task a THEOS-2 swath over the narrowed channel (Sector D) on the real map
+  await click(page, page.locator('[data-sector="D"]'), { hold: 620, after: 3000 })
+  mark('  THEOS-2 swath over Sector D · N measured')
 
-  // 2 · flood-wall marker → VERY HIGH popup
-  const pins = page.locator('svg[viewBox="0 0 1000 760"] circle[fill="transparent"]')
-  await click(page, pins.nth(5), { hold: 620, after: 2600 })
-  mark('  Missing Flood Wall popup')
+  // 2 · buy evidence layers
+  await click(page, tab('data'), { after: 600 })
+  await click(page, page.locator('[data-layer="river"]'), { after: 700 })
+  await click(page, page.locator('[data-layer="roads"]'), { after: 700 })
+  await click(page, page.locator('[data-layer="pop"]'), { after: 900 })
+  mark('  three evidence layers opened')
 
-  // 3 · OPERATIONS tab → catchment tasking grid (3 swaths, Myanmar side)
-  await click(page, cmd.locator('button', { hasText: 'OPERATIONS' }), { after: 1100 })
-  await click(page, page.locator('button', { hasText: 'Open Catchment Tasking Grid' }), { after: 2900 })
-  mark('  catchment tasking grid')
+  // 3 · real town view, then the 3D DEM tilt
+  await click(page, view('urban'), { after: 2200 })
+  await click(page, page.locator('[data-tilt]'), { after: 2600 })
+  await click(page, page.locator('[data-tilt]'), { after: 1200 })
+  mark('  AOI-A communities + 3D tilt')
 
-  // show a swath actually being tasked — the core Act-I mechanic
-  await click(page, page.locator('button').filter({ hasText: /SECTOR C/ }).first(), { after: 3000 })
-  mark('  THEOS-2 swath tasked over Sector C')
-
-  // 4 · back to OVERVIEW → place big bags
-  await click(page, cmd.locator('button', { hasText: 'OVERVIEW' }), { after: 900 })
-  await click(page, page.locator('button', { hasText: 'SANDBAGS (BIG BAG)' }), { hold: 620, after: 3000 })
-  mark('SEGMENT 1 ends · big bags deployed')
+  // 4 · decision: hold once to show the dual comparison, then evacuate
+  await click(page, tab('decide'), { after: 900 })
+  await click(page, page.locator('[data-panel="decide"] button', { hasText: 'ยังไม่สั่งการ' }), { after: 3200 })
+  await click(page, page.locator('[data-modal="hold"] button', { hasText: 'รับทราบ' }), { after: 900 })
+  await click(page, page.locator('[data-panel="decide"] button', { hasText: 'ประกาศอพยพ' }), { hold: 620, after: 2600 })
+  mark('SEGMENT 1 ends · evacuation ordered')
 
   /* ══════════ SEGMENT 2 · ACT II — T+0 Hrs ══════════ */
   mark('SEGMENT 2 · ACT II begins')
-  await click(page, actII, { after: 2600 })            // hold on the radar switch
+  await click(page, page.locator('[data-next-act]'), { after: 2600 })
+  await click(page, page.locator('[data-modal="cloud"] button', { hasText: 'Sphere Routing' }), { after: 1600 })
+  await click(page, page.locator('[data-route-from="slj"]'), { after: 600 })
+  await click(page, page.locator('[data-panel="route"] button', { hasText: 'คำนวณเส้นทาง' }), { after: 3200 })
+  mark('  evacuation route computed (Sai Lom Joy → high ground)')
 
-  // 1 · SAR layer
-  const sar = page.locator('button', { hasText: 'SAR Flood Extent' }).first()
-  await click(page, sar, { after: 700 })
-  await click(page, sar, { after: 2400 })
-  mark('  SAR flood extent')
-
-  // 2 · ROUTE BLOCKED cross → detail
-  const xHit = page.locator('svg[viewBox="0 0 1000 760"] rect[fill="transparent"]').first()
-  await click(page, xHit, { hold: 620, after: 2700 })
-  mark('  ROUTE BLOCKED detail')
-
-  // 3 · Sphere Routing API detour, then the evacuation order
-  await click(page, page.locator('button', { hasText: 'Compute Detour' }), { after: 2800 })
-  mark('  detour computed')
-  await click(page, cmd.locator('button', { hasText: 'OVERVIEW' }), { after: 800 })
-  await click(page, page.locator('button', { hasText: 'EVACUATION ALERT' }).first(), { hold: 620, after: 2600 })
-  mark('  evacuation alert · late warning')
-
-  // 4 · hover the trust gauge as it collapses
-  const trust = page.locator('.panel', { hasText: 'TRUST INDEX' }).first()
-  await point(page, trust, { hold: 400 })
-  const tb = await trust.boundingBox()
-  await glide(page, tb.x + tb.width / 2, tb.y + tb.height * 0.55, 20)
-  await wait(3600)
-  mark('SEGMENT 2 ends · trust index')
+  await click(page, tab('triage'), { after: 800 })
+  for (const id of ['slj', 'ksa', 'mlk', 'mdg']) await click(page, page.locator(`[data-triage="${id}"]`), { after: 450 })
+  await click(page, page.locator('[data-panel="triage"] button', { hasText: 'ปล่อยขบวน' }), { after: 2800 })
+  mark('SEGMENT 2 ends · triage released')
 
   /* ══════════ SEGMENT 3 · ACT III — AAR ══════════ */
   mark('SEGMENT 3 · ACT III begins')
-  await click(page, actIII, { after: 2600 })
+  await click(page, page.locator('[data-next-act]'), { after: 2600 })
 
-  // 1 · before/after slider drag
-  const handle = page.locator('[class*="cursor-ew-resize"]').first()
+  const handle = page.locator('[data-slider-handle]').first()
   const hb = await handle.boundingBox()
   const cy = hb.y + hb.height / 2
   await glide(page, hb.x + hb.width / 2, cy, 24)
@@ -193,19 +173,19 @@ async function main() {
   await wait(1400)
   mark('  before / after slider')
 
-  // change detection overlay
-  await click(page, page.locator('button', { hasText: 'CHANGE DETECTION' }), { after: 2600 })
-  mark('  change detection')
-
-  // 2 · relief budget logic on the right
-  const relief = page.locator('.panel', { hasText: 'RELIEF BUDGET' })
-  await relief.scrollIntoViewIfNeeded()
-  await point(page, relief, { hold: 500 })
-  const rb = await relief.boundingBox()
-  await glide(page, rb.x + rb.width * 0.5, rb.y + rb.height * 0.30, 20); await wait(1500)
-  await glide(page, rb.x + rb.width * 0.5, rb.y + rb.height * 0.52, 18); await wait(1700)
-  await glide(page, rb.x + rb.width * 0.5, rb.y + rb.height * 0.80, 18); await wait(2200)
-  mark('SEGMENT 3 ends · relief budget')
+  await click(page, page.locator('[data-aar-tab="decisions"]'), { after: 1500 })
+  // roof IDs come from the real GISTDA footprints (BD-<FID>), so drive the first rows by position
+  for (const [row, v] of [[0, 'both'], [2, 'reject'], [3, 'flat']]) {
+    const tr = page.locator('[data-roof]').nth(row)
+    const roof = await tr.getAttribute('data-roof')
+    await click(page, tr, { after: 900 })
+    await click(page, page.locator(`[data-verdict="${roof}-${v}"]`), { after: 1100 })
+  }
+  mark('  roof-by-roof relief adjudication')
+  const relief = page.locator('[data-panel="relief-budget"]')
+  await point(page, relief, { hold: 1800 })
+  await click(page, page.locator('[data-aar-tab="summary"]'), { after: 2400 })
+  mark('SEGMENT 3 ends · mission score')
 
   await wait(1600)
 
@@ -216,7 +196,6 @@ async function main() {
   const raw = await video.path()
   const final = join(OUT, 'maesai-demo.webm')
   if (existsSync(raw)) renameSync(raw, final)
-  // tidy any stray empty video files
   for (const f of readdirSync(OUT)) {
     if (f.endsWith('.webm') && f !== 'maesai-demo.webm') rmSync(join(OUT, f), { force: true })
   }
@@ -228,6 +207,7 @@ async function main() {
   }
   console.log(`\nTOTAL ${((Date.now() - t0) / 1000).toFixed(1)}s`)
   console.log(`VIDEO ${final}`)
+  if (errors.length) { console.log(`\nPAGE ERRORS (${errors.length}):\n${errors.join('\n')}`); process.exitCode = 2 }
 }
 
 main().catch((e) => { console.error('RECORDING FAILED:', e); process.exit(1) })

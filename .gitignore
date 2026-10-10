@@ -13,3 +13,14 @@ Desktop.ini
 .DS_Store
 *.log
 ~$*
+
+# local secrets (e.g. VITE_SPHERE_API_KEY)
+*.local
+.env
+
+# raw national GIS files (GitHub limit 100 MB) + script caches
+*.shp
+*.shx
+*.dbf
+gistda-request/BD_footprintTH/
+scripts/.cache/

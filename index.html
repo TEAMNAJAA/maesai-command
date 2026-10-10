@@ -54,9 +54,9 @@
       setTimeout(function () {
         var root = document.getElementById('root')
         if (!root || root.children.length === 0) {
-          document.getElementById('devnotice').className = 'show'
+          var d = document.getElementById('devnotice'); if (d) d.className = 'show'
         }
-      }, 1200)
+      }, 2500)
     </script>
 
     <script type="module" src="/src/main.jsx"></script>
