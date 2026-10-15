@@ -27,10 +27,17 @@ export function PanelHead({ title, right, icon: Icon, accent = '#7dd3fc' }) {
   )
 }
 
-/** Provenance chip — every number on screen must declare where it came from. */
-export function Src({ t, mini = false }) {
+/** Provenance chip — every number on screen must declare where it came from.
+ *  `dot` = colour dot only (dense one-line rows); the label stays in the tooltip and the map legend. */
+export function Src({ t, mini = false, dot = false }) {
   const s = SRC[t]
   if (!s) return null
+  if (dot) {
+    return (
+      <span title={`${s.th} (${s.code}) — ${s.note}`} data-src={t}
+        className="inline-block h-[8px] w-[8px] shrink-0 rounded-full" style={{ background: s.hex, boxShadow: `0 0 0 2px ${s.hex}33, 0 0 6px ${s.hex}88` }} />
+    )
+  }
   return (
     <span title={`${s.th} (${s.code}) — ${s.note}`}
       className={`font-thai inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-[3px] border leading-none
@@ -97,8 +104,8 @@ export function Section({ title, th, icon: Icon, accent = '#7dd3fc', open, onTog
   )
 }
 
-/** Small tab strip. items: [[id, label, badge?]] */
-export function Tabs({ items, value, onChange, tone = '#38BDF8' }) {
+/** Small tab strip. items: [[id, label, badge?]] · `beacon` = tab the mission quest points at */
+export function Tabs({ items, value, onChange, tone = '#38BDF8', beacon = null }) {
   return (
     <div className="flex shrink-0 gap-[3px] border-b border-white/[0.07] px-2 pt-2">
       {items.map(([id, label, badge]) => {
@@ -106,7 +113,8 @@ export function Tabs({ items, value, onChange, tone = '#38BDF8' }) {
         return (
           <button key={id} onClick={() => onChange(id)} data-tab={id}
             className={`font-thai relative flex-1 rounded-t px-1.5 py-1.5 text-[10.5px] font-semibold transition
-              ${on ? 'text-white' : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'}`}
+              ${on ? 'text-white' : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'}
+              ${beacon === id && !on ? 'text-[#FFE0A3] ring-1 ring-[#FFD066]/70 animate-[beacon_1.6s_ease-in-out_infinite]' : ''}`}
             style={on ? { background: `${tone}26`, boxShadow: `inset 0 -2px 0 ${tone}` } : undefined}>
             {label}
             {badge ? <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[#FFB300] animate-[flash_1.4s_ease-in-out_infinite]" /> : null}

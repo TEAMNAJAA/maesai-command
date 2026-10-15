@@ -1,11 +1,11 @@
 /* ══════════════════════════════════════════════════════════════════════════
    MODALS — briefing · pre/post test · veto-1 alert · cloud rule · hold
-   comparison · teacher log panel
+   comparison · act-1 summary · teacher log panel
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useState, useMemo } from 'react'
 import {
-  Shield, Satellite, Radar, Building2, AlertTriangle, Cloud, Route, Megaphone, CheckCircle2, XCircle, Clock, Database, Download, Trash2, ArrowRight, GraduationCap,
+  Shield, Satellite, Radar, Building2, AlertTriangle, Cloud, Route, Megaphone, CheckCircle2, XCircle, Clock, Database, Download, Trash2, ArrowRight, GraduationCap, Flag, Bell, CornerUpLeft, Check, X,
 } from 'lucide-react'
 import { Modal, Btn, Src, SrcLegend } from '../ui/atoms'
 import { QUIZ, COMMUNITIES } from '../config/scenarioData'
@@ -13,13 +13,16 @@ import { SFVI, THRESHOLDS, RELIEF, TRUST, GAME, EVAL } from '../config/missionCo
 import { clockLabel, clockToDate, fmt, pct } from '../lib/format'
 import { logger, downloadText } from '../lib/evalLogger'
 import { evacCostFor } from '../engine/useEngine'
+import { questSteps } from '../panels/quest'
+import { TOTAL_AT_RISK } from '../lib/sim'
+import { EMBANKMENT_GAPS } from '../lib/embankment'
 
 /* ── Mission briefing ───────────────────────────────────────────────────── */
 
 export function BriefingModal({ open, firstRun, onEnter, onClose, player, setPlayer }) {
   const acts = [
     { n: 1, hex: '#22E36B', icon: Satellite, title: 'องก์ 1: เฝ้าระวัง', time: 'T−48 → T−0 ชม.', sensor: 'THEOS-2 (ภาพเชิงแสง)',
-      body: 'ใช้เหรียญข้อมูลเปิดชั้นข้อมูล สั่งถ่ายภาพ THEOS-2 ไปที่ป่าต้นน้ำในเมียนมาหารอยดินถล่ม (L) และวัดความกว้างลำน้ำ (N) แล้วตัดสินใจว่าจะเตือน/อพยพชุมชนใด เมื่อใด' },
+      body: 'ภารกิจ 3 สเต็ป: ① สั่งถ่ายภาพ THEOS-2 ป่าต้นน้ำในเมียนมาหารอยดินถล่ม (L) ② ตรวจแนวตลิ่งแม่น้ำสายบนภาพดาวเทียม วัดความกว้างลำน้ำ (N) และอุดจุดฟันหลอ ③ ดู SFVI แล้วตัดสินใจ — ต้องตัดสินใจก่อนจึงไปองก์ 2 ได้' },
     { n: 2, hex: '#FF003C', icon: Radar, title: 'องก์ 2: วิกฤต', time: 'T+0 → T+36 ชม.', sensor: 'เรดาร์ RADARSAT-2 (เช็คน้ำ)',
       body: 'เมฆบัง 100% ภาพเชิงแสงถูกปิดอัตโนมัติ สลับไปใช้เรดาร์ ใช้ Sphere Routing หาเส้นทางหนีน้ำเมื่อถนนขาด และจัดลำดับส่งกำลังให้ 4 ชุมชน' },
     { n: 3, hex: '#38BDF8', icon: Building2, title: 'องก์ 3: ฟื้นฟู', time: 'T+36 ชม. →', sensor: 'THEOS-2 Pan 0.5 ม. + เรดาร์',
@@ -74,7 +77,8 @@ export function BriefingModal({ open, firstRun, onEnter, onClose, player, setPla
             <ul className="font-thai mt-1.5 space-y-1 text-[12px] leading-snug text-slate-300">
               <li>• <b>ซ้าย</b> = แผงประเมิน (SFVI สด · ระดับน้ำ · ความเชื่อมั่น)</li>
               <li>• <b>กลาง</b> = แผนที่ — สลับมุมมองด้านบน · ปุ่ม 3D เอียงภูมิประเทศ</li>
-              <li>• <b>ขวา</b> = แผงสั่งการ (ชั้นข้อมูล · ทรัพยากร · ตัดสินใจ)</li>
+              <li>• <b>ขวาบน</b> = กล่องภารกิจ 3 สเต็ป — ทำตามช่องที่กระพริบ เสร็จแล้วติ๊กเขียว</li>
+              <li>• <b>ขวา</b> = แผงสั่งการ (① ภาพต้นน้ำ · ② แนวตลิ่ง · ③ ตัดสินใจ)</li>
               <li>• ◈ เหรียญข้อมูลซื้อชั้นข้อมูล · AP ใช้สั่งการ</li>
             </ul>
             <div className="font-thai mt-2 text-[11.5px] text-slate-400">ทุกตัวเลขมีป้ายบอกที่มา:</div>
@@ -355,6 +359,130 @@ export function HoldCompareModal({ data, onClose, onEvacuate }) {
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="solid" onClick={onClose}><span className="font-thai normal-case tracking-normal text-[12.5px]">รับทราบ</span></Btn>
           <Btn variant="danger" icon={Megaphone} onClick={onEvacuate}><span className="font-thai normal-case tracking-normal text-[12.5px]">ไปสั่งอพยพตอนนี้</span></Btn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/* ── End of act 1 · decision summary → act 2 ────────────────────────────── */
+
+const KIND_TH = { EVACUATE: 'ประกาศอพยพ', STANDBY: 'แจ้งเตรียมพร้อม', HOLD: 'ยังไม่สั่งการ (รอภาพ)' }
+const OUTCOME = {
+  justified: ['มีหลักฐานรองรับ', '#7CFFA0'], 'false-alarm': ['เตือนผิด', '#FF6B8A'],
+  standby: ['เตรียมพร้อม', '#FFD066'], hold: ['รอ +3 ชม.', '#FFD066'],
+}
+
+export function Act1SummaryModal({ open, eng, timeout, onNext, onStay }) {
+  if (!open) return null
+  const { s, exposure } = eng
+  const steps = questSteps(eng)
+  const rounds = s.decisions.filter((d) => d.act === 1)
+  const ordered = COMMUNITIES.filter((c) => s.evacOrders[c.id] !== undefined)
+  const exposed = exposure.exposed
+  const verdict = !rounds.length
+    ? ['crit', 'ไม่ได้ตัดสินใจก่อนน้ำมาถึง — การประกาศครั้งแรกในองก์ 2 จะนับเป็น "เตือนช้า" (ความเชื่อมั่น −30%)']
+    : ordered.length === COMMUNITIES.length && exposed === 0
+      ? ['good', 'ยอดเยี่ยม — ทั้ง 4 ชุมชนได้รับคำสั่งอพยพทันก่อนน้ำมาถึง']
+      : ordered.length === COMMUNITIES.length
+        ? ['warn', `สั่งอพยพครบ 4 ชุมชน แต่บางชุมชนอพยพไม่ทัน — ยังเสี่ยง ${fmt(exposed)} หลังคาเรือน`]
+        : ordered.length
+          ? ['warn', `สั่งอพยพ ${ordered.length}/4 ชุมชน — ชุมชนที่เหลือยังไม่ได้รับคำสั่ง (ยังเสี่ยง ${fmt(exposed)} หลังคาเรือน)`]
+          : ['warn', 'ยังไม่มีชุมชนใดได้รับคำสั่งอพยพ — ถ้าเข้าองก์ 2 ตอนนี้ การประกาศครั้งแรกจะนับเป็นการเตือนช้า']
+  const vhex = { good: '#22E36B', warn: '#FFB300', crit: '#FF003C' }[verdict[0]]
+  const stat = (label, value, src, hex = '#fff') => (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
+      <div className="flex items-center justify-between gap-1">
+        <span className="font-thai text-[11px] text-slate-400">{label}</span>
+        {src && <Src t={src} mini />}
+      </div>
+      <div className="num mt-0.5 text-[20px] font-bold leading-tight" style={{ color: hex }}>{value}</div>
+    </div>
+  )
+  return (
+    <Modal open closable={false} width={720} tone={vhex} z={86}>
+      <div className="p-6" data-modal="act1-summary">
+        <div className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-lg border-2" style={{ borderColor: vhex, background: `${vhex}1A` }}>
+            {timeout ? <Clock size={21} style={{ color: vhex }} /> : <Flag size={21} style={{ color: vhex }} />}
+          </div>
+          <div>
+            <div className="hud-label">ACT I COMPLETE · {clockLabel(s.clock)} · {clockToDate(s.clock)}</div>
+            <h2 className="font-thai text-[20px] font-bold leading-tight text-white">
+              {timeout ? 'หมดเวลา — มวลน้ำถึงตัวเมืองแล้ว' : 'สรุปผลการตัดสินใจ องก์ 1'}
+            </h2>
+          </div>
+        </div>
+
+        <div className="font-thai mt-3 rounded-lg border px-3 py-2.5 text-[13.5px] font-semibold leading-snug"
+          style={{ borderColor: `${vhex}55`, background: `${vhex}12`, color: verdict[0] === 'good' ? '#C8FFD9' : verdict[0] === 'crit' ? '#FFC2CE' : '#FFE0A3' }}>
+          {verdict[1]}
+          {s.falseAlarms > 0 && <div className="mt-0.5 text-[12px] font-normal text-[#FFB3C2]">เตือนโดยหลักฐานไม่พอ {s.falseAlarms} ครั้ง — ความเชื่อมั่นลดลงแบบทบ</div>}
+        </div>
+
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {stat('หลังคาเรือนยังเสี่ยง', <>{fmt(exposed)}<span className="text-[12px] font-normal text-slate-500"> / {fmt(TOTAL_AT_RISK)}</span></>, 'scenario', exposed ? '#FF6B8A' : '#7CFFA0')}
+          {stat('ชุมชนที่สั่งอพยพ', `${ordered.length}/4`, 'scenario', ordered.length === 4 ? '#7CFFA0' : '#FFD066')}
+          {stat('ความเชื่อมั่น', `${Math.round(s.trust)}%`, 'scenario', s.trust >= 75 ? '#7CFFA0' : s.trust >= 50 ? '#FFD066' : '#FF6B8A')}
+          {stat('SFVI ตอนนี้', eng.sfvi.basin.toFixed(2), null, eng.sfvi.basin >= SFVI.decisionBand ? '#FFB300' : '#7CFFA0')}
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2.5">
+          <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
+            <div className="font-thai text-[12px] font-bold text-white">ภารกิจ 3 สเต็ป</div>
+            <div className="mt-1.5 space-y-1.5">
+              {steps.map((st) => (
+                <div key={st.id} className="flex items-start gap-2">
+                  <span className={`mt-[1px] grid h-4 w-4 shrink-0 place-items-center rounded-[3px] ${st.state === 'done' ? 'bg-[#22E36B]' : 'border border-slate-600'}`}>
+                    {st.state === 'done' ? <Check size={11} strokeWidth={4} className="text-[#04121F]" /> : st.state === 'missed' ? <X size={10} className="text-[#C4B5FD]" /> : null}
+                  </span>
+                  <span className="min-w-0">
+                    <span className={`font-thai block text-[12px] leading-tight ${st.state === 'done' ? 'text-[#BFF5CF]' : 'text-slate-400'}`}>{st.n}. {st.title}</span>
+                    <span className="font-thai block text-[10.5px] text-slate-500">{st.detail}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1"><Src t="image" mini /><Src t="scenario" mini /></div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
+            <div className="font-thai text-[12px] font-bold text-white">การตัดสินใจของคุณ</div>
+            {rounds.length === 0 && <div className="font-thai mt-2 text-[12px] text-[#FF9DB2]">— ไม่มีคำสั่งในองก์ 1 —</div>}
+            <div className="mt-1.5 space-y-1.5">
+              {rounds.map((r, i) => {
+                const [lab, hex] = OUTCOME[r.outcome || (r.kind === 'HOLD' ? 'hold' : 'standby')] || ['', '#cbd5e1']
+                const Icon = r.kind === 'EVACUATE' ? Megaphone : r.kind === 'STANDBY' ? Bell : Clock
+                return (
+                  <div key={i} className="flex items-start gap-2 border-b border-white/[0.05] pb-1.5 last:border-0">
+                    <Icon size={13} className="mt-[2px] shrink-0" style={{ color: hex }} />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-thai block text-[12px] text-white">{KIND_TH[r.kind]}
+                        {r.communities?.length > 0 && <span className="text-slate-400"> · {r.communities.map((id) => COMMUNITIES.find((c) => c.id === id)?.th).join(', ')}</span>}
+                      </span>
+                      <span className="num block text-[10.5px] text-slate-500">{r.clockLabel} · SFVI {r.sfvi.toFixed(2)} · น้ำ {r.water.toFixed(2)} ม.</span>
+                    </span>
+                    <span className="font-thai shrink-0 text-[10.5px] font-semibold" style={{ color: hex }}>{lab}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="font-thai mt-3 text-[11.5px] leading-snug text-slate-400">
+          องก์ 2: เมฆบัง 100% ภาพเชิงแสงใช้ไม่ได้ ต้องสลับไปใช้เรดาร์ หาเส้นทางหนีน้ำด้วย Sphere Routing และจัดลำดับส่งกำลังให้ 4 ชุมชน
+          {s.sealed.length < EMBANKMENT_GAPS.length && <> · จุดฟันหลอที่ยังไม่อุด {EMBANKMENT_GAPS.length - s.sealed.length} จุดจะเป็นทางให้น้ำเข้าเมือง</>}
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          {!timeout && (
+            <Btn variant="solid" icon={CornerUpLeft} onClick={onStay}>
+              <span className="font-thai normal-case tracking-normal text-[12.5px]">กลับไปสั่งการต่อในองก์ 1</span>
+            </Btn>
+          )}
+          <Btn variant="danger" size="lg" icon={ArrowRight} onClick={onNext}>
+            <span className="font-thai normal-case tracking-normal text-[14px]" data-act1-next>เข้าสู่ องก์ 2: วิกฤตน้ำท่วม</span>
+          </Btn>
         </div>
       </div>
     </Modal>

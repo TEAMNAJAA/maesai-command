@@ -48,6 +48,11 @@ body {
 @keyframes shimmer    { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
 @keyframes tickerX    { 0% { transform: translateX(0) } 100% { transform: translateX(-50%) } }
 @keyframes breathe    { 0%,100% { opacity: .35 } 50% { opacity: .85 } }
+/* mission quest — next-step beacon, completion tick, end-of-act call to action */
+@keyframes beacon     { 0%,100% { box-shadow: 0 0 0 0 rgba(255,208,102,0) } 50% { box-shadow: 0 0 0 2px rgba(255,208,102,.55), 0 0 18px -2px rgba(255,208,102,.55) } }
+@keyframes beaconGo   { 0%,100% { box-shadow: 0 0 0 0 rgba(34,227,107,0) } 50% { box-shadow: 0 0 0 2px rgba(34,227,107,.55), 0 0 20px -2px rgba(34,227,107,.6) } }
+@keyframes checkpop   { 0% { transform: scale(.3) } 55% { transform: scale(1.35); box-shadow: 0 0 0 6px rgba(34,227,107,.35) } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,227,107,0) } }
+@keyframes stepdone   { 0% { background-color: rgba(34,227,107,.32) } 100% { background-color: rgba(34,227,107,.06) } }
 
 /* ── Reusable component classes ─────────────────────────────── */
 @layer components {

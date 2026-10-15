@@ -4,10 +4,10 @@
 
 import React, { useState } from 'react'
 import {
-  AlertTriangle, Users, Clock, Timer, ChevronRight, ChevronUp, ChevronDown, Play, RotateCcw, BookOpen, Database, Lightbulb, X, Check, ScrollText,
+  AlertTriangle, Users, Clock, Timer, ChevronRight, ChevronUp, ChevronDown, Play, RotateCcw, BookOpen, Database, Lightbulb, X, Check, ScrollText, Lock, Flag,
 } from 'lucide-react'
 import { Panel } from '../ui/atoms'
-import { CLOUD_RULE, SPHERE } from '../config/missionConfig'
+import { SPHERE } from '../config/missionConfig'
 import { COMMUNITIES } from '../config/scenarioData'
 import { ACT_WINDOW, TOTAL_AT_RISK } from '../lib/sim'
 import { fmt, clockHeadline, clockToDate, clamp } from '../lib/format'
@@ -37,8 +37,8 @@ function Logo() {
   )
 }
 
-export function TopBar({ eng, onBriefing, onTeacher, hintsOn, setHintsOn }) {
-  const { s, situation, veto1, running, setRunning, goAct, reset, exposure } = eng
+export function TopBar({ eng, onBriefing, onTeacher, hintsOn, setHintsOn, onNextAct, act1Ready }) {
+  const { s, situation, veto1, running, setRunning, reset, exposure } = eng
   const act = ACTS[s.act - 1]
   const sitHex = situation === 'CRITICAL' ? '#FF003C' : situation === 'HIGH' ? '#FF7A1A' : situation === 'REVIEW' ? '#38BDF8' : '#FFB300'
   const sitTh = { CRITICAL: 'วิกฤต', HIGH: 'สูง', REVIEW: 'ทบทวน', ELEVATED: 'เฝ้าระวัง' }[situation]
@@ -93,14 +93,20 @@ export function TopBar({ eng, onBriefing, onTeacher, hintsOn, setHintsOn }) {
           </button>
         </div>
       )}
-      {s.act !== 3 && (
-        <button onClick={() => goAct(s.act + 1)} title={`ไปองก์ ${s.act + 1}`} data-next-act
-          className="btn flex items-center gap-1.5 px-2.5 py-1.5"
-          style={{ borderColor: `${ACTS[s.act].hex}77`, background: `linear-gradient(180deg, ${ACTS[s.act].hex}26, ${ACTS[s.act].hex}0D)`, color: ACTS[s.act].hex }}>
-          <Play size={12} fill="currentColor" />
-          <span className="font-thai normal-case tracking-normal text-[11px]">องก์ถัดไป</span>
-        </button>
-      )}
+      {s.act !== 3 && (() => {
+        // act 1 closes only through its summary, and only after a decision
+        const locked = s.act === 1 && !act1Ready
+        const hex = locked ? '#64748b' : ACTS[s.act].hex
+        return (
+          <button onClick={onNextAct} data-next-act data-locked={locked ? '1' : '0'}
+            title={locked ? 'ต้องตัดสินใจก่อน: ประกาศอพยพ / แจ้งเตรียมพร้อม / ยังไม่สั่งการ' : s.act === 1 ? 'สรุปผลองก์ 1 แล้วเข้าสู่องก์ 2' : `ไปองก์ ${s.act + 1}`}
+            className="btn flex items-center gap-1.5 px-2.5 py-1.5"
+            style={{ borderColor: `${hex}77`, background: `linear-gradient(180deg, ${hex}26, ${hex}0D)`, color: locked ? '#94a3b8' : hex }}>
+            {locked ? <Lock size={12} /> : s.act === 1 ? <Flag size={12} /> : <Play size={12} fill="currentColor" />}
+            <span className="font-thai normal-case tracking-normal text-[11px]">{s.act === 1 ? 'สรุปผล → องก์ 2' : 'องก์ถัดไป'}</span>
+          </button>
+        )
+      })()}
 
       <div className="flex items-center gap-0.5">
         <button onClick={() => setHintsOn((h) => !h)} title={hintsOn ? 'ซ่อนคำแนะนำ' : 'แสดงคำแนะนำ'}
@@ -129,8 +135,8 @@ export function TopBar({ eng, onBriefing, onTeacher, hintsOn, setHintsOn }) {
 
 /* ── Act stepper ────────────────────────────────────────────────────────── */
 
-export function ActStepper({ eng }) {
-  const { s, goAct } = eng
+export function ActStepper({ eng, onAct }) {
+  const { s } = eng
   return (
     <nav className="relative z-20 flex h-[40px] shrink-0 items-center gap-2 border-b border-white/[0.06] bg-[#050A14]/80 px-3" aria-label="Act progress">
       {ACTS.map((a, i) => {
@@ -139,7 +145,7 @@ export function ActStepper({ eng }) {
         const prog = state === 'current' ? clamp((s.clock - lo) / (hi - lo)) : state === 'done' ? 1 : 0
         return (
           <React.Fragment key={a.n}>
-            <button onClick={() => goAct(a.n)} data-act={a.n} title={`${a.en} — ${a.long}`}
+            <button onClick={() => onAct(a.n)} data-act={a.n} title={`${a.en} — ${a.long}`}
               className="group relative flex h-[30px] min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md border px-2.5 transition"
               style={{
                 borderColor: state === 'next' ? 'rgba(255,255,255,.08)' : `${a.hex}66`,
@@ -172,22 +178,11 @@ export function computeHint(eng, { tab, view, postDone }) {
   const { s, sfvi, veto1 } = eng
   const orders = Object.keys(s.evacOrders).length
   if (s.act === 1) {
+    // step-by-step guidance lives in the mission quest box (panels/quest.jsx); only urgent cases surface here
     if (veto1 && orders < COMMUNITIES.length) return { lv: 'crit', text: 'ระดับน้ำถึง 4.20 ม. — Veto 1: สั่งอพยพทันที ไม่ต้องรอภาพ', go: { tab: 'decide' }, cta: 'ไปที่การตัดสินใจ' }
-    if (!s.tasked.length && s.swaths > 0 && sfvi.world.cloud <= CLOUD_RULE.cloudPct)
-      return { text: 'คำแนะนำ: ลองสแกนป่าต้นน้ำเพื่อหาค่าดินถล่ม (L) — คลิกแถบ SECTOR บนแผนที่ลุ่มน้ำ', go: view === 'catchment' ? { tab: 'data' } : { view: 'catchment', tab: 'data' }, cta: view === 'catchment' ? 'ดูรายการแถบถ่ายภาพ' : 'เปิดแผนที่ลุ่มน้ำ' }
-    if (!s.channelMeasured && s.swaths > 0 && sfvi.world.cloud <= CLOUD_RULE.cloudPct)
-      return { text: 'คำแนะนำ: Sector D หรือ E พาดผ่านลำน้ำหลัก ใช้วัดความกว้างลำน้ำ (N) ได้', go: { view: 'catchment', tab: 'data' }, cta: 'ดูแถบ D / E' }
-    if (sfvi.justified && orders === 0)
-      return { text: `SFVI ${sfvi.basin.toFixed(2)} ผ่านเกณฑ์ ${'0.62'} แล้ว — เลือกชุมชนและพิจารณาสั่งอพยพ (ชุมชนทางออกน้อยใช้เวลาอพยพนาน)`, go: { tab: 'decide' }, cta: 'ไปที่การตัดสินใจ' }
-    if (sfvi.stale && orders === 0)
+    if (sfvi.stale && orders === 0 && !s.decisions.length)
       return { lv: 'warn', text: 'เมฆเริ่มบังลุ่มน้ำ (Cloud Rule) — ภาพเชิงแสงเชื่อถือได้น้อยลง ค่า L ถูกลดน้ำหนัก', go: { tab: 'decide' }, cta: 'ทบทวนการตัดสินใจ' }
-    if (orders > 0 && orders < COMMUNITIES.length)
-      return { text: 'ยังมีชุมชนที่ยังไม่ได้รับคำสั่ง — ตรวจ SFVI รายชุมชนและเวลาน้ำถึง', go: { tab: 'decide' }, cta: 'ดูชุมชนที่เหลือ' }
-    if (orders === COMMUNITIES.length)
-      return { text: 'สั่งอพยพครบ 4 ชุมชนแล้ว — ส่งบิ๊กแบ็กอุดจุดฟันหลอ หรือกด "องก์ถัดไป"', go: { view: 'corridor', tab: 'resources' }, cta: 'ดูจุดฟันหลอ' }
-    if (view !== 'urban')
-      return { text: 'ดูมุมมอง "4 ชุมชน" เพื่อเห็นตำแหน่งชุมชน ถนน และจุดอพยพจริง', go: { view: 'urban' }, cta: 'เปิดมุมมอง 4 ชุมชน' }
-    return { text: 'การรอข้อมูลที่ครบกว่าก็มีราคา — ลองกด "ยังไม่สั่งการ" เพื่อดูผลเปรียบเทียบสองทาง', go: { tab: 'decide' }, cta: 'ไปที่การตัดสินใจ' }
+    return null
   }
   if (s.act === 2) {
     if (s.warnedAt === null) return { lv: 'crit', text: 'ยังไม่เคยประกาศอพยพ — ประกาศตอนนี้ (เตือนช้า) ยังดีกว่าไม่ประกาศ', go: { tab: 'resources' }, cta: 'ไปที่ประกาศอพยพ' }

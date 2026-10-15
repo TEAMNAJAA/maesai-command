@@ -154,12 +154,13 @@ export const logger = {
   roundsCSV() {
     const head = ['session_id', 'player', 'round', 'act', 'kind', 'clock', 'event_time', 'round_sec', 'water_m', 'sfvi',
       'confidence', 'justified', 'layers_opened', 'layers_active', 'swaths_tasked', 'communities_ordered',
-      'sfvi_recommended', 'match_sfvi', 'outcome', 'trust_after']
+      'sfvi_recommended', 'match_sfvi', 'outcome', 'trust_after', 'channel_measured', 'gaps_sealed']
     const rows = []
     for (const s of memory.sessions) for (const r of s.rounds) {
       rows.push([s.id, s.player, r.n, r.act, r.kind, r.clockLabel, r.eventTime, r.roundSec, r.water, r.sfvi,
         r.confidence, r.justified ? 1 : 0, r.layersOpened, r.layersActive, r.swaths,
-        (r.communities || []).join(' '), (r.recommended || []).join(' '), r.matchSfvi ?? '', r.outcome ?? '', r.trustAfter ?? ''])
+        (r.communities || []).join(' '), (r.recommended || []).join(' '), r.matchSfvi ?? '', r.outcome ?? '', r.trustAfter ?? '',
+        r.channelMeasured === undefined ? '' : r.channelMeasured ? 1 : 0, r.gapsSealed ?? ''])
     }
     return toCSV([head, ...rows])
   },

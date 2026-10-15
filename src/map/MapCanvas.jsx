@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════════════════
    MAP CANVAS — view switcher, 3D tilt, zoom/pan and on-map callouts
-   Views:  corridor  · procedural THEOS-2 render of the urban embankment (act 1)
+   Views:  corridor  · Sai embankment on sphere imagery — flood-wall gaps   (act 1)
            catchment · real AOI-B geography + THEOS-2 tasking swaths  (act 1)
            urban     · real AOI-A town core — communities, roads, routes (acts 1–2)
            sar       · procedural RADARSAT-2 backscatter scene           (act 2)
@@ -8,24 +8,25 @@
 
 import React, { useState, useRef, useCallback } from 'react'
 import {
-  AlertTriangle, CheckCircle2, X, Plus, Minus, MousePointer2, Hand, Maximize2, Mountain, Lock, Radar, Route,
+  AlertTriangle, CheckCircle2, X, Plus, Minus, MousePointer2, Hand, Maximize2, Mountain, Lock, Radar, Route, ShieldCheck, Ruler,
 } from 'lucide-react'
-import { TerrainDefs, OpticalScene, SarScene, useTerrain } from './terrain'
+import { TerrainDefs, SarScene, useTerrain } from './terrain'
 import { GeoMap, EXTENTS } from './GeoMap'
 import { Panel, Corners, Src, SrcLegend, Btn } from '../ui/atoms'
 import { COMMUNITIES } from '../config/scenarioData'
-import { clamp } from '../lib/format'
-import { THRESHOLDS } from '../config/missionConfig'
+import { clamp, fmt } from '../lib/format'
+import { THRESHOLDS, EMBANKMENT } from '../config/missionConfig'
+import { EMBANKMENT_GAPS } from '../lib/embankment'
 
 export const VIEWS = {
-  corridor: { th: 'แนวตลิ่งเมือง', en: 'URBAN EMBANKMENT', src: 'scenario', sensor: 'THEOS-2 · L3 ORTHO (ภาพจำลอง)' },
+  corridor: { th: 'แนวตลิ่งเมือง', en: 'URBAN EMBANKMENT', src: 'image', sensor: 'GISTDA sphere · ภาพดาวเทียม z17 · อาคาร GISTDA' },
   catchment: { th: 'ลุ่มน้ำต้นน้ำ AOI-B', en: 'UPSTREAM CATCHMENT', src: 'radar', sensor: 'DEM SRTM · AOI GeoJSON' },
   urban: { th: '4 ชุมชน AOI-A', en: 'WATCH COMMUNITIES', src: 'measured', sensor: 'OpenStreetMap · AOI GeoJSON' },
   sar: { th: 'เรดาร์ SAR', en: 'RADARSAT-2', src: 'radar', sensor: 'RADARSAT-2 · C-BAND (ภาพจำลอง)' },
 }
 export const viewsForAct = (act) => (act === 2 ? ['sar', 'urban'] : ['catchment', 'urban', 'corridor'])
 
-export function MapCanvas({ eng, view, setView, focus, onCommunity, onRouteTool, hint }) {
+export function MapCanvas({ eng, view, setView, focus, onCommunity, onRouteTool, hint, beaconView, beaconMap }) {
   const { s, sfvi, veto1 } = eng
   const terrain = useTerrain()
   const [hoverSector, setHoverSector] = useState(null)
@@ -37,12 +38,13 @@ export function MapCanvas({ eng, view, setView, focus, onCommunity, onRouteTool,
   const [tilt, setTilt] = useState(false)
   const [cursor, setCursor] = useState(null)
   const drag = useRef(null)
+  const rootRef = useRef(null)
 
   const act = s.act
   const L = s.layers
   const level = sfvi.world.level
   const floodPhase = clamp((level - 3.4) / 3, 0, 1)
-  const isGeo = view === 'catchment' || view === 'urban'
+  const isGeo = view !== 'sar'
   const meta = VIEWS[view]
 
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); setTilt(false) }
@@ -61,17 +63,20 @@ export function MapCanvas({ eng, view, setView, focus, onCommunity, onRouteTool,
   const sceneTransform = `${tilt ? 'perspective(1500px) rotateX(52deg) scale(1.22) ' : ''}scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-lg border border-sky-400/15 bg-[#04070E]" data-map-view={view}>
+    <div ref={rootRef} className="relative h-full w-full overflow-hidden rounded-lg border border-sky-400/15 bg-[#04070E]" data-map-view={view}>
       {/* ── Scene (tilt / zoom / pan apply here only) ───────────────────── */}
       <div className={`absolute inset-0 ${tool === 'pan' ? 'cursor-grab active:cursor-grabbing' : ''}`}
         style={{ transform: sceneTransform, transformOrigin: '50% 58%', transition: drag.current ? 'none' : 'transform .5s cubic-bezier(.4,0,.2,1)' }}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         {isGeo ? (
           <GeoMap extent={view} eng={eng} hoverSector={hoverSector} setHoverSector={setHoverSector}
-            onHover={tilt ? null : setCursor} focus={focus} onCommunity={onCommunity} />
+            onHover={tilt ? null : setCursor} focus={focus} onCommunity={onCommunity} beacon={beaconMap}
+            gapSel={gapCard?.id} onGap={(g, e) => {
+              const r = rootRef.current?.getBoundingClientRect()
+              setGapCard(g && r ? { ...g, px: e.clientX - r.left, py: e.clientY - r.top, w: r.width, h: r.height } : null)
+            }} />
         ) : (
-          <ProceduralScene eng={eng} view={view} terrain={terrain} floodPhase={floodPhase}
-            gapCard={gapCard} setGapCard={setGapCard} setRouteDetail={setRouteDetail} routeDetail={routeDetail} />
+          <ProceduralScene eng={eng} terrain={terrain} floodPhase={floodPhase} setRouteDetail={setRouteDetail} routeDetail={routeDetail} />
         )}
       </div>
 
@@ -87,7 +92,8 @@ export function MapCanvas({ eng, view, setView, focus, onCommunity, onRouteTool,
           <button key={id} onClick={() => setView(id)} data-view={id}
             className={`btn whitespace-nowrap px-2.5 py-1.5 ${view === id
               ? 'border-sky-400/60 bg-sky-400/20 text-sky-100'
-              : 'border-transparent text-sky-300/60 hover:text-sky-200'}`}>
+              : beaconView === id ? 'border-[#FFD066]/70 bg-[#FFD066]/15 text-[#FFE0A3] animate-[beacon_1.6s_ease-in-out_infinite]'
+                : 'border-transparent text-sky-300/60 hover:text-sky-200'}`}>
             <span className="font-thai normal-case tracking-normal text-[10.5px]">{VIEWS[id].th}</span>
           </button>
         ))}
@@ -117,40 +123,9 @@ export function MapCanvas({ eng, view, setView, focus, onCommunity, onRouteTool,
       {/* ── Guided hint ─────────────────────────────────────────────────── */}
       {hint && <div className="absolute left-14 top-[58px] z-20 max-w-[330px]">{hint}</div>}
 
-      {/* ── Act 1 corridor: flood-wall callouts ─────────────────────────── */}
-      {view === 'corridor' && !gapCard && (
-        <div className="pointer-events-none absolute bottom-12 left-1/2 z-20 -translate-x-1/2 animate-[fadeIn_.5s_ease-out]">
-          <div className="flex items-center gap-2 rounded-md border border-[#FF003C]/45 bg-[#0B0F22]/85 px-3 py-1.5 backdrop-blur-md">
-            <AlertTriangle size={11} className="text-[#FF003C] animate-[flash_1.4s_ease-in-out_infinite]" />
-            <span className="font-thai text-[11px] text-[#FF9DB2]">พบจุดฟันหลอแนวกั้นน้ำ 14 จุด — คลิกหมุดสีแดงเพื่อดูรายละเอียด</span>
-          </div>
-        </div>
-      )}
-      {view === 'corridor' && gapCard && (
-        <div className="absolute z-20 w-[220px] animate-[riseIn_.28s_ease-out]"
-          style={{ left: `${clamp(gapCard.x / 1000, 0.04, 0.6) * 100}%`, top: `${clamp(gapCard.y / 760, 0.08, 0.6) * 100}%`, marginLeft: 26 }}>
-          <Panel className="p-3" glow="#FF003C">
-            <Corners color="rgba(255,0,60,.55)" />
-            <button onClick={() => setGapCard(null)} className="absolute right-1.5 top-1.5 text-slate-500 hover:text-white"><X size={11} /></button>
-            <div className="flex items-start gap-2">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[#FF003C]" />
-              <div>
-                <div className="text-[13px] font-semibold text-white">Missing Flood Wall</div>
-                <div className="font-thai text-[10.5px] text-slate-400">จุดฟันหลอของแนวกั้นน้ำ</div>
-              </div>
-            </div>
-            <div className="mt-2.5 space-y-1.5 border-t border-white/10 pt-2.5">
-              {[['Marker', gapCard.id, 'text-sky-200'], ['Risk Level', 'VERY HIGH', 'text-[#FF003C]'], ['Gap Length', `${gapCard.len} m`, 'text-white']].map(([k, v, c]) => (
-                <div key={k} className="flex items-center justify-between">
-                  <span className="hud-label">{k}</span><span className={`num text-[11px] font-bold ${c}`}>{v}</span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between"><span className="hud-label">Evidence</span><Src t="scenario" mini /></div>
-              <div className="font-thai pt-1 text-[10px] leading-snug text-slate-400">ส่งบิ๊กแบ็กได้ที่แผงสั่งการ → ทรัพยากร</div>
-            </div>
-          </Panel>
-        </div>
-      )}
+      {/* ── Act 1 corridor: flood-wall action bar + gap card ─────────────── */}
+      {view === 'corridor' && <EmbankmentBar eng={eng} />}
+      {view === 'corridor' && gapCard && <GapCard eng={eng} gap={gapCard} onClose={() => setGapCard(null)} />}
 
       {/* ── Act 2 SAR: blocked-route callout → opens the routing tool ────── */}
       {view === 'sar' && (
@@ -242,18 +217,16 @@ export function MapCanvas({ eng, view, setView, focus, onCommunity, onRouteTool,
   )
 }
 
-/** The original procedural scenes (urban embankment render · SAR backscatter). */
-function ProceduralScene({ eng, view, terrain, floodPhase, gapCard, setGapCard, setRouteDetail, routeDetail }) {
+/** The procedural RADARSAT-2 backscatter scene (act 2). */
+function ProceduralScene({ eng, terrain, floodPhase, setRouteDetail, routeDetail }) {
   const { s } = eng
   const L = s.layers
   const act = s.act
-  const sar = view === 'sar'
+  const sar = true
   return (
     <svg viewBox="0 0 1000 760" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full">
       <TerrainDefs />
-      {sar
-        ? <SarScene terrain={terrain} floodPhase={floodPhase} />
-        : <OpticalScene terrain={terrain} showBuildings={L.buildings || L.theos} />}
+      <SarScene terrain={terrain} floodPhase={floodPhase} />
 
       {L.elev && terrain.ridges.map((r, i) => (
         <path key={`e${i}`} d={r.d} stroke={sar ? '#7FB2E5' : '#9ae6b4'} strokeWidth="0.7" fill="none" opacity="0.16" />
@@ -300,21 +273,6 @@ function ProceduralScene({ eng, view, terrain, floodPhase, gapCard, setGapCard, 
         </g>
       )}
 
-      {/* flood-wall gaps — จุดฟันหลอ */}
-      {view === 'corridor' && terrain.gaps.map((g, i) => {
-        const on = gapCard?.id === g.id
-        return (
-          <g key={g.id} className="cursor-pointer" data-gap={g.id} onClick={() => setGapCard(on ? null : g)}>
-            <circle cx={g.x} cy={g.y} r="9" fill="none" stroke="#FF003C" strokeWidth="1.1" opacity="0.5"
-              className="animate-[pulsering_2.6s_ease-out_infinite]" style={{ animationDelay: `${i * 0.16}s`, transformOrigin: `${g.x}px ${g.y}px` }} />
-            <circle cx={g.x} cy={g.y} r="15" fill="transparent" />
-            <circle cx={g.x} cy={g.y} r={on ? 6.4 : 4.6} fill="#FF003C" opacity="0.95" style={{ filter: `drop-shadow(0 0 ${on ? 12 : 6}px #FF003C)` }} />
-            <circle cx={g.x} cy={g.y} r="1.8" fill="#fff" />
-            {on && <circle cx={g.x} cy={g.y} r="12" fill="none" stroke="#fff" strokeWidth="1.2" opacity="0.9" />}
-          </g>
-        )
-      })}
-
       {/* act 2 — blocked mountain route */}
       {sar && (
         <g className="cursor-pointer" onClick={() => setRouteDetail((v) => !v)}>
@@ -340,5 +298,82 @@ function ProceduralScene({ eng, view, terrain, floodPhase, gapCard, setGapCard, 
         </g>
       )}
     </svg>
+  )
+}
+
+/* ── Corridor overlays ─────────────────────────────────────────────────────── */
+
+/** Bottom action bar of the embankment view: progress, measure N, seal everything left. */
+function EmbankmentBar({ eng }) {
+  const { s } = eng
+  const open = EMBANKMENT_GAPS.filter((g) => !s.sealed.includes(g.id))
+  const cost = open.length * EMBANKMENT.sealAP
+  const act1 = s.act === 1 && !s.act1Timeout
+  return (
+    <div className="absolute bottom-11 left-1/2 z-20 w-max max-w-[96%] -translate-x-1/2 animate-[fadeIn_.4s_ease-out]" data-embankment-bar>
+      <div className="flex items-center gap-2 whitespace-nowrap rounded-md border border-white/15 bg-[#070D1C]/95 px-2.5 py-1.5">
+        {open.length
+          ? <AlertTriangle size={12} className="shrink-0 text-[#FF003C] animate-[flash_1.4s_ease-in-out_infinite]" />
+          : <CheckCircle2 size={12} className="shrink-0 text-[#22E36B]" />}
+        <span className="font-thai whitespace-nowrap text-[11px]" style={{ color: open.length ? '#FF9DB2' : '#7CFFA0' }}>
+          {open.length ? `จุดฟันหลอ ${EMBANKMENT_GAPS.length} จุด · อุดแล้ว ${s.sealed.length}` : `แนวกั้นน้ำครบ ${EMBANKMENT_GAPS.length}/${EMBANKMENT_GAPS.length} จุด`}
+        </span>
+        <Src t="scenario" mini />
+        {act1 && !s.channelMeasured && (
+          <Btn size="sm" variant="primary" icon={Ruler} onClick={eng.measureChannel}>
+            <span className="font-thai normal-case tracking-normal text-[10.5px]">วัดลำน้ำ (N)</span>
+          </Btn>
+        )}
+        {act1 && open.length > 0 && (
+          <Btn size="sm" variant="go" icon={ShieldCheck} disabled={s.ap < cost} onClick={() => eng.sealGaps(open.map((g) => g.id))}>
+            <span className="font-thai normal-case tracking-normal text-[10.5px]">อุดที่เหลือ {open.length} จุด · {fmt(cost)} AP</span>
+          </Btn>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Card next to a clicked gap: what is behind it, and the seal order. */
+function GapCard({ eng, gap, onClose }) {
+  const { s } = eng
+  const sealed = s.sealed.includes(gap.id)
+  const act1 = s.act === 1 && !s.act1Timeout
+  const hex = sealed ? '#22E36B' : '#FF003C'
+  const left = clamp(gap.px + 22, 8, gap.w - 252), top = clamp(gap.py - 40, 56, gap.h - 230)
+  return (
+    <div className="absolute z-30 w-[240px] animate-[riseIn_.25s_ease-out]" style={{ left, top }} data-gap-card={gap.id}>
+      <Panel className="bg-[#070D1C]/95 p-3" glow={hex}>
+        <Corners color={`${hex}88`} />
+        <button onClick={onClose} className="absolute right-1.5 top-1.5 text-slate-500 hover:text-white"><X size={12} /></button>
+        <div className="flex items-start gap-2">
+          {sealed ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-[#22E36B]" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[#FF003C]" />}
+          <div>
+            <div className="font-thai text-[13px] font-semibold text-white">{sealed ? 'อุดแล้ว' : 'จุดฟันหลอของแนวกั้นน้ำ'} · <span className="num">{gap.id}</span></div>
+            <div className="font-thai text-[10.5px] text-slate-400">{gap.community ? `ริมตลิ่งใกล้ชุมชน${gap.community}` : 'ริมตลิ่งแม่น้ำสาย ฝั่งไทย'}</div>
+          </div>
+        </div>
+        <div className="mt-2.5 space-y-1.5 border-t border-white/10 pt-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-thai text-[10.5px] text-slate-400">ช่องโหว่ยาว</span>
+            <span className="flex items-center gap-1.5"><span className="num text-[11.5px] font-bold text-white">{gap.len} ม.</span><Src t="scenario" mini /></span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-thai text-[10.5px] text-slate-400">หลังคาเสี่ยงด้านหลัง (≤150 ม.)</span>
+            <span className="flex items-center gap-1.5"><span className="num text-[11.5px] font-bold text-[#FFB3C2]">{gap.behind}</span><Src t="image" mini /></span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-thai text-[10.5px] text-slate-400">บิ๊กแบ็กที่ต้องใช้</span>
+            <span className="num text-[11.5px] font-bold text-white">{fmt(gap.len * EMBANKMENT.bagsPerMetre)} ใบ</span>
+          </div>
+        </div>
+        {!sealed && act1 && (
+          <Btn variant="go" className="mt-2.5 w-full" icon={ShieldCheck} disabled={s.ap < EMBANKMENT.sealAP}
+            onClick={() => { eng.sealGaps([gap.id]); onClose() }}>
+            <span className="font-thai normal-case tracking-normal text-[11.5px]">อุดจุดนี้ด้วยบิ๊กแบ็ก · {EMBANKMENT.sealAP} AP</span>
+          </Btn>
+        )}
+      </Panel>
+    </div>
   )
 }

@@ -2,11 +2,13 @@
    GEO MAP — the real geography, drawn from the project's spatial files
    · catchment : AOI-B (DEM-derived, Myanmar) + THEOS-2 tasking swaths
    · urban     : AOI-A town core — 4 watch communities, OSM roads/rivers, routes
+   · corridor  : the Sai embankment through town on sphere imagery (zoom 16–17) —
+                 real roofs, the flood wall and its 14 gaps, the N ruler
    All coordinates are WGS84 → Web Mercator, so sphere tiles and the DEM align.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useMemo, useRef, useCallback } from 'react'
-import { DATA, THEOS2, OFFLINE_ROUTING, SPHERE, FLOOD_REACH } from '../config/missionConfig'
+import { DATA, THEOS2, OFFLINE_ROUTING, SPHERE, FLOOD_REACH, EMBANKMENT, HYDRO, THRESHOLDS } from '../config/missionConfig'
 import { SECTORS, SHELTER } from '../config/scenarioData'
 import {
   makeProjection, geomPath, linePath, boxKm, geomCentroid, aoiFeature, aoiStations, aoiRiver, osmRivers, osmRoads, saiRiver, roadWeight, tilesFor, elevationAt, isFloodedStreet,
@@ -15,10 +17,18 @@ import { mulberry32 } from './terrain'
 import { levelAt, ARRIVAL, safeFraction } from '../lib/sim'
 import { sphereTileTemplate } from '../lib/sphere'
 import { BUILDINGS, COMMUNITIES_LIVE } from '../lib/buildings'
+import { EMBANKMENT_GAPS, EMBANKMENT_WALL, EMBANKMENT_RIVER, CHANNEL_RULER } from '../lib/embankment'
 
 export const EXTENTS = {
   catchment: { bbox: [99.37, 20.3, 99.9, 20.615], dem: 'catchment', label: 'AOI-B · ลุ่มน้ำสายตอนบน (เมียนมา)' },
   urban: { bbox: [99.855, 20.414, 99.915, 20.458], dem: 'urban', label: 'AOI-A · เขตเมืองแม่สาย (4 ชุมชนเฝ้าระวัง)' },
+  corridor: { bbox: EMBANKMENT.bbox, dem: 'urban', label: 'แนวตลิ่งแม่น้ำสาย · เขตเมืองแม่สาย' },
+}
+
+/** Grow a bbox about its centre (corridor imagery also fills the letterbox around the frame). */
+const grow = ([w, s, e, n], fx, fy) => {
+  const cx = (w + e) / 2, cy = (s + n) / 2, hx = ((e - w) / 2) * fx, hy = ((n - s) / 2) * fy
+  return [cx - hx, cy - hy, cx + hx, cy + hy]
 }
 
 const SWATH_H_KM = 11
@@ -33,19 +43,25 @@ function sectorScars(sec) {
 }
 const SCARS = Object.fromEntries(SECTORS.map((sec) => [sec.id, sectorScars(sec)]))
 
-export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focus, onCommunity }) {
+export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focus, onCommunity, gapSel, onGap, beacon }) {
   const { s, sfvi } = eng
   const L = s.layers
   const ex = EXTENTS[extent]
   const proj = useMemo(() => makeProjection(ex.bbox, 1000, 760, extent === 'catchment' ? 18 : 0), [extent])
+  const corridor = extent === 'corridor'
   const dem = DATA.dem[ex.dem]
   const svgRef = useRef(null)
   // sphere imagery basemap — Thai coverage only, so the Myanmar catchment keeps the SRTM relief
-  const tiles = useMemo(() => (SPHERE.basemap[extent] ? tilesFor(proj, sphereTileTemplate(), 96, 1) : []), [proj, extent])
+  const tiles = useMemo(() => {
+    if (!SPHERE.basemap[extent]) return []
+    // the embankment view keeps imagery under the letterbox too (its svg overflows the frame)
+    return corridor ? tilesFor({ ...proj, bbox: grow(proj.bbox, 1.5, 1.4) }, sphereTileTemplate(), 140, 1) : tilesFor(proj, sphereTileTemplate(), 96, 1)
+  }, [proj, extent, corridor])
 
   /* Real GISTDA roofs as a few compound paths (15k polygons → 6 SVG elements). */
   const roofs = useMemo(() => {
-    if (extent !== 'urban' || !BUILDINGS.length) return null
+    if (extent === 'catchment' || !BUILDINGS.length) return null
+    const [bw, bs, be, bn] = corridor ? grow(proj.bbox, 1.6, 1.5) : proj.bbox
     const ring = (r) => {
       let d = ''
       for (let i = 0; i < r.length; i++) { const [x, y] = proj.pt(r[i]); d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) }
@@ -53,6 +69,7 @@ export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focu
     }
     const out = { dry: '', wet: '', com: {} }
     for (const b of BUILDINGS) {
+      if (corridor && (b.c[0] < bw || b.c[0] > be || b.c[1] < bs || b.c[1] > bn)) continue
       const d = ring(b.ring)
       if (b.community) {
         const k = (out.com[b.community] ||= { dry: '', wet: '' })
@@ -61,7 +78,7 @@ export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focu
       else out.dry += d
     }
     return out
-  }, [extent, proj])
+  }, [extent, proj, corridor])
   const act = s.act
   const level = levelAt(s.clock)
   const flooded = act === 2
@@ -80,6 +97,7 @@ export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focu
 
   return (
     <svg ref={svgRef} viewBox="0 0 1000 760" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full"
+      style={corridor ? { overflow: 'visible' } : undefined}
       onPointerMove={handleMove} onPointerLeave={() => onHover?.(null)}>
       <defs>
         <pattern id={`grid-${extent}`} width="40" height="40" patternUnits="userSpaceOnUse">
@@ -93,24 +111,27 @@ export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focu
       <rect x="0" y="0" width="1000" height="760" fill={`url(#grid-${extent})`} />
 
       {/* DEM hillshade — SRTM relief, baked offline */}
-      {L.elev && dem && (() => {
+      {(L.elev || corridor) && dem && (() => {
         const r = proj.rect(dem.bbox)
         return <image href={dem.href} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio="none"
           opacity={tiles.length ? 0.45 : 0.92} style={tiles.length ? { mixBlendMode: 'multiply' } : undefined} />
       })()}
-      {!L.elev && <rect x="0" y="0" width="1000" height="760" fill="#0a1424" opacity="0.6" />}
+      {!L.elev && !corridor && <rect x="0" y="0" width="1000" height="760" fill="#0a1424" opacity="0.6" />}
 
       {/* GISTDA sphere imagery basemap (online + key); failed tiles stay transparent → DEM shows through */}
       {tiles.map((t) => (
         <image key={t.key} href={t.href} x={t.x} y={t.y} width={t.w + 0.6} height={t.h + 0.6} preserveAspectRatio="none" />
       ))}
-      {tiles.length > 0 && <rect x="0" y="0" width="1000" height="760" fill="#04080f" opacity="0.32" pointerEvents="none" />}
+      {tiles.length > 0 && !corridor && <rect x="0" y="0" width="1000" height="760" fill="#04080f" opacity="0.32" pointerEvents="none" />}
+      {tiles.length > 0 && corridor && <rect x="-500" y="-400" width="2000" height="1560" fill="#04080f" opacity="0.12" pointerEvents="none" />}
 
       {/* real THEOS-2 imagery (when GISTDA delivers it) */}
       {L.theos && DATA.theosImagery.after && extent === 'urban' && (() => {
         const r = proj.rect(DATA.theosImagery.bbox)
         return <image href={DATA.theosImagery.after} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio="none" />
       })()}
+
+      {corridor && <CorridorScene eng={eng} proj={proj} roofs={roofs} gapSel={gapSel} onGap={onGap} beacon={beacon} />}
 
       {extent === 'catchment' && (
         <g>
@@ -355,3 +376,136 @@ export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focu
   )
 }
 
+/* ── Corridor · the Sai embankment through town ───────────────────────────── */
+
+const halo = { paintOrder: 'stroke', stroke: '#000', strokeWidth: 3.5, strokeLinejoin: 'round' }
+
+function CorridorScene({ eng, proj, roofs, gapSel, onGap, beacon }) {
+  const { s } = eng
+  const px = (m) => m / proj.metresPerPx
+  const act1 = s.act === 1 && !s.act1Timeout
+  const shift = (p, [nx, ny], d) => [p[0] + (nx * d) / (111320 * Math.cos((p[1] * Math.PI) / 180)), p[1] + (ny * d) / 110540]
+  const ruler = CHANNEL_RULER && (() => {
+    const w = s.channelMeasured ? s.channelWidth : HYDRO.trueChannelWidth
+    const a = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, w / 2))
+    const b = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, -w / 2))
+    const lab = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, -95))   // label over the Myanmar bank
+    const ang = Math.atan2(b[1] - a[1], b[0] - a[0])
+    const tick = (p) => [p[0] + Math.cos(ang + Math.PI / 2) * 6, p[1] + Math.sin(ang + Math.PI / 2) * 6, p[0] - Math.cos(ang + Math.PI / 2) * 6, p[1] - Math.sin(ang + Math.PI / 2) * 6]
+    return { a, b, lab, ta: tick(a), tb: tick(b), w }
+  })()
+
+  return (
+    <g data-corridor>
+      {/* the pre-encroachment channel (~150 m) once THEOS-2 has measured what is left */}
+      {s.channelMeasured && EMBANKMENT_RIVER.length > 1 && (
+        <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#38BDF8" strokeWidth={px(THRESHOLDS.origChannelWidth)}
+          strokeLinecap="round" strokeLinejoin="round" opacity="0.1" pointerEvents="none" />
+      )}
+
+      {/* real GISTDA roofs as outlines, so the imagery stays readable underneath */}
+      {roofs && (
+        <g pointerEvents="none" data-roofs={BUILDINGS.length}>
+          <path d={roofs.dry + Object.values(roofs.com).map((k) => k.dry).join('')} fill="#F8FAFC" fillOpacity="0.06" stroke="#F8FAFC" strokeOpacity="0.6" strokeWidth="0.7" />
+          <path d={roofs.wet + Object.values(roofs.com).map((k) => k.wet).join('')} fill="#38BDF8" fillOpacity="0.16" stroke="#7DD3FC" strokeOpacity="0.9" strokeWidth="0.75" />
+        </g>
+      )}
+
+      {/* river centreline (OSM) */}
+      {EMBANKMENT_RIVER.length > 1 && (
+        <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#38BDF8" strokeWidth="1.4" strokeDasharray="8 6" opacity="0.75"
+          className="animate-[dashflow_9s_linear_infinite]" pointerEvents="none" />
+      )}
+
+      {/* the flood wall, broken at every gap */}
+      <g pointerEvents="none">
+        {EMBANKMENT_WALL.pieces.map((piece, i) => (
+          <g key={i}>
+            <path d={linePath(piece, proj)} fill="none" stroke="#000" strokeWidth="6.5" opacity="0.55" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={linePath(piece, proj)} fill="none" stroke="#FCD34D" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+        ))}
+        {EMBANKMENT_GAPS.map((g) => {
+          const span = EMBANKMENT_WALL.spans[g.id]
+          if (!span || span.length < 2) return null
+          const sealed = s.sealed.includes(g.id)
+          return (
+            <path key={g.id} d={linePath(span, proj)} fill="none" stroke={sealed ? '#22E36B' : '#FF003C'} strokeWidth="4.5"
+              strokeDasharray={sealed ? undefined : '3 3'} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${sealed ? '#22E36B' : '#FF003C'})` }} />
+          )
+        })}
+      </g>
+
+      {/* N ruler across the channel */}
+      {ruler && (
+        <g className={act1 && !s.channelMeasured ? 'cursor-pointer' : ''} data-ruler={s.channelMeasured ? 'measured' : 'open'}
+          onClick={() => act1 && !s.channelMeasured && eng.measureChannel()}>
+          <line x1={ruler.a[0]} y1={ruler.a[1]} x2={ruler.lab[0]} y2={ruler.lab[1]} stroke="#E0F2FE" strokeWidth="1" strokeDasharray="2 3" opacity="0.8" />
+          <line x1={ruler.a[0]} y1={ruler.a[1]} x2={ruler.b[0]} y2={ruler.b[1]} stroke="#000" strokeWidth="5" opacity="0.6" />
+          <line x1={ruler.a[0]} y1={ruler.a[1]} x2={ruler.b[0]} y2={ruler.b[1]} stroke={s.channelMeasured ? '#22D3EE' : '#fff'} strokeWidth="2.4"
+            strokeDasharray={s.channelMeasured ? undefined : '3 2'} />
+          {[ruler.ta, ruler.tb].map((k, i) => <line key={i} x1={k[0]} y1={k[1]} x2={k[2]} y2={k[3]} stroke={s.channelMeasured ? '#22D3EE' : '#fff'} strokeWidth="2" />)}
+          {beacon === 'ruler' && !s.channelMeasured && (
+            <circle cx={ruler.lab[0]} cy={ruler.lab[1]} r="16" fill="none" stroke="#FFD066" strokeWidth="1.6"
+              className="animate-[pulsering_1.8s_ease-out_infinite]" style={{ transformOrigin: `${ruler.lab[0]}px ${ruler.lab[1]}px` }} />
+          )}
+          <g transform={`translate(${ruler.lab[0]} ${ruler.lab[1]})`}>
+            <rect x="-78" y="-15" width="156" height="30" rx="5" fill="#070D1C" fillOpacity="0.9" stroke={s.channelMeasured ? '#22D3EE' : '#FFD066'} strokeWidth="1.2" />
+            <text y="-2" textAnchor="middle" fontSize="11" fontWeight="700" className="font-thai" fill={s.channelMeasured ? '#A5F3FC' : '#FFE0A3'}>
+              {s.channelMeasured ? `ลำน้ำเหลือ ${Math.round(ruler.w)} ม.` : 'คลิกวัดความกว้างลำน้ำ'}
+            </text>
+            <text y="10" textAnchor="middle" fontSize="9" className="font-thai" fill="#94A3B8">
+              {s.channelMeasured ? `เดิม ${THRESHOLDS.origChannelWidth} ม. · N = ${(1 - ruler.w / THRESHOLDS.origChannelWidth).toFixed(2)}` : 'ค่า N · ภาพ THEOS-2'}
+            </text>
+          </g>
+        </g>
+      )}
+
+      {/* community names for orientation */}
+      {COMMUNITIES_LIVE.map((c) => {
+        const [x, y] = proj.pt([c.lon, c.lat])
+        return (
+          <g key={c.id} pointerEvents="none">
+            <circle cx={x} cy={y} r="3.5" fill="#FDE68A" stroke="#000" strokeWidth="1.2" />
+            <text x={x + 7} y={y + 4} fontSize="12" fontWeight="600" className="font-thai" fill="#FEF3C7" style={halo}>{c.th}</text>
+          </g>
+        )
+      })}
+
+      {/* the 14 gaps — click to seal */}
+      {EMBANKMENT_GAPS.map((g, i) => {
+        const [x, y] = proj.pt([g.lon, g.lat])
+        const sealed = s.sealed.includes(g.id)
+        const on = gapSel === g.id
+        return (
+          <g key={g.id} className="cursor-pointer" data-gap={g.id} data-sealed={sealed ? '1' : '0'}
+            onClick={(e) => { e.stopPropagation(); onGap?.(on ? null : g, e) }}>
+            <circle cx={x} cy={y} r="16" fill="transparent" />
+            {!sealed && (
+              <circle cx={x} cy={y} r="10" fill="none" stroke="#FF003C" strokeWidth="1.4" opacity="0.7"
+                className="animate-[pulsering_2.4s_ease-out_infinite]" style={{ animationDelay: `${i * 0.17}s`, transformOrigin: `${x}px ${y}px` }} />
+            )}
+            {sealed ? (
+              <g>
+                <circle cx={x} cy={y} r={on ? 8 : 6.5} fill="#22E36B" stroke="#03140a" strokeWidth="1.4" style={{ filter: 'drop-shadow(0 0 5px #22E36B)' }} />
+                <path d={`M ${x - 3} ${y} L ${x - 0.8} ${y + 2.4} L ${x + 3.2} ${y - 2.6}`} fill="none" stroke="#03140a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </g>
+            ) : (
+              <g>
+                <circle cx={x} cy={y} r={on ? 7.5 : 6} fill="#FF003C" stroke="#2b0008" strokeWidth="1.2" style={{ filter: `drop-shadow(0 0 ${on ? 10 : 6}px #FF003C)` }} />
+                <circle cx={x} cy={y} r="2" fill="#fff" />
+              </g>
+            )}
+            {on && <circle cx={x} cy={y} r="13" fill="none" stroke="#fff" strokeWidth="1.4" />}
+            {(on || i === 0 || i === EMBANKMENT_GAPS.length - 1) && (
+              <text x={x} y={y + 22} textAnchor="middle" fontSize="9.5" className="font-mono" fill={sealed ? '#7CFFA0' : '#FF9DB2'} style={halo}>{g.id}</text>
+            )}
+          </g>
+        )
+      })}
+
+      <text x="500" y="80" textAnchor="middle" fontSize="13" fill="#CBD5E1" className="font-mono" letterSpacing="3" style={halo}>TACHILEIK · MYANMAR</text>
+      <text x="30" y="690" fontSize="13" fill="#CBD5E1" className="font-mono" letterSpacing="3" style={halo}>MAE SAI · THAILAND</text>
+    </g>
+  )
+}

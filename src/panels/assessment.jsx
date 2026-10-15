@@ -57,70 +57,70 @@ export const trustHex = (t) => (t >= 75 ? '#22E36B' : t >= 50 ? '#FFB300' : '#FF
 export function SfviScorecard({ eng }) {
   const { sfvi, s } = eng
   const w = SFVI.weights
+  const roofs = COMMUNITIES_LIVE.reduce((a, c) => a + c.households, 0)
+  const floodRoofs = COMMUNITIES_LIVE.reduce((a, c) => a + c.floodRoofs, 0)
+  // one line per factor: letter · what it is · raw reading · score — the bar fills the row behind
   const rows = [
-    { k: 'W', w: w.W, v: sfvi.W, src: 'measured', label: `ระดับน้ำ ÷ ${THRESHOLDS.criticalLevel.toFixed(2)} ม.`, th: 'สถานีบ้านถ้ำผาจม' },
-    { k: 'R', w: w.R, v: sfvi.R, src: 'measured', label: 'ฝนสะสมต้นน้ำ', th: 'สถานีบ้านโจตาดา · เมียนมา' },
-    { k: 'L', w: sfvi.Lw, v: sfvi.L, src: 'image', label: `ดินถล่มใหม่ ${sfvi.scarsSeen}/${TOTAL_SCARS} จุด`, th: 'จากภาพ THEOS-2', dim: sfvi.stale },
-    { k: 'N', w: w.N, v: sfvi.N, src: 'image', label: `ลำน้ำเหลือ ${Math.round(s.channelWidth)} / ${THRESHOLDS.origChannelWidth} ม.`, th: s.channelMeasured ? 'วัดจากภาพแล้ว' : 'ยังไม่วัด (ค่าเดิม)' },
+    { k: 'W', w: w.W, v: sfvi.W, src: ['measured'], label: 'ระดับน้ำ', raw: `${sfvi.world.level.toFixed(2)} ม.`,
+      tip: `W = ระดับน้ำสถานีบ้านถ้ำผาจม ÷ ${THRESHOLDS.criticalLevel.toFixed(2)} ม.` },
+    { k: 'R', w: w.R, v: sfvi.R, src: ['measured'], label: 'ฝนต้นน้ำ', raw: `${fmt(sfvi.world.rain)} มม.`,
+      tip: `R = ฝนสะสมสถานีบ้านโจตาดา (เมียนมา) ÷ ${SFVI.rainNormMm} มม.` },
+    { k: 'L', w: sfvi.Lw, v: sfvi.L, src: ['image'], label: 'ดินถล่ม', raw: `${sfvi.scarsSeen}/${TOTAL_SCARS} จุด`, dim: sfvi.stale,
+      tip: `L = รอยดินถล่มใหม่ที่ THEOS-2 พบ ÷ ${TOTAL_SCARS} จุด` },
+    { k: 'N', w: w.N, v: sfvi.N, src: ['image'], label: 'ลำน้ำแคบ', raw: s.channelMeasured ? `${Math.round(s.channelWidth)}/${THRESHOLDS.origChannelWidth} ม.` : 'ยังไม่วัด',
+      tip: `N = 1 − ความกว้างลำน้ำที่วัดได้ ÷ ${THRESHOLDS.origChannelWidth} ม.` },
     HAS_BUILDINGS
-      ? { k: 'P', w: w.P, v: sfvi.P, src: 'image', src2: FLOOD_SOURCE === 'radar' ? 'radar' : 'scenario',
-        label: `หลังคาในเขตน้ำถึง ${COMMUNITIES_LIVE.reduce((a, c) => a + c.floodRoofs, 0)}/${COMMUNITIES_LIVE.reduce((a, c) => a + c.households, 0)}`,
-        th: `อาคารจริง GISTDA · โซนน้ำถึง${FLOOD_SOURCE === 'radar' ? 'เรดาร์' : 'แบบจำลอง'}` }
-      : { k: 'P', w: w.P, v: sfvi.P, src: 'scenario', label: 'ครัวเรือนในเขตน้ำถึง', th: 'เฉลี่ย 4 ชุมชน' },
+      ? { k: 'P', w: w.P, v: sfvi.P, src: ['image', FLOOD_SOURCE === 'radar' ? 'radar' : 'scenario'], label: 'บ้านเขตน้ำถึง', raw: `${fmt(floodRoofs)}/${fmt(roofs)}`,
+        tip: `P = หลังคาจริง GISTDA ในโซนน้ำถึง${FLOOD_SOURCE === 'radar' ? 'เรดาร์' : 'แบบจำลอง'} ÷ หลังคาทั้งหมดของ 4 ชุมชน` }
+      : { k: 'P', w: w.P, v: sfvi.P, src: ['scenario'], label: 'บ้านเขตน้ำถึง', raw: 'เฉลี่ย 4 ชุมชน', tip: 'P = สัดส่วนครัวเรือนในเขตน้ำถึง' },
   ]
   const hex = sfviHex(sfvi.basin)
   return (
     <div className="space-y-2 p-2.5" data-panel="sfvi">
       <div className="relative rounded border border-white/[0.08] bg-white/[0.025] p-2.5">
         <Corners />
-        <div className="flex items-end gap-3">
-          <span className="num text-[30px] font-bold leading-none" style={{ color: hex, textShadow: `0 0 18px ${hex}77` }}>{sfvi.basin.toFixed(3)}</span>
-          <div className="flex-1 pb-1">
-            <div className="relative h-[7px] w-full overflow-hidden rounded-full bg-white/[0.08]">
-              <div className="h-full rounded-full transition-[width] duration-700"
-                style={{ width: `${sfvi.basin * 100}%`, background: `linear-gradient(90deg,${hex}55,${hex})`, boxShadow: `0 0 10px ${hex}` }} />
-              <div className="absolute top-0 h-full w-[2px] bg-white" style={{ left: `${SFVI.decisionBand * 100}%` }} />
-            </div>
-            <div className="font-thai mt-1 flex justify-between text-[9px] text-slate-500">
-              <span>0</span><span>เกณฑ์ตัดสินใจ ≥ {SFVI.decisionBand.toFixed(2)}</span><span>1</span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-1.5 flex items-center justify-between">
-          <span className="font-thai text-[10.5px]" style={{ color: sfvi.justified ? '#7CFFA0' : '#FFB3C2' }}>
+        <div className="flex items-center gap-3">
+          <span className="num text-[30px] font-bold leading-none" style={{ color: hex, textShadow: `0 0 18px ${hex}77` }}>{sfvi.basin.toFixed(2)}</span>
+          <span className="font-thai text-[12px] font-semibold leading-tight" style={{ color: sfvi.justified ? '#7CFFA0' : '#FFB3C2' }}>
             {sfvi.veto1 ? 'Veto 1 — ต้องอพยพทันที' : sfvi.justified ? 'หลักฐานพอสั่งอพยพ' : 'หลักฐานยังไม่พอ'}
           </span>
-          <span className="font-mono text-[9px] text-sky-300/60">0.30W+0.25R+0.20L+0.15N+0.10P</span>
         </div>
+        <div className="relative mt-2 h-[7px] w-full overflow-hidden rounded-full bg-white/[0.08]">
+          <div className="h-full rounded-full transition-[width] duration-700"
+            style={{ width: `${sfvi.basin * 100}%`, background: `linear-gradient(90deg,${hex}55,${hex})`, boxShadow: `0 0 10px ${hex}` }} />
+          <div className="absolute top-0 h-full w-[2px] bg-white" style={{ left: `${SFVI.decisionBand * 100}%` }} />
+        </div>
+        <div className="relative mt-1 h-3">
+          <span className="font-thai absolute -translate-x-1/2 whitespace-nowrap text-[9.5px] text-slate-500" style={{ left: `${SFVI.decisionBand * 100}%` }}>เกณฑ์ {SFVI.decisionBand.toFixed(2)}</span>
+        </div>
+      </div>
+
+      <div className="num whitespace-nowrap rounded border border-sky-400/15 bg-sky-400/[0.04] px-2 py-1 text-center text-[10.5px] text-sky-200/90" title="SFVI = ผลรวมของ (น้ำหนัก × ค่า) ทั้ง 5 ตัว">
+        SFVI = {rows.map((r, i) => (
+          <span key={r.k}>{i ? '+' : ''}<span style={{ color: r.dim ? '#C4B5FD' : undefined }}>{r.w.toFixed(2)}</span>{r.k}</span>
+        ))}
       </div>
 
       <div className="space-y-1">
         {rows.map((r) => (
-          <div key={r.k} className={`rounded border border-white/[0.06] bg-white/[0.02] px-2 py-1.5 ${r.dim ? 'opacity-70' : ''}`}>
-            <div className="flex items-center gap-1.5">
-              <span className="num grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[3px] border border-sky-400/35 bg-sky-400/10 text-[10px] font-bold text-sky-200">{r.k}</span>
-              <span className="num shrink-0 text-[9px] text-slate-500">×{r.w.toFixed(2)}</span>
-              <span className="font-thai min-w-0 flex-1 truncate text-[10.5px] text-slate-300">{r.label}</span>
-              <Src t={r.src} mini />
-              {r.src2 && <Src t={r.src2} mini />}
-              <span className="num w-[32px] shrink-0 text-right text-[11px] font-semibold text-white">{r.v.toFixed(2)}</span>
-            </div>
-            <div className="mt-1 flex items-center gap-2">
-              <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/[0.07]">
-                <div className="h-full rounded-full bg-sky-400 transition-[width] duration-500" style={{ width: `${r.v * 100}%`, boxShadow: '0 0 6px #38BDF8' }} />
-              </div>
-              <span className="font-thai shrink-0 text-[9px] text-slate-500">{r.th}</span>
-            </div>
-            {r.dim && (
-              <div className="mt-1 flex items-center gap-1.5 rounded border border-[#A78BFA]/25 bg-[#A78BFA]/[0.07] px-1.5 py-1">
-                <Lock size={9} className="shrink-0 text-[#A78BFA]" />
-                <span className="font-thai text-[9.5px] leading-tight text-[#C4B5FD]">
-                  Cloud Rule — เมฆ {Math.round(sfvi.world.cloud)}% / ภาพเก่า {Math.round(sfvi.imageAgeH)} ชม. · น้ำหนัก L เหลือ {sfvi.Lw.toFixed(2)} · ความเชื่อมั่นต่ำ
-                </span>
-              </div>
-            )}
+          <div key={r.k} title={`${r.tip} · น้ำหนัก ${r.w.toFixed(2)}`} data-factor={r.k}
+            className="relative flex items-center gap-2 overflow-hidden rounded border border-white/[0.06] bg-white/[0.02] px-2 py-[5px]">
+            <span className="absolute inset-y-0 left-0 transition-[width] duration-500"
+              style={{ width: `${r.v * 100}%`, background: r.dim ? 'rgba(167,139,250,.13)' : 'rgba(56,189,248,.13)' }} />
+            <span className="num relative grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[3px] border border-sky-400/35 bg-[#0b1526] text-[10px] font-bold text-sky-200">{r.k}</span>
+            <span className="font-thai relative min-w-0 flex-1 truncate text-[11px] text-slate-200">
+              {r.label} <span className="num text-[10px] text-slate-400">{r.raw}</span>
+            </span>
+            <span className="num relative w-[30px] shrink-0 text-right text-[11.5px] font-bold text-white">{r.v.toFixed(2)}</span>
+            <span className="relative flex shrink-0 items-center gap-1">{r.src.map((x) => <Src key={x} t={x} dot />)}</span>
           </div>
         ))}
+        {sfvi.stale && (
+          <div className="font-thai flex items-center gap-1.5 rounded border border-[#A78BFA]/25 bg-[#A78BFA]/[0.07] px-2 py-1 text-[10px] text-[#C4B5FD]">
+            <Lock size={10} className="shrink-0" />
+            Cloud Rule — เมฆ {Math.round(sfvi.world.cloud)}% · น้ำหนัก L เหลือ {sfvi.Lw.toFixed(2)}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between rounded border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
@@ -134,13 +134,13 @@ export function SfviScorecard({ eng }) {
       </div>
 
       <div className="rounded border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
-        <div className="font-thai mb-1 text-[10px] text-slate-400">SFVI รายชุมชน (เรียงตามกฎ + tie-break)</div>
+        <div className="font-thai mb-1 text-[10px] text-slate-400">SFVI รายชุมชน (เรียงตามกฎ)</div>
         {sfvi.ranked.map((c, i) => (
-          <div key={c.id} className="flex items-center gap-1.5 py-[2px]">
+          <div key={c.id} className="flex items-center gap-1.5 py-[2px]" data-ranked={c.id}>
             <span className="num w-3 text-[9.5px] text-slate-500">{i + 1}</span>
             <span className="font-thai min-w-0 flex-1 truncate text-[10.5px] text-slate-200">{c.th}</span>
             <span className="num text-[9px]" style={{ color: c.exits === 1 ? '#FF6B8A' : '#64748b' }}>{c.exits} ทาง</span>
-            <span className="num w-[38px] text-right text-[10.5px] font-semibold" style={{ color: sfviHex(c.score) }}>{c.score.toFixed(3)}</span>
+            <span className="num w-[34px] text-right text-[10.5px] font-semibold" style={{ color: sfviHex(c.score) }}>{c.score.toFixed(2)}</span>
           </div>
         ))}
       </div>

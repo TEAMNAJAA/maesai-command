@@ -156,6 +156,28 @@ export const FLOOD_REACH = {
   communityZoneM: 300,   // หลังคาเป็นของชุมชนที่ใกล้ที่สุดภายในรัศมีนี้ → ใช้คำนวณ P จริง
 }
 
+/* ── 10c · แนวตลิ่งเมือง — จุดฟันหลอของแนวกั้นน้ำ (องก์ 1 สเต็ป 2) ─────────────── */
+// วางบนแม่น้ำสายจริง (OSM) ฝั่งไทย = ฝั่งที่มีหลังคา GISTDA · ตำแหน่ง/ความยาวจุดฟันหลอเป็นค่าสถานการณ์
+export const EMBANKMENT = {
+  bbox: [99.8745, 20.4352, 99.8955, 20.4532],   // [W,S,E,N] มุมมอง "แนวตลิ่งเมือง" ≈ ซูม 16 (ภาพ sphere z17)
+  stretch: [99.8755, 99.8945],   // ช่วงลองจิจูดของแม่น้ำสายที่วางแนวกั้นน้ำ
+  bankOffsetM: 16,               // แนวกั้นน้ำห่างกึ่งกลางลำน้ำ (ลำน้ำกว้าง ~28 ม.)
+  gaps: 14,                      // จำนวนจุดฟันหลอ
+  gapLenM: [18, 64],             // ช่วงความยาวช่องโหว่ (ม.)
+  sealAP: 150,                   // AP ต่อการอุด 1 จุด
+  sealMinutes: 5,                // เวลาต่อจุด
+  bagsPerMetre: 2,               // บิ๊กแบ็กต่อความยาว 1 ม. (วางสองแถว)
+  measureMinutes: 15,            // วัดความกว้างลำน้ำจากภาพ (ค่า N)
+  rulerAt: 0.36,                 // ตำแหน่งไม้บรรทัดวัดลำน้ำตามแนวแม่น้ำ (0–1)
+}
+
+/* ── 10d · ภารกิจองก์ 1 (Mission Quest) ─────────────────────────────────────── */
+export const QUEST = {
+  // สเต็ป 1 สำเร็จเมื่อใช้แถบถ่ายภาพครบ หรือเมฆปิดหน้าต่างภาพแล้ว (ต้องมีภาพที่ใช้ได้อย่างน้อย 1 แถบ)
+  // สเต็ป 2 สำเร็จเมื่อวัดค่า N แล้ว และอุดจุดฟันหลอครบ sealTarget จุด
+  sealTarget: 14,
+}
+
 /* ── 11 · GISTDA sphere API (https://sphere.gistda.or.th/docs) ───────────── */
 // คีย์ของทีม (ตั้งทับได้ด้วย .env.local → VITE_SPHERE_API_KEY=...)
 // หมายเหตุ: คีย์ถูกฝังใน dist/index.html และอยู่ใน git — repo ต้องเป็น private เท่านั้น
@@ -166,7 +188,7 @@ export const SPHERE = {
   elevationUrl: 'https://api.sphere.gistda.or.th/services/geo/elevation',
   tileUrl: 'https://basemap.sphere.gistda.or.th/tiles/{layer}/EPSG3857/{z}/{x}/{y}.jpeg?key={key}',
   tileLayer: 'thailand_images', // sphere_streets · thailand_images · sphere_hybrid
-  basemap: { urban: true, catchment: false }, // ภาพ sphere ครอบคลุมเฉพาะไทย — ลุ่มน้ำเมียนมาใช้ DEM
+  basemap: { urban: true, corridor: true, catchment: false }, // ภาพ sphere ครอบคลุมเฉพาะไทย — ลุ่มน้ำเมียนมาใช้ DEM
   maxZoom: 19,
   timeoutMs: 7000,
 }

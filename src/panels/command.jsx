@@ -6,24 +6,27 @@
 
 import React, { useState, useMemo } from 'react'
 import {
-  Layers, Lock, Check, Crosshair, Megaphone, Bell, Clock, AlertTriangle, CheckCircle2, Truck, Route, Radar, ChevronRight, Loader2, Wifi, WifiOff, ChevronDown,
+  Layers, Lock, Check, Crosshair, Megaphone, Bell, Clock, AlertTriangle, CheckCircle2, Truck, Route, Radar, ChevronRight, Loader2, Wifi, WifiOff, Ruler, ShieldCheck, Map as MapIcon,
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Panel, Btn, Src, Divider, Corners, Tabs } from '../ui/atoms'
 import { LAYERS, SECTORS, TACTICAL, QUICK_DEPLOY, SHORTAGE, COMMUNITIES, RES_PROOF } from '../config/scenarioData'
-import { GAME, THEOS2, SFVI, CLOUD_RULE, OFFLINE_ROUTING } from '../config/missionConfig'
+import { GAME, THEOS2, SFVI, CLOUD_RULE, OFFLINE_ROUTING, EMBANKMENT, THRESHOLDS } from '../config/missionConfig'
 import { ARRIVAL, evacNeedMin, cloudAt } from '../lib/sim'
 import { evacCostFor } from '../engine/useEngine'
 import { sphereReady } from '../lib/sphere'
 import { COMMUNITIES_LIVE } from '../lib/buildings'
+import { EMBANKMENT_GAPS } from '../lib/embankment'
+import { QuestBox } from './quest'
 import { fmt, clockLabel } from '../lib/format'
 import { sfviHex } from './assessment'
 
-export function CommandRail({ eng, tab, setTab, setView, onCollapse, onRoute, onHoldResult }) {
+export function CommandRail({ eng, tab, setTab, setView, onCollapse, onRoute, onHoldResult, onGo, onFinish, beaconTab }) {
   const { s } = eng
   const act1 = s.act === 1
+  // act 1 tabs are numbered to match the three mission steps
   const tabs = act1
-    ? [['data', 'ข้อมูล/ภาพ'], ['resources', 'ทรัพยากร'], ['decide', 'ตัดสินใจ', eng.veto1]]
+    ? [['data', '① ภาพต้นน้ำ'], ['resources', '② แนวตลิ่ง'], ['decide', '③ ตัดสินใจ', eng.veto1]]
     : [['data', 'ข้อมูล'], ['route', 'เส้นทาง', !s.detourSolved], ['triage', 'จัดลำดับ', !s.convoy], ['resources', 'ทรัพยากร']]
   const current = tabs.some((t) => t[0] === tab) ? tab : tabs[0][0]
   return (
@@ -41,16 +44,16 @@ export function CommandRail({ eng, tab, setTab, setView, onCollapse, onRoute, on
           </button>
         </div>
       </div>
-      <Tabs items={tabs} value={current} onChange={setTab} tone={act1 ? '#38BDF8' : '#FF003C'} />
+      {act1 && <QuestBox eng={eng} onGo={onGo} onFinish={onFinish} />}
+      <Tabs items={tabs} value={current} onChange={setTab} tone={act1 ? '#38BDF8' : '#FF003C'} beacon={beaconTab} />
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {current === 'data' && (
           <div className="space-y-3">
-            <LayersList eng={eng} />
             {act1 ? <TaskingPanel eng={eng} setView={setView} /> : <SensorHandover />}
-            {act1 && <ResolutionBlock />}
+            <LayersList eng={eng} />
           </div>
         )}
-        {current === 'resources' && (act1 ? <ResourcesAct1 eng={eng} /> : <ResourcesAct2 eng={eng} />)}
+        {current === 'resources' && (act1 ? <ResourcesAct1 eng={eng} setView={setView} /> : <ResourcesAct2 eng={eng} />)}
         {current === 'decide' && <DecisionBlock eng={eng} onHoldResult={onHoldResult} />}
         {current === 'route' && <RoutingTool eng={eng} onRoute={onRoute} />}
         {current === 'triage' && <PriorityPanel eng={eng} />}
@@ -119,22 +122,18 @@ function TaskingPanel({ eng, setView }) {
   const cloudNow = cloudAt(s.clock + GAME.swathMinutes)
   return (
     <div className="space-y-2" data-panel="tasking">
-      <Divider label="THEOS-2 TASKING · สั่งถ่ายภาพต้นน้ำ" />
+      <Divider label="① สั่งถ่ายภาพป่าต้นน้ำ · THEOS-2" />
       <div className="relative rounded border border-white/[0.08] bg-white/[0.025] p-2.5">
         <Corners />
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2" title={`THEOS-2 · Pan ${THEOS2.panM} m · MS ${THEOS2.msM} m · revisit ${THEOS2.revisitDays} d · swath ${THEOS2.swathKm} km`}>
           <span className="num text-[24px] font-bold leading-none text-white">{s.swaths}</span>
-          <span className="font-thai pb-0.5 text-[10.5px] text-slate-400">แถบคงเหลือ · แถบละ {THEOS2.swathKm} กม. · {fmt(GAME.swathAP)} AP</span>
+          <span className="font-thai pb-0.5 text-[10.5px] text-slate-400">แถบถ่ายภาพคงเหลือ · แถบละ {fmt(GAME.swathAP)} AP</span>
+          <span className="ml-auto pb-0.5"><Src t="image" mini /></span>
         </div>
         <div className="mt-2 flex gap-1">
           {Array.from({ length: GAME.swaths }, (_, i) => (
             <div key={i} className="h-[5px] flex-1 rounded-full" style={{ background: i < s.swaths ? '#38BDF8' : 'rgba(255,255,255,.08)', boxShadow: i < s.swaths ? '0 0 8px #38BDF8' : 'none' }} />
           ))}
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-1 border-t border-white/[0.07] pt-2 font-mono text-[9px] text-slate-400">
-          <div>PAN <span className="text-white">{THEOS2.panM} m</span></div><div>MS <span className="text-white">{THEOS2.msM} m</span></div>
-          <div>REVISIT <span className="text-white">{THEOS2.revisitDays} d</span></div>
-          <div>CLOUD <span style={{ color: cloudNow > CLOUD_RULE.cloudPct ? '#C4B5FD' : '#fff' }}>{Math.round(cloudNow)}%</span></div>
         </div>
       </div>
       {cloudNow > CLOUD_RULE.cloudPct && (
@@ -167,20 +166,6 @@ function TaskingPanel({ eng, setView }) {
           )
         })}
       </div>
-    </div>
-  )
-}
-
-function ResolutionBlock() {
-  const [open, setOpen] = useState(false)
-  const data = RES_PROOF.map((r) => ({ name: r.width, 'Sentinel-2 10 m': r.s2, 'THEOS-2 MS 2 m': r.ms, 'THEOS-2 Pan 0.5 m': r.pan }))
-  return (
-    <div>
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 py-1">
-        <span className="hud-label">RESOLUTION PROOF · ข้อพิสูจน์เชิงตัวเลข</span>
-        <ChevronDown size={11} className={`ml-auto text-slate-500 transition ${open ? '' : '-rotate-90'}`} />
-      </button>
-      {open && <ResolutionProof data={data} />}
     </div>
   )
 }
@@ -253,11 +238,65 @@ function TacticalGrid({ eng, highlightEvac }) {
   )
 }
 
-function ResourcesAct1({ eng }) {
+/** Act 1 step 2 — the town embankment: measure N, seal the flood-wall gaps. */
+function EmbankmentPanel({ eng, setView }) {
+  const { s, measureChannel, sealGaps } = eng
+  const open = EMBANKMENT_GAPS.filter((g) => !s.sealed.includes(g.id))
+  const cost = open.length * EMBANKMENT.sealAP
+  const share = EMBANKMENT_GAPS.length ? s.sealed.length / EMBANKMENT_GAPS.length : 0
+  const src = s.channelSource === 'town' ? 'แนวตลิ่งเมือง' : s.channelSource ? `ภาพ Sector ${s.channelSource}` : ''
+  return (
+    <div className="space-y-2" data-panel="embankment">
+      <Divider label="② แนวตลิ่งแม่น้ำสาย · จุดฟันหลอ" />
+      <Btn variant="primary" icon={MapIcon} className="w-full" onClick={() => setView('corridor')}>
+        <span className="font-thai normal-case tracking-normal">เปิดมุมมองแนวตลิ่งเมือง (ภาพดาวเทียมจริง)</span>
+      </Btn>
+      <div className="flex items-center gap-2 rounded border border-white/[0.08] bg-white/[0.025] px-2 py-1.5">
+        <Ruler size={13} className="shrink-0 text-sky-300" />
+        <span className="min-w-0 flex-1">
+          <span className="font-thai block text-[11px] text-slate-200">ความกว้างลำน้ำ (ค่า N)</span>
+          <span className="font-thai block text-[9.5px] text-slate-500">{s.channelMeasured ? `วัดแล้วจาก${src}` : 'วัดจากภาพ THEOS-2 ช่วงในเมือง'}</span>
+        </span>
+        {s.channelMeasured ? (
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span className="num text-[12px] font-bold text-white">{Math.round(s.channelWidth)}<span className="text-[9.5px] font-normal text-slate-500"> / {THRESHOLDS.origChannelWidth} ม.</span></span>
+            <Src t="image" mini />
+          </span>
+        ) : (
+          <Btn size="sm" variant="primary" icon={Ruler} onClick={measureChannel} disabled={s.act1Timeout}>
+            <span className="font-thai normal-case tracking-normal">วัด · +{EMBANKMENT.measureMinutes} นาที</span>
+          </Btn>
+        )}
+      </div>
+      <div className="rounded border border-white/[0.08] bg-white/[0.025] px-2 py-1.5">
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={13} className={open.length ? 'shrink-0 text-[#FF6B8A]' : 'shrink-0 text-[#22E36B]'} />
+          <span className="font-thai flex-1 text-[11px] text-slate-200">อุดจุดฟันหลอแล้ว</span>
+          <span className="num text-[12px] font-bold" style={{ color: open.length ? '#FFD066' : '#7CFFA0' }}>{s.sealed.length}/{EMBANKMENT_GAPS.length}</span>
+          <Src t="scenario" mini />
+        </div>
+        <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
+          <div className="h-full rounded-full bg-[#22E36B] transition-[width] duration-500" style={{ width: `${share * 100}%`, boxShadow: '0 0 8px #22E36B' }} />
+        </div>
+        {open.length > 0 && (
+          <Btn variant="go" className="mt-2 w-full" icon={ShieldCheck} disabled={s.ap < cost || s.act1Timeout} onClick={() => sealGaps(open.map((g) => g.id))}>
+            <span className="font-thai normal-case tracking-normal">อุดที่เหลือทั้งหมด {open.length} จุด · {fmt(cost)} AP</span>
+          </Btn>
+        )}
+        <div className="font-thai mt-1 text-[9.5px] leading-snug text-slate-500">
+          {open.length ? `หรือคลิกหมุดแดงบนแผนที่เพื่ออุดทีละจุด (${EMBANKMENT.sealAP} AP/จุด)` : 'แนวกั้นน้ำครบทุกจุดแล้ว'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ResourcesAct1({ eng, setView }) {
   const { s, deploy } = eng
   return (
     <div className="space-y-3" data-panel="resources">
-      <Divider label="QUICK DEPLOY · จัดสรรกำลัง" />
+      <EmbankmentPanel eng={eng} setView={setView} />
+      <Divider label="ทรัพยากรอื่น · จัดสรรกำลัง" />
       <div className="grid grid-cols-3 gap-1.5">
         {QUICK_DEPLOY.map((q) => (
           <button key={q.id} onClick={() => deploy(q.id)} disabled={s.ap < q.ap} data-deploy={q.id}

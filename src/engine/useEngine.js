@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { GAME, THRESHOLDS, TRUST, CLOUD_RULE, RELIEF, THEOS2 } from '../config/missionConfig'
+import { GAME, THRESHOLDS, TRUST, CLOUD_RULE, RELIEF, THEOS2, EMBANKMENT, HYDRO } from '../config/missionConfig'
 import { COMMUNITIES, SECTORS, LAYERS, TACTICAL, QUICK_DEPLOY, SHELTER } from '../config/scenarioData'
 import {
   T_START, ACT_WINDOW, cloudAt, computeSfvi, holdComparison, exposureSummary, levelAt, reliefSummary,
@@ -14,6 +14,7 @@ import { clamp, fmt, clockLabel, clockToDate } from '../lib/format'
 import { routeOffline, metres, pointInGeometry, communityGeo, isFloodedStreet } from '../lib/geo'
 import { sphereRoute, sphereReady } from '../lib/sphere'
 import { DATA, OFFLINE_ROUTING } from '../config/missionConfig'
+import { EMBANKMENT_GAPS } from '../lib/embankment'
 import { logger } from '../lib/evalLogger'
 
 let LOG_SEQ = 0
@@ -42,6 +43,9 @@ export const makeInitial = () => ({
   lastImageClock: T_START - 6 * 60,      // last optical evidence is 6 h old at the start
   channelWidth: THRESHOLDS.origChannelWidth, // last confirmed width — stale until imaged
   channelMeasured: false,
+  channelSource: null,                   // 'town' (แนวตลิ่งเมือง) or the sector id that measured N
+  sealed: [],                            // flood-wall gaps sealed with big bags (act 1 step 2)
+  act1Timeout: false,                    // T−0 reached in act 1 → the act-1 summary must close the act
   decisions: [],
   falseAlarms: 0,
   warnedAt: null,
@@ -77,7 +81,7 @@ function passTime(p, mins) {
 /** Pure: enter act `n`, seeding presentation values only when the act is entered cold. */
 function enterAct(p, n) {
   if (p.act === n) return p
-  let next = { ...p, act: n }
+  let next = { ...p, act: n, act1Timeout: false }
   const playedAct1 = p.decisions.length > 0
   if (n === 2 && !p.seeded[2]) {
     const trust = playedAct1 ? p.trust : Math.min(p.trust, GAME.act2Seed.trust)
@@ -141,10 +145,12 @@ export function useEngine() {
   const tick = useCallback((p, mins) => {
     let next = passTime(p, mins)
     if (next.act === 1 && next.clock >= 0) {
-      next = enterAct({ ...next, clock: 0 }, 2)
+      // The flood reaches town: act 1 stops at T−0 and the act-1 summary closes it.
+      const first = !p.act1Timeout
+      next = { ...next, clock: 0, act1Timeout: true }
       setTimeout(() => {
         setRunning(false)
-        toast('crit', 'T+0 · มวลน้ำถึงตัวเมือง — เข้าสู่องก์ 2')
+        if (first) toast('crit', 'T−0 · มวลน้ำถึงตัวเมือง — สรุปผลองก์ 1')
       }, 0)
     } else if (next.act === 2 && next.clock >= ACT_WINDOW[3][0]) {
       next = enterAct(next, 3)
@@ -153,7 +159,7 @@ export function useEngine() {
     return next
   }, [toast])
 
-  const advance = useCallback((mins) => commit((p) => (p.act === 3 ? p : tick(p, mins))), [commit, tick])
+  const advance = useCallback((mins) => commit((p) => (p.act === 3 || p.act1Timeout ? p : tick(p, mins))), [commit, tick])
 
   useEffect(() => {
     if (!running || s.act === 3) return
@@ -225,7 +231,7 @@ export function useEngine() {
   const taskSwath = useCallback((sectorId) => {
     const sec = SECTORS.find((x) => x.id === sectorId)
     const cur = sRef.current
-    if (cur.act !== 1 || cur.tasked.includes(sectorId)) return
+    if (cur.act !== 1 || cur.act1Timeout || cur.tasked.includes(sectorId)) return
     if (cur.swaths <= 0) { push('warn', 'THEOS-2', 'No tasking swaths left this round.', 'โควตาสั่งถ่ายภาพหมดแล้ว'); return }
     if (cur.ap < GAME.swathAP) { push('warn', 'THEOS-2', `Need ${fmt(GAME.swathAP)} AP to task a swath.`, 'แต้มสั่งการไม่พอ'); return }
     const cloud = cloudAt(cur.clock + GAME.swathMinutes)
@@ -235,7 +241,7 @@ export function useEngine() {
       if (!clear) return { ...next, cloudyPasses: [...next.cloudyPasses, sectorId] }
       next = { ...next, tasked: [...next.tasked, sectorId], lastImageClock: next.clock }
       if (sec.widthAt && (!next.channelMeasured || sec.widthAt < next.channelWidth)) {
-        next = { ...next, channelWidth: sec.widthAt, channelMeasured: true }
+        next = { ...next, channelWidth: sec.widthAt, channelMeasured: true, channelSource: sec.id }
       }
       return next
     })
@@ -273,6 +279,41 @@ export function useEngine() {
     push('good', 'DEPLOY', `${q.batch} ${q.unit.toLowerCase()} of ${q.name} dispatched — ${q.ap} AP.`, `ส่ง${q.th} ${q.batch} หน่วย`)
   }, [commit, tick, push])
 
+  /* ── Act 1 · town embankment (step 2) ─────────────────────────────────── */
+  /** Measure the Sai channel on the latest THEOS-2 ortho at the town reach → N. */
+  const measureChannel = useCallback(() => {
+    const cur = sRef.current
+    if (cur.act !== 1 || cur.act1Timeout || cur.channelMeasured) return
+    const w = HYDRO.trueChannelWidth, orig = THRESHOLDS.origChannelWidth
+    const narrow = w < orig * THRESHOLDS.narrowChannelRatio
+    commit((p) => tick({ ...p, channelWidth: w, channelMeasured: true, channelSource: 'town' }, EMBANKMENT.measureMinutes))
+    push('crit', 'CHANNEL',
+      `Sai River measured on the THEOS-2 ortho at the town embankment: ${w} m wide, down from ${orig} m.${narrow ? ` Preparedness band lowered by ${THRESHOLDS.narrowChannelPrepDrop.toFixed(2)} m.` : ''}`,
+      `วัดความกว้างลำน้ำสายช่วงในเมืองได้ ${w} ม. จากเดิม ${orig} ม.${narrow ? ' → ลดเกณฑ์เตือนภัยและเตือนเร็วขึ้น' : ''}`)
+    toast('ok', `วัดลำน้ำได้ ${w} ม. · ค่า N = ${(1 - w / orig).toFixed(2)}`)
+  }, [commit, tick, push, toast])
+
+  /** Seal flood-wall gaps with big bags — one gap or every gap still open. */
+  const sealGaps = useCallback((ids) => {
+    const cur = sRef.current
+    if (cur.act !== 1 || cur.act1Timeout) return
+    const todo = ids.filter((id) => !cur.sealed.includes(id))
+    if (!todo.length) return
+    const cost = todo.length * EMBANKMENT.sealAP
+    if (cur.ap < cost) {
+      push('warn', 'EMBANKMENT', `Need ${fmt(cost)} AP to seal ${todo.length} gap${todo.length > 1 ? 's' : ''}.`, 'แต้มสั่งการไม่พอสำหรับอุดจุดฟันหลอ')
+      return
+    }
+    const bags = EMBANKMENT_GAPS.filter((g) => todo.includes(g.id)).reduce((a, g) => a + g.len * EMBANKMENT.bagsPerMetre, 0)
+    const next = commit((p) => tick({
+      ...p, ap: p.ap - cost, sealed: [...p.sealed, ...todo],
+      deployed: { ...p.deployed, bigbag: (p.deployed.bigbag || 0) + bags },
+    }, todo.length * EMBANKMENT.sealMinutes))
+    push('good', 'EMBANKMENT', `${todo.length} flood-wall gap${todo.length > 1 ? 's' : ''} sealed with ${fmt(bags)} big bags (${todo.join(', ')}) — ${fmt(cost)} AP.`,
+      `อุดจุดฟันหลอ ${todo.length} จุดด้วยบิ๊กแบ็ก ${fmt(bags)} ใบ`)
+    toast('ok', next.sealed.length >= EMBANKMENT_GAPS.length ? 'แนวกั้นน้ำครบทุกจุดแล้ว' : todo.length === 1 ? `อุด ${todo[0]} แล้ว` : `อุดจุดฟันหลอ ${todo.length} จุด`)
+  }, [commit, tick, push, toast])
+
   /* ── Decisions ────────────────────────────────────────────────────────── */
   const record = (p, rec) => {
     const sf = computeSfvi(p)
@@ -280,6 +321,7 @@ export function useEngine() {
       act: p.act, clock: p.clock, clockLabel: clockLabel(p.clock), eventTime: clockToDate(p.clock),
       water: +levelAt(p.clock).toFixed(2), sfvi: +sf.basin.toFixed(3), confidence: +sf.confidence.toFixed(2),
       justified: sf.justified, layersOpened: p.layersOpened.length,
+      channelMeasured: p.channelMeasured, gapsSealed: p.sealed.length,
       layersActive: Object.values(p.layers).filter(Boolean).length, swaths: p.tasked.length,
       recommended: sf.recommended, at: Date.now(), ...rec,
     }
@@ -289,6 +331,7 @@ export function useEngine() {
   /** Core decision: EVACUATE (selected communities) · STANDBY · HOLD. Returns HOLD comparison. */
   const issueOrder = useCallback((kind, communities) => {
     const cur = sRef.current
+    if (cur.act1Timeout) return null                  // act 1 is over — the summary closes it
     const sf = computeSfvi(cur)
     if (kind === 'HOLD') {
       if (sf.veto1 && cur.act === 1) {
@@ -491,7 +534,7 @@ export function useEngine() {
 
   return {
     s, sfvi, world, veto1, veto2, situation, exposure, running, setRunning, flash,
-    push, toast, advance, toggleLayer, taskSwath, deploy, tactical, issueOrder,
+    push, toast, advance, toggleLayer, taskSwath, deploy, measureChannel, sealGaps, tactical, issueOrder,
     setPriority, releaseConvoy, computeRoute, adjudicate, survey, goAct, ackVeto, ackCloud, reset,
   }
 }

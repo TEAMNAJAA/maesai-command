@@ -43,11 +43,11 @@ Produces one self-contained file, `dist/index.html` (~2.6 MB): code, the AOI Geo
 
 | Act | Window | Map | What the learner decides |
 | --- | --- | --- | --- |
-| **I** เฝ้าระวัง | T−48 → T−0 h | Real AOI-B catchment (SRTM relief) with THEOS-2 swaths placed on the real map; real AOI-A town | Which sectors to image (L, N), which layers to buy, which communities to evacuate and when — or hold |
+| **I** เฝ้าระวัง | T−48 → T−0 h | Real AOI-B catchment (SRTM relief) with THEOS-2 swaths; real AOI-A town; the Sai embankment on GISTDA sphere imagery (zoom 16–17) | A 3-step mission: ① image upstream sectors (L) ② measure the channel and seal the 14 flood-wall gaps (N) ③ evacuate / standby / hold — act 1 closes only through its decision summary |
 | **II** วิกฤต | T+0 → T+36 h | SAR scene / AOI-A town with flood band and closed streets | Radar handover, Sphere routing to high ground, triage of the 4 communities |
 | **III** ฟื้นฟู | T+36 h → | Before/after slider (town + per roof) | Roof-by-roof relief: ฿9,000 / +฿10,000 / reject / ground survey |
 
-Screen layout: **left** = assessment (live SFVI · river gauge · trust), **centre** = map (view switcher, zoom/pan, 3D tilt), **right** = command panel (tabs). Both side rails collapse. A guided hint box follows the player's state (toggle with the bulb icon).
+Screen layout: **left** = assessment (live SFVI · river gauge · trust), **centre** = map (view switcher, zoom/pan, 3D tilt), **right** = command panel with the act-1 mission quest box on top and numbered tabs. Finished steps tick green; the next step, its tab and its map view blink (the bulb icon turns the blinking beacons and hints off). Both side rails collapse.
 
 ---
 
@@ -118,6 +118,12 @@ node record-demo.mjs
 ```
 
 Drives `dist/index.html?demo` through all three acts at 1920×1080 and writes `recordings/run-<timestamp>/maesai-demo.webm`. Existing videos are never deleted. Exits with code 2 if the page logs any error.
+
+```bash
+node record-perfect-run.mjs
+```
+
+A "perfect run" from the Mission Briefing to the AAR with a Thai caption on every step (scan 3 sectors, measure N and seal the 14 gaps, evacuate, SAR + Sphere Routing, triage in SFVI order, survey weak evidence, correct relief on all 10 roofs → mission score 100%). Writes `recordings/perfect-run-<timestamp>/demo_gameplay.mp4` (and `.webm`; the mp4 needs ffmpeg).
 
 ## Data sources & credits
 
