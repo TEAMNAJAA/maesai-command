@@ -1,87 +1,74 @@
 /* ══════════════════════════════════════════════════════════════════════════
    GEO MAP — the real geography, drawn from the project's spatial files
-   · catchment : AOI-B (DEM-derived, Myanmar) + THEOS-2 tasking swaths
-   · urban     : AOI-A town core — 4 watch communities, OSM roads/rivers, routes
-   · corridor  : the Sai embankment through town on sphere imagery (zoom 16–17) —
-                 real roofs, the flood wall and its 14 gaps, the N ruler
-   All coordinates are WGS84 → Web Mercator, so sphere tiles and the DEM align.
+   · catchment : AOI-B (Myanmar) — THEOS-2 sectors, the next pass, cloud forecast
+   · urban     : AOI-A town — 10 operational zones (real roofs), shelters, hospital,
+                 base; act 2 adds radar depth, drifting clouds, flowing water,
+                 stranded groups, boats on their routes, live current, comms
+   · corridor  : the Sai embankment on sphere imagery (zoom 16–17) — flood wall,
+                 14 gaps with water jetting through, the N ruler
+   All coordinates are WGS84 → Web Mercator so sphere tiles and the DEM align.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useMemo, useRef, useCallback } from 'react'
-import { DATA, THEOS2, OFFLINE_ROUTING, SPHERE, FLOOD_REACH, EMBANKMENT, HYDRO, THRESHOLDS } from '../config/missionConfig'
-import { SECTORS, SHELTER } from '../config/scenarioData'
+import { DATA, THEOS2, SPHERE, EMBANKMENT, THRESHOLDS, ACT2 } from '../config/missionConfig'
+import { SECTORS, CAMP_SITES, HOSPITAL, SHELTER_POOL } from '../config/scenarioData'
 import {
-  makeProjection, geomPath, linePath, boxKm, geomCentroid, aoiFeature, aoiStations, aoiRiver, osmRivers, osmRoads, saiRiver, roadWeight, tilesFor, elevationAt, isFloodedStreet,
+  makeProjection, geomPath, linePath, boxKm, aoiFeature, aoiStations, aoiRiver, osmRivers, osmRoads, saiRiver, roadWeight, tilesFor, elevationAt, metres,
 } from '../lib/geo'
-import { mulberry32 } from './terrain'
-import { levelAt, ARRIVAL, safeFraction } from '../lib/sim'
+import { depthAt } from '../lib/sim'
 import { sphereTileTemplate } from '../lib/sphere'
 import { BUILDINGS, COMMUNITIES_LIVE } from '../lib/buildings'
+import { SECTIONS } from '../lib/sections'
 import { EMBANKMENT_GAPS, EMBANKMENT_WALL, EMBANKMENT_RIVER, CHANNEL_RULER } from '../lib/embankment'
+import { cloudCells, CLOUD_BOX } from '../lib/clouds'
+import { alongRoute } from '../lib/routes'
+import { TOWN_TARGET } from '../lib/scenario'
+import { campOf } from '../engine/world'
+import { sfviHex } from '../panels/datahub'
 
 export const EXTENTS = {
   catchment: { bbox: [99.37, 20.3, 99.9, 20.615], dem: 'catchment', label: 'AOI-B · ลุ่มน้ำสายตอนบน (เมียนมา)' },
-  urban: { bbox: [99.855, 20.414, 99.915, 20.458], dem: 'urban', label: 'AOI-A · เขตเมืองแม่สาย (4 ชุมชนเฝ้าระวัง)' },
+  urban: { bbox: [99.862, 20.418, 99.908, 20.456], dem: 'urban', label: 'AOI-A · เขตเมืองแม่สาย · 10 โซนปฏิบัติการ' },
   corridor: { bbox: EMBANKMENT.bbox, dem: 'urban', label: 'แนวตลิ่งแม่น้ำสาย · เขตเมืองแม่สาย' },
 }
+const SWATH_H_KM = 11
+const halo = { paintOrder: 'stroke', stroke: '#000', strokeWidth: 3.5, strokeLinejoin: 'round' }
 
-/** Grow a bbox about its centre (corridor imagery also fills the letterbox around the frame). */
+/** Grow a bbox about its centre (imagery also fills the letterbox around the frame). */
 const grow = ([w, s, e, n], fx, fy) => {
   const cx = (w + e) / 2, cy = (s + n) / 2, hx = ((e - w) / 2) * fx, hy = ((n - s) / 2) * fy
   return [cx - hx, cy - hy, cx + hx, cy + hy]
 }
 
-const SWATH_H_KM = 11
-
-/** Deterministic scar positions inside each sector box (until GISTDA's landslide layer arrives). */
-function sectorScars(sec) {
-  const rnd = mulberry32(sec.id.charCodeAt(0) * 7919)
-  const [w, s, e, n] = boxKm(sec.lon, sec.lat, THEOS2.swathKm * 0.8, SWATH_H_KM * 0.8)
-  return Array.from({ length: sec.scars }, () => ({
-    lon: w + rnd() * (e - w), lat: s + rnd() * (n - s), rot: rnd() * 180, len: 0.55 + rnd() * 0.5,
-  }))
-}
-const SCARS = Object.fromEntries(SECTORS.map((sec) => [sec.id, sectorScars(sec)]))
-
-export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focus, onCommunity, gapSel, onGap, beacon }) {
-  const { s, sfvi } = eng
+export function GeoMap({ extent, eng, onHover, onPoint, onSector, onChannel, gapSel, onGap, beacon }) {
+  const { s, scn } = eng
   const L = s.layers
   const ex = EXTENTS[extent]
   const proj = useMemo(() => makeProjection(ex.bbox, 1000, 760, extent === 'catchment' ? 18 : 0), [extent])
-  const corridor = extent === 'corridor'
   const dem = DATA.dem[ex.dem]
   const svgRef = useRef(null)
-  // sphere imagery basemap — Thai coverage only, so the Myanmar catchment keeps the SRTM relief
-  const tiles = useMemo(() => {
-    if (!SPHERE.basemap[extent]) return []
-    // the embankment view keeps imagery under the letterbox too (its svg overflows the frame)
-    return corridor ? tilesFor({ ...proj, bbox: grow(proj.bbox, 1.5, 1.4) }, sphereTileTemplate(), 140, 1) : tilesFor(proj, sphereTileTemplate(), 96, 1)
-  }, [proj, extent, corridor])
+  const town = extent !== 'catchment'
+  const tiles = useMemo(() => (SPHERE.basemap[extent] || extent === 'urban'
+    ? tilesFor({ ...proj, bbox: grow(proj.bbox, 1.45, 1.35) }, sphereTileTemplate(), 140, 1) : []), [proj, extent])
 
-  /* Real GISTDA roofs as a few compound paths (15k polygons → 6 SVG elements). */
+  /* real GISTDA roofs as compound paths, split dry / flood-reach */
   const roofs = useMemo(() => {
-    if (extent === 'catchment' || !BUILDINGS.length) return null
-    const [bw, bs, be, bn] = corridor ? grow(proj.bbox, 1.6, 1.5) : proj.bbox
-    const ring = (r) => {
+    if (!town || !BUILDINGS.length) return null
+    const [bw, bs, be, bn] = grow(proj.bbox, 1.6, 1.5)
+    const zoneOf = new Map(SECTIONS.flatMap((z) => z.idx.map((i) => [i, z.id])))
+    let dry = '', wet = ''
+    const zone = Object.fromEntries(SECTIONS.map((z) => [z.id, '']))
+    BUILDINGS.forEach((b, idx) => {
+      if (b.c[0] < bw || b.c[0] > be || b.c[1] < bs || b.c[1] > bn) return
       let d = ''
-      for (let i = 0; i < r.length; i++) { const [x, y] = proj.pt(r[i]); d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) }
-      return d + 'Z'
-    }
-    const out = { dry: '', wet: '', com: {} }
-    for (const b of BUILDINGS) {
-      if (corridor && (b.c[0] < bw || b.c[0] > be || b.c[1] < bs || b.c[1] > bn)) continue
-      const d = ring(b.ring)
-      if (b.community) {
-        const k = (out.com[b.community] ||= { dry: '', wet: '' })
-        if (b.flood) k.wet += d; else k.dry += d
-      } else if (b.flood) out.wet += d
-      else out.dry += d
-    }
-    return out
-  }, [extent, proj, corridor])
-  const act = s.act
-  const level = levelAt(s.clock)
-  const flooded = act === 2
+      for (let i = 0; i < b.ring.length; i++) { const [x, y] = proj.pt(b.ring[i]); d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) }
+      d += 'Z'
+      if (b.flood) wet += d; else dry += d
+      const z = zoneOf.get(idx)
+      if (z) zone[z] += d
+    })
+    return { dry, wet, zone }
+  }, [town, proj])
 
   const handleMove = useCallback((e) => {
     if (!onHover || !svgRef.current) return
@@ -92,332 +79,295 @@ export function GeoMap({ extent, eng, hoverSector, setHoverSector, onHover, focu
     onHover({ lon, lat, elev: elevationAt(dem, lon, lat) })
   }, [proj, dem, onHover])
 
-  const aoiB = aoiFeature('AOI-B'), aoiB1 = aoiFeature('AOI-B1'), aoiA = aoiFeature('AOI-A')
-  const px = (m) => m / proj.metresPerPx
-
   return (
     <svg ref={svgRef} viewBox="0 0 1000 760" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full"
-      style={corridor ? { overflow: 'visible' } : undefined}
-      onPointerMove={handleMove} onPointerLeave={() => onHover?.(null)}>
+      style={town ? { overflow: 'visible' } : undefined} onPointerMove={handleMove} onPointerLeave={() => onHover?.(null)} data-extent={extent}>
       <defs>
-        <pattern id={`grid-${extent}`} width="40" height="40" patternUnits="userSpaceOnUse">
-          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(56,189,248,.07)" strokeWidth="1" />
-        </pattern>
-        <filter id="geo-glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
+        <filter id="geo-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+        <filter id="cloud-soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14" /></filter>
       </defs>
-      <rect x="0" y="0" width="1000" height="760" fill="#060b14" />
-      <rect x="0" y="0" width="1000" height="760" fill={`url(#grid-${extent})`} />
-
-      {/* DEM hillshade — SRTM relief, baked offline */}
-      {(L.elev || corridor) && dem && (() => {
+      <rect x="-500" y="-400" width="2000" height="1560" fill="#060b14" />
+      {dem && (L.elev || town) && (() => {
         const r = proj.rect(dem.bbox)
-        return <image href={dem.href} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio="none"
-          opacity={tiles.length ? 0.45 : 0.92} style={tiles.length ? { mixBlendMode: 'multiply' } : undefined} />
+        return <image href={dem.href} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio="none" opacity="0.9" />
       })()}
-      {!L.elev && !corridor && <rect x="0" y="0" width="1000" height="760" fill="#0a1424" opacity="0.6" />}
+      {tiles.map((t) => <image key={t.key} href={t.href} x={t.x} y={t.y} width={t.w + 0.6} height={t.h + 0.6} preserveAspectRatio="none" />)}
+      {tiles.length > 0 && <rect x="-500" y="-400" width="2000" height="1560" fill="#04080f" opacity={extent === 'urban' ? 0.3 : 0.12} pointerEvents="none" />}
 
-      {/* GISTDA sphere imagery basemap (online + key); failed tiles stay transparent → DEM shows through */}
-      {tiles.map((t) => (
-        <image key={t.key} href={t.href} x={t.x} y={t.y} width={t.w + 0.6} height={t.h + 0.6} preserveAspectRatio="none" />
-      ))}
-      {tiles.length > 0 && !corridor && <rect x="0" y="0" width="1000" height="760" fill="#04080f" opacity="0.32" pointerEvents="none" />}
-      {tiles.length > 0 && corridor && <rect x="-500" y="-400" width="2000" height="1560" fill="#04080f" opacity="0.12" pointerEvents="none" />}
-
-      {/* real THEOS-2 imagery (when GISTDA delivers it) */}
-      {L.theos && DATA.theosImagery.after && extent === 'urban' && (() => {
-        const r = proj.rect(DATA.theosImagery.bbox)
-        return <image href={DATA.theosImagery.after} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio="none" />
-      })()}
-
-      {corridor && <CorridorScene eng={eng} proj={proj} roofs={roofs} gapSel={gapSel} onGap={onGap} beacon={beacon} />}
-
-      {extent === 'catchment' && (
-        <g>
-          {/* AOI-B catchment polygon */}
-          {aoiB && (
-            <path d={geomPath(aoiB.geometry, proj)} fill="#FFB300" fillOpacity={L.watershed ? 0.07 : 0.03}
-              stroke="#FFB300" strokeWidth={L.watershed ? 2.2 : 1.2} strokeDasharray="10 6" opacity="0.9" />
-          )}
-          {aoiB1 && (
-            <path d={geomPath(aoiB1.geometry, proj)} fill="none" stroke="#FFD066" strokeWidth="1" strokeDasharray="3 5" opacity="0.7" />
-          )}
-          {aoiA && (() => {
-            const r = proj.rect([99.83, 20.405, 99.965, 20.475])
-            return (
-              <g>
-                <rect x={r.x} y={r.y} width={r.w} height={r.h} fill="#38BDF8" fillOpacity="0.06" stroke="#38BDF8" strokeWidth="1.4" />
-                <text x={r.x + 4} y={r.y - 6} fontSize="11" fill="#7dd3fc" className="font-mono">AOI-A · MAE SAI</text>
-              </g>
-            )
-          })()}
-
-          {/* LANDX: forest → mine/agri change, shaded per sector */}
-          {L.landx && SECTORS.map((sec) => {
-            const r = proj.rect(boxKm(sec.lon, sec.lat, THEOS2.swathKm, SWATH_H_KM))
-            return <rect key={`lx${sec.id}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="#C2410C" opacity={sec.forestLoss / 100 * 0.9} />
-          })}
-
-          {/* main stem from the AOI file */}
-          {aoiRiver && (
-            <>
-              <path d={linePath(aoiRiver.geometry.coordinates, proj)} stroke="#0b1d33" strokeWidth="5" fill="none" opacity="0.7" />
-              <path d={linePath(aoiRiver.geometry.coordinates, proj)} stroke="#38BDF8" strokeWidth={L.river ? 2.4 : 1.6} fill="none"
-                opacity="0.95" filter="url(#geo-glow)" />
-            </>
-          )}
-
-          {/* THEOS-2 tasking swaths */}
-          {SECTORS.map((sec) => {
-            const done = s.tasked.includes(sec.id)
-            const cloudy = !done && s.cloudyPasses.includes(sec.id)
-            const hot = hoverSector === sec.id
-            const r = proj.rect(boxKm(sec.lon, sec.lat, THEOS2.swathKm, SWATH_H_KM))
-            const tone = done ? '#22E36B' : cloudy ? '#A78BFA' : '#38BDF8'
-            return (
-              <g key={sec.id} className={act === 1 ? 'cursor-pointer' : ''} data-sector={sec.id}
-                onMouseEnter={() => setHoverSector?.(sec.id)} onMouseLeave={() => setHoverSector?.(null)}
-                onClick={() => act === 1 && eng.taskSwath(sec.id)}>
-                <rect x={r.x} y={r.y} width={r.w} height={r.h} rx="2"
-                  fill={tone} fillOpacity={done ? 0.12 : hot ? 0.16 : 0.05}
-                  stroke={tone} strokeWidth={hot ? 2.2 : 1.3} strokeDasharray={done ? '0' : '8 5'} />
-                <text x={r.x + 6} y={r.y + 15} fontSize="11.5" className="font-mono" letterSpacing="1.2" fill={done ? '#7CFFA0' : '#CFE6FF'}
-                  style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>{sec.label}</text>
-                <text x={r.x + 6} y={r.y + 28} fontSize="9" className="font-thai" fill="#bae6fd"
-                  style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 2.5 }}>{sec.th}</text>
-                <text x={r.x + 6} y={r.y + r.h - 8} fontSize="9" className="font-mono"
-                  fill={done ? '#FF6B8A' : cloudy ? '#C4B5FD' : '#94a3b8'} style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 2.5 }}>
-                  {done ? `${sec.scars} NEW SCARS${sec.widthAt ? ` · W ${sec.widthAt} m` : ''}` : cloudy ? 'CLOUDED PASS' : `${THEOS2.swathKm} KM SWATH · ${act === 1 ? 'CLICK TO TASK' : 'NOT IMAGED'}`}
-                </text>
-                {done && SCARS[sec.id].map((k, i) => {
-                  const [x, y] = proj.pt([k.lon, k.lat])
-                  return <rect key={i} x={x - 2} y={y - 7 * k.len} width="4" height={14 * k.len} rx="1.5"
-                    transform={`rotate(${k.rot} ${x} ${y})`} fill="#E0662F" stroke="#2b0d02" strokeWidth="0.6"
-                    style={{ filter: 'drop-shadow(0 0 4px #FF5A2B)' }} />
-                })}
-              </g>
-            )
-          })}
-
-          {/* GISTDA landslide layer (when delivered — DATA.landslides), revealed only inside imaged swaths */}
-          {DATA.landslides?.features.map((f, i) => {
-            const c = geomCentroid(f.geometry)
-            if (!c) return null
-            const seen = s.tasked.some((id) => {
-              const sec = SECTORS.find((x) => x.id === id)
-              const [w, so, e, n] = boxKm(sec.lon, sec.lat, THEOS2.swathKm, SWATH_H_KM)
-              return c[0] >= w && c[0] <= e && c[1] >= so && c[1] <= n
-            })
-            if (!seen) return null
-            return f.geometry.type === 'Point'
-              ? <circle key={`ls${i}`} cx={proj.x(c[0])} cy={proj.y(c[1])} r="4" fill="#E0662F" stroke="#2b0d02" />
-              : <path key={`ls${i}`} d={geomPath(f.geometry, proj)} fill="#E0662F" fillOpacity="0.8" stroke="#2b0d02" strokeWidth="0.6" />
-          })}
-
-          {/* stations */}
-          {aoiStations.map((f) => {
-            const [x, y] = proj.pt(f.geometry.coordinates)
-            const key = f.properties.id === 'STN0029' ? 'W' : f.properties.id === 'MYA001' ? 'R' : null
-            return (
-              <g key={f.properties.id}>
-                <circle cx={x} cy={y} r={key ? 6 : 3.5} fill={key ? '#22E36B' : '#9ae6b4'} stroke="#04140a" strokeWidth="1.5" />
-                {key && (
-                  <text x={x + 9} y={y - 6} fontSize="10.5" className="font-mono" fill="#7CFFA0"
-                    style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>
-                    {f.properties.id} · {key === 'W' ? 'ระดับน้ำ (W)' : 'ฝนต้นน้ำ (R)'}
-                  </text>
-                )}
-              </g>
-            )
-          })}
-
-          <text x="500" y="748" textAnchor="middle" fontSize="12" fill="#FFB300" className="font-mono" letterSpacing="2"
-            style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>MYANMAR — UPSTREAM CATCHMENT · NO GROUND SENSORS · ≈965 KM²</text>
-        </g>
-      )}
-
-      {extent === 'urban' && (
-        <g>
-          {/* simulated / radar flood extent */}
-          {(flooded || (act === 1 && level >= 4.1)) && (
-            DATA.radarFlood
-              ? DATA.radarFlood.features.map((f, i) => (
-                <path key={i} d={geomPath(f.geometry, proj)} fill="#FF8A3D" fillOpacity="0.28" stroke="#FF8A3D" strokeWidth="1" />
-              ))
-              : saiRiver.map((f) => (
-                <path key={`fl${f.properties.osm}`} d={linePath(f.geometry.coordinates, proj)} stroke="#2563EB"
-                  strokeWidth={px(flooded ? OFFLINE_ROUTING.floodBufferM * 2 : 160)} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.26" />
-              ))
-          )}
-
-          {/* OSM roads */}
-          {L.roads && osmRoads.map((f) => {
-            const w = roadWeight(f.properties.class)
-            const mid = f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)]
-            const wet = flooded && isFloodedStreet(mid)
-            return (
-              <path key={f.properties.osm} d={linePath(f.geometry.coordinates, proj)} fill="none"
-                stroke={wet ? '#FF3B63' : w > 1 ? '#E8E2D4' : '#9FB4CC'} strokeWidth={w}
-                strokeDasharray={wet ? '4 3' : undefined} opacity={w > 1 ? 0.8 : 0.42} />
-            )
-          })}
-
-          {/* real GISTDA roofs — blue = inside the flood reach, tinted = assigned to a watch community */}
-          {L.buildings && roofs && (
-            <g pointerEvents="none" data-roofs={BUILDINGS.length}>
-              <path d={roofs.dry} fill="#E2E8F0" fillOpacity="0.22" stroke="#F1F5F9" strokeOpacity="0.75" strokeWidth="0.5" />
-              <path d={roofs.wet} fill="#38BDF8" fillOpacity={flooded ? 0.75 : 0.45} />
-              {COMMUNITIES_LIVE.map((c) => {
-                const k = roofs.com[c.id]
-                if (!k) return null
-                const order = s.evacOrders[c.id]
-                const safe = order !== undefined ? safeFraction(c, order) : 0
-                const hex = !L.pop ? '#38BDF8' : order !== undefined ? (safe >= 0.99 ? '#22E36B' : safe > 0 ? '#FFB300' : '#FF3B63') : s.clock >= ARRIVAL[c.id] ? '#FF003C' : '#FDE68A'
-                return (
-                  <g key={c.id}>
-                    <path d={k.dry} fill="#F8FAFC" fillOpacity="0.45" stroke="#F8FAFC" strokeWidth="0.5" />
-                    <path d={k.wet} fill={hex} fillOpacity="0.9" />
-                  </g>
-                )
-              })}
-            </g>
-          )}
-
-          {/* rivers — the Sai is the border, always drawn; the full network is a layer */}
-          {(L.river ? osmRivers : saiRiver).map((f) => (
-            <path key={`r${f.properties.osm}`} d={linePath(f.geometry.coordinates, proj)} fill="none"
-              stroke="#38BDF8" strokeWidth={f.properties.class === 'river' ? 3.2 : 1.4} opacity="0.95" filter="url(#geo-glow)" />
-          ))}
-
-          {/* routes to the evacuation point */}
-          {Object.values(s.routes).map((r) => (
-            <g key={r.cid}>
-              <path d={linePath(r.coords, proj)} fill="none" stroke="#000" strokeWidth="7" opacity="0.5" strokeLinejoin="round" />
-              <path d={linePath(r.coords, proj)} fill="none" stroke="#22E36B" strokeWidth="3.6" strokeLinejoin="round"
-                strokeDasharray={r.source === 'sphere' ? undefined : '10 6'} style={{ filter: 'drop-shadow(0 0 6px #22E36B)' }}
-                className="animate-[dashflow_9s_linear_infinite]" />
-            </g>
-          ))}
-
-          {/* shelter */}
-          {(() => {
-            const [x, y] = proj.pt([SHELTER.lon, SHELTER.lat])
-            return (
-              <g>
-                <path d={`M ${x} ${y - 11} L ${x + 10} ${y + 7} L ${x - 10} ${y + 7} Z`} fill="#22E36B" fillOpacity="0.25" stroke="#22E36B" strokeWidth="1.8" />
-                <text x={x + 14} y={y + 4} fontSize="11" className="font-thai" fill="#7CFFA0"
-                  style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>{SHELTER.th}</text>
-              </g>
-            )
-          })()}
-
-          {/* stations in town */}
-          {aoiStations.filter((f) => ['STN0029', 'MYA004', 'MYA002'].includes(f.properties.id)).map((f) => {
-            const [x, y] = proj.pt(f.geometry.coordinates)
-            const isW = f.properties.id === 'STN0029'
-            return (
-              <g key={f.properties.id}>
-                <rect x={x - 5} y={y - 5} width="10" height="10" fill={isW ? '#22E36B' : '#9ae6b4'} stroke="#03120a" strokeWidth="1.3" transform={`rotate(45 ${x} ${y})`} />
-                {isW && (
-                  <text x={x - 8} y={y - 12} textAnchor="end" fontSize="10.5" className="font-mono" fill="#7CFFA0"
-                    style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>STN0029 · {level.toFixed(2)} m</text>
-                )}
-              </g>
-            )
-          })}
-
-          {/* the four watch communities */}
-          {COMMUNITIES_LIVE.map((c) => {
-            const [x, y] = proj.pt([c.lon, c.lat])
-            const order = s.evacOrders[c.id]
-            const arrived = s.clock >= ARRIVAL[c.id]
-            const safe = order !== undefined ? safeFraction(c, order) : 0
-            const hex = order !== undefined ? (safe >= 0.99 ? '#22E36B' : safe > 0 ? '#FFB300' : '#FF3B63') : arrived ? '#FF003C' : '#94A3B8'
-            const rank = s.priorities.indexOf(c.id)
-            const sel = focus === c.id
-            const r = px(c.radiusM)
-            const [lx, ly, anchor] = {
-              w: [x - r - 8, y + 4, 'end'], e: [x + r + 8, y + 4, 'start'], n: [x, y - r - 18, 'middle'],
-              s: [x, y + r + 16, 'middle'], sw: [x - r * 0.7 - 6, y + r * 0.7 + 14, 'end'],
-            }[c.label || 's']
-            return (
-              <g key={c.id} className="cursor-pointer" data-community={c.id} onClick={() => onCommunity?.(c.id)}>
-                {c.geometry
-                  ? <path d={geomPath(c.geometry, proj)} fill={hex} fillOpacity={L.pop ? 0.22 : 0.08} stroke={hex} strokeWidth={sel ? 3 : 1.6} />
-                  : <circle cx={x} cy={y} r={px(FLOOD_REACH.communityZoneM)} fill={hex} fillOpacity={sel ? 0.12 : 0.04} stroke={hex}
-                    strokeWidth={sel ? 2.6 : 1.2} strokeDasharray="6 4" opacity="0.85" />}
-                <circle cx={x} cy={y} r="4" fill={hex} />
-                {rank >= 0 && (
-                  <g>
-                    <circle cx={x + r * 0.72} cy={y - r * 0.72} r="10" fill="#FFB300" stroke="#000" strokeWidth="1.5" />
-                    <text x={x + r * 0.72} y={y - r * 0.72 + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="#04121F" className="font-mono">{rank + 1}</text>
-                  </g>
-                )}
-                <text x={lx} y={ly} textAnchor={anchor} fontSize="12.5" className="font-thai" fill="#F1F7FF" fontWeight="600"
-                  style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3.5 }}>{c.th}</text>
-                {L.pop && (
-                  <text x={lx} y={ly + 14} textAnchor={anchor} fontSize="10" className="font-thai" fill="#e2e8f0"
-                    style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>
-                    {c.floodRoofs}/{c.households} หลังคาในเขตน้ำถึง · {c.exits} ทางออก
-                  </text>
-                )}
-              </g>
-            )
-          })}
-
-          <text x="500" y="70" textAnchor="middle" fontSize="13" fill="#8FA6C4" className="font-mono" letterSpacing="3"
-            style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>TACHILEIK · MYANMAR</text>
-          <text x="500" y="735" textAnchor="middle" fontSize="13" fill="#8FA6C4" className="font-mono" letterSpacing="3"
-            style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>MAE SAI · THAILAND</text>
-        </g>
-      )}
+      {extent === 'catchment' && <Catchment eng={eng} proj={proj} onSector={onSector} />}
+      {extent === 'urban' && <Urban eng={eng} proj={proj} roofs={roofs} onPoint={onPoint} />}
+      {extent === 'corridor' && <Corridor eng={eng} proj={proj} roofs={roofs} gapSel={gapSel} onGap={onGap} onChannel={onChannel} beacon={beacon} />}
     </svg>
   )
 }
 
-/* ── Corridor · the Sai embankment through town ───────────────────────────── */
+/* ── Catchment (act 1 tasking) ───────────────────────────────────────────── */
 
-const halo = { paintOrder: 'stroke', stroke: '#000', strokeWidth: 3.5, strokeLinejoin: 'round' }
-
-function CorridorScene({ eng, proj, roofs, gapSel, onGap, beacon }) {
-  const { s } = eng
-  const px = (m) => m / proj.metresPerPx
-  const act1 = s.act === 1 && !s.act1Timeout
-  const shift = (p, [nx, ny], d) => [p[0] + (nx * d) / (111320 * Math.cos((p[1] * Math.PI) / 180)), p[1] + (ny * d) / 110540]
-  const ruler = CHANNEL_RULER && (() => {
-    const w = s.channelMeasured ? s.channelWidth : HYDRO.trueChannelWidth
-    const a = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, w / 2))
-    const b = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, -w / 2))
-    const lab = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, -95))   // label over the Myanmar bank
-    const ang = Math.atan2(b[1] - a[1], b[0] - a[0])
-    const tick = (p) => [p[0] + Math.cos(ang + Math.PI / 2) * 6, p[1] + Math.sin(ang + Math.PI / 2) * 6, p[0] - Math.cos(ang + Math.PI / 2) * 6, p[1] - Math.sin(ang + Math.PI / 2) * 6]
-    return { a, b, lab, ta: tick(a), tb: tick(b), w }
-  })()
-
+function Catchment({ eng, proj, onSector }) {
+  const { s, scn } = eng
+  const L = s.layers
+  const aoiB = aoiFeature('AOI-B'), aoiB1 = aoiFeature('AOI-B1')
+  const next = scn.passes.find((p) => p.t > s.clock)
+  const chosen = next ? s.taskings[next.id] || [] : []
   return (
-    <g data-corridor>
-      {/* the pre-encroachment channel (~150 m) once THEOS-2 has measured what is left */}
-      {s.channelMeasured && EMBANKMENT_RIVER.length > 1 && (
-        <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#38BDF8" strokeWidth={px(THRESHOLDS.origChannelWidth)}
-          strokeLinecap="round" strokeLinejoin="round" opacity="0.1" pointerEvents="none" />
+    <g>
+      {aoiB && <path d={geomPath(aoiB.geometry, proj)} fill="#FFB300" fillOpacity={L.watershed ? 0.07 : 0.03} stroke="#FFB300" strokeWidth={L.watershed ? 2.2 : 1.2} strokeDasharray="10 6" opacity="0.9" />}
+      {aoiB1 && <path d={geomPath(aoiB1.geometry, proj)} fill="none" stroke="#FFD066" strokeWidth="1" strokeDasharray="3 5" opacity="0.7" />}
+      {(() => { const r = proj.rect([99.83, 20.405, 99.965, 20.475]); return <g><rect x={r.x} y={r.y} width={r.w} height={r.h} fill="#38BDF8" fillOpacity="0.07" stroke="#38BDF8" strokeWidth="1.4" /><text x={r.x + 4} y={r.y - 6} fontSize="11" fill="#7dd3fc" className="font-mono">AOI-A · MAE SAI (ตัวเมือง)</text></g> })()}
+      {aoiRiver && (
+        <>
+          <path d={linePath(aoiRiver.geometry.coordinates, proj)} stroke="#0b1d33" strokeWidth="5" fill="none" opacity="0.7" />
+          <path d={linePath(aoiRiver.geometry.coordinates, proj)} stroke="#38BDF8" strokeWidth="2.2" fill="none" opacity="0.95" strokeDasharray="10 6" className="animate-[dashflow_6s_linear_infinite]" />
+        </>
       )}
+      {SECTORS.map((sec) => {
+        const r = proj.rect(boxKm(sec.lon, sec.lat, THEOS2.swathKm, SWATH_H_KM))
+        const imgs = s.images.filter((i) => i.target === sec.id)
+        const good = imgs.find((i) => i.usable)
+        const reach = next?.reach.includes(sec.id)
+        const on = chosen.includes(sec.id)
+        const f = next?.forecast[sec.id]
+        const tone = on ? '#38BDF8' : good ? '#22E36B' : reach ? '#FFD066' : '#64748b'
+        const marked = good?.analyzed ? Object.values(good.labels).filter((v) => v === 'scar').length : null
+        return (
+          <g key={sec.id} className={reach ? 'cursor-pointer' : ''} data-sector={sec.id} onClick={() => reach && onSector?.(next.id, sec.id)}>
+            <rect x={r.x} y={r.y} width={r.w} height={r.h} rx="2" fill={tone} fillOpacity={on ? 0.18 : good ? 0.1 : 0.04}
+              stroke={tone} strokeWidth={on ? 2.6 : 1.3} strokeDasharray={good || on ? undefined : '8 5'} />
+            <text x={r.x + 6} y={r.y + 15} fontSize="11.5" className="font-mono" letterSpacing="1.2" fill="#CFE6FF" style={halo}>{sec.label}</text>
+            <text x={r.x + 6} y={r.y + 28} fontSize="9" className="font-thai" fill="#bae6fd" style={halo}>{sec.th}</text>
+            {reach && f !== undefined && (
+              <g>
+                <text x={r.x + r.w - 6} y={r.y + 16} textAnchor="end" fontSize="13" style={halo} fill={f > THEOS2.cloudUsablePct ? '#FF9DB2' : f > 40 ? '#FFE0A3' : '#BFF5CF'}>☁ {f}%</text>
+                <text x={r.x + r.w - 6} y={r.y + 30} textAnchor="end" fontSize="9" className="font-thai" fill="#FFE0A3" style={halo}>{on ? `สั่งถ่ายรอบ ${next.id}` : `คลิกเพื่อสั่งถ่ายรอบ ${next.id}`}</text>
+              </g>
+            )}
+            <text x={r.x + 6} y={r.y + r.h - 8} fontSize="9.5" className="font-thai" style={halo}
+              fill={good ? '#7CFFA0' : imgs.length ? '#FF9DB2' : '#94a3b8'}>
+              {good ? (marked === null ? 'ภาพพร้อม — รอแปล' : `แปลแล้ว · ระบุดินถล่ม ${marked} จุด`) : imgs.length ? 'ถ่ายแล้วแต่เมฆบัง' : 'ยังไม่มีภาพ THEOS-2'}
+            </text>
+            {sec.widthAt && <text x={r.x + 6} y={r.y + r.h - 22} fontSize="9" className="font-thai" fill="#7dd3fc" style={halo}>ลำน้ำคอด — วัด N ได้</text>}
+          </g>
+        )
+      })}
+      {aoiStations.map((f) => {
+        const [x, y] = proj.pt(f.geometry.coordinates)
+        const key = f.properties.id === 'STN0029' ? 'W' : f.properties.id === 'MYA001' ? 'R' : null
+        return (
+          <g key={f.properties.id}>
+            <circle cx={x} cy={y} r={key ? 6 : 3.5} fill={key ? '#22E36B' : '#9ae6b4'} stroke="#04140a" strokeWidth="1.5" />
+            {key && <text x={x + 9} y={y - 6} fontSize="10.5" className="font-mono" fill="#7CFFA0" style={halo}>{f.properties.id} · {key === 'W' ? 'ระดับน้ำ (W)' : 'ฝนต้นน้ำ (R)'}</text>}
+          </g>
+        )
+      })}
+      <text x="500" y="748" textAnchor="middle" fontSize="12" fill="#FFB300" className="font-mono" letterSpacing="2" style={halo}>MYANMAR — UPSTREAM CATCHMENT · NO GROUND SENSORS · ≈965 KM²</text>
+    </g>
+  )
+}
 
-      {/* real GISTDA roofs as outlines, so the imagery stays readable underneath */}
-      {roofs && (
-        <g pointerEvents="none" data-roofs={BUILDINGS.length}>
-          <path d={roofs.dry + Object.values(roofs.com).map((k) => k.dry).join('')} fill="#F8FAFC" fillOpacity="0.06" stroke="#F8FAFC" strokeOpacity="0.6" strokeWidth="0.7" />
-          <path d={roofs.wet + Object.values(roofs.com).map((k) => k.wet).join('')} fill="#38BDF8" fillOpacity="0.16" stroke="#7DD3FC" strokeOpacity="0.9" strokeWidth="0.75" />
+/* ── Urban: zones, operations ────────────────────────────────────────────── */
+
+function Urban({ eng, proj, roofs, onPoint }) {
+  const { s, scn, sfvi } = eng
+  const L = s.layers
+  const act2 = s.act === 2
+  const t = s.clock
+  const lastRadar = s.radarAt[s.radarAt.length - 1] ?? 0
+  const score = Object.fromEntries(sfvi.perSection.map((z) => [z.id, z.score]))
+  const cells = act2 ? cloudCells(scn, t) : []
+  const camp = campOf(s)
+  const px = (m) => m / proj.metresPerPx
+  const boats = act2 ? s.jobs.filter((j) => j.kind === 'boatAtPoint' || j.kind === 'boatAtDest') : []
+  return (
+    <g>
+      {/* zones: a soft boundary + the zone's real roofs tinted by the metric that matters now */}
+      {SECTIONS.map((z) => {
+        const d = act2 ? depthAt(s, z, lastRadar) : 0
+        const ordered = s.orders[z.id] !== undefined
+        const hex = act2 ? (d >= ACT2.deepWaterM ? '#3b82f6' : d >= 0.3 ? '#7dd3fc' : '#94a3b8') : sfviHex(score[z.id])
+        return (
+          <g key={z.id} data-zone={z.id}>
+            <path d={linePath([...z.hull, z.hull[0]], proj)} fill={hex} fillOpacity={act2 ? Math.min(0.32, d / 5) : 0.05}
+              stroke={ordered ? '#22E36B' : hex} strokeOpacity={0.75} strokeWidth={ordered ? 2.4 : 1.1} strokeDasharray={ordered ? undefined : '5 4'} />
+            {roofs && <path d={roofs.zone[z.id]} fill={hex} fillOpacity={act2 ? 0.55 : 0.32} stroke={hex} strokeOpacity="0.8" strokeWidth="0.5" pointerEvents="none" />}
+          </g>
+        )
+      })}
+      {/* water flowing through flooded zones (act 2) */}
+      {act2 && SECTIONS.map((z) => {
+        const d = depthAt(s, z, t)
+        if (d < 0.3) return null
+        return <path key={`fl${z.id}`} d={linePath([...z.hull, z.hull[0]], proj)} fill="none" stroke="#bfdbfe" strokeOpacity={Math.min(0.7, d / 2.5)}
+          strokeWidth="1.6" strokeDasharray="3 9" className="animate-[waterflow_14s_linear_infinite]" pointerEvents="none" />
+      })}
+      {L.roads && osmRoads.map((f) => {
+        const w = roadWeight(f.properties.class)
+        const blocked = act2 && scn.blockedRoads.includes(f.properties.osm)
+        return <path key={f.properties.osm} d={linePath(f.geometry.coordinates, proj)} fill="none" stroke={blocked ? '#FF3B63' : w > 1 ? '#E8E2D4' : '#9FB4CC'} strokeWidth={blocked ? 3 : w} strokeDasharray={blocked ? '4 3' : undefined} opacity={blocked ? 0.95 : w > 1 ? 0.75 : 0.4} />
+      })}
+      {L.buildings && roofs && (
+        <g pointerEvents="none" opacity="0.6">
+          <path d={roofs.dry} fill="none" stroke="#F1F5F9" strokeOpacity="0.35" strokeWidth="0.5" />
         </g>
       )}
+      {(L.river ? osmRivers : saiRiver).map((f) => (
+        <g key={`r${f.properties.osm}`}>
+          <path d={linePath(f.geometry.coordinates, proj)} fill="none" stroke="#38BDF8" strokeWidth={f.properties.class === 'river' ? 3.4 : 1.4} opacity="0.95" filter="url(#geo-glow)" />
+          {f.properties.class === 'river' && <path d={linePath(f.geometry.coordinates, proj)} fill="none" stroke="#e0f2fe" strokeWidth="1.4" strokeDasharray="6 10" className="animate-[waterflow_9s_linear_infinite]" opacity="0.8" />}
+        </g>
+      ))}
+      {/* evacuation routes computed for ordered zones (Sphere / offline) */}
+      {Object.entries(s.routes).map(([id, r]) => (
+        <path key={`ev${id}`} d={linePath(r.coords, proj)} fill="none" stroke="#22E36B" strokeWidth="2.6" strokeOpacity="0.85"
+          strokeDasharray={r.source === 'sphere' ? undefined : '8 5'} className="animate-[dashflow_9s_linear_infinite]" />
+      ))}
+      {/* active boat routes */}
+      {boats.map((j, i) => <path key={`br${i}`} d={linePath(j.coords, proj)} fill="none" stroke="#FFB27A" strokeWidth="2" strokeOpacity="0.55" strokeDasharray="5 4" />)}
 
-      {/* river centreline (OSM) */}
-      {EMBANKMENT_RIVER.length > 1 && (
-        <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#38BDF8" strokeWidth="1.4" strokeDasharray="8 6" opacity="0.75"
-          className="animate-[dashflow_9s_linear_infinite]" pointerEvents="none" />
+      {/* zone labels */}
+      {SECTIONS.map((z) => {
+        const [x, y] = proj.pt(z.c)
+        const d = act2 ? depthAt(s, z, lastRadar) : null
+        const power = s.hazardsLive.includes(z.id) && !s.powerCut[z.id]
+        const comm = s.commDown.includes(z.id)
+        return (
+          <g key={`lb${z.id}`} pointerEvents="none">
+            <text x={x} y={y - 4} textAnchor="middle" fontSize="13" fontWeight="700" className="num" fill="#F8FAFC" style={halo}>{z.id}</text>
+            <text x={x} y={y + 10} textAnchor="middle" fontSize="9.5" className="font-thai" fill="#e2e8f0" style={halo}>
+              {act2 ? `น้ำ ${d.toFixed(1)} ม.` : `SFVI ${score[z.id].toFixed(2)}`}{s.orders[z.id] !== undefined ? ' · สั่งอพยพ' : ''}
+            </text>
+            {power && <text x={x - 16} y={y + 28} fontSize="16" textAnchor="middle">⚡</text>}
+            {comm && <text x={x + 2} y={y + 28} fontSize="13" textAnchor="middle" fill="#FF6B8A" className="num" style={halo}>📵</text>}
+            {s.pumps[z.id] && <text x={x + 20} y={y + 28} fontSize="10" textAnchor="middle" fill="#7dd3fc" className="font-thai" style={halo}>{t >= s.pumps[z.id].readyAt ? 'สูบน้ำ' : 'ติดตั้งสูบ'}</text>}
+            {act2 && scn.blindSpots.includes(z.id) && <text x={x} y={y - 18} fontSize="9" textAnchor="middle" fill="#C4B5FD" className="font-thai" style={halo}>จุดอับ</text>}
+          </g>
+        )
+      })}
+      {/* watch communities (act 1) */}
+      {!act2 && COMMUNITIES_LIVE.map((c) => {
+        const [x, y] = proj.pt([c.lon, c.lat])
+        return <g key={c.id} pointerEvents="none"><circle cx={x} cy={y} r="3.5" fill="#FDE68A" stroke="#000" /><text x={x + 6} y={y - 5} fontSize="10.5" className="font-thai" fill="#FEF3C7" style={halo}>{c.th}</text></g>
+      })}
+      {/* destinations and base */}
+      {[HOSPITAL, ...scn.shelters.map((id) => SHELTER_POOL.find((x) => x.id === id))].map((d) => {
+        const [x, y] = proj.pt([d.lon, d.lat])
+        const hosp = d.id === 'hosp'
+        return (
+          <g key={d.id} pointerEvents="none">
+            <rect x={x - 8} y={y - 8} width="16" height="16" rx="3" fill={hosp ? '#0ea5e9' : '#16a34a'} stroke="#fff" strokeWidth="1.5" />
+            <text x={x} y={y + 5} textAnchor="middle" fontSize="12" fontWeight="800" fill="#fff">{hosp ? '+' : 'S'}</text>
+            <text x={x + 12} y={y + 4} fontSize="10" className="font-thai" fill={hosp ? '#bae6fd' : '#bbf7d0'} style={halo}>{d.th}</text>
+          </g>
+        )
+      })}
+      {(s.act === 1 && !s.camp ? CAMP_SITES : camp ? [camp] : []).map((c) => {
+        const [x, y] = proj.pt([c.lon, c.lat])
+        return (
+          <g key={c.id} pointerEvents="none" opacity={camp ? 1 : 0.75}>
+            <path d={`M ${x} ${y - 12} L ${x + 10} ${y + 6} L ${x - 10} ${y + 6} Z`} fill={camp ? '#FFD066' : 'none'} stroke="#FFD066" strokeWidth="2" strokeDasharray={camp ? undefined : '3 2'} />
+            <text x={x + 13} y={y + 4} fontSize="10" className="font-thai" fill="#FFE0A3" style={halo}>{camp ? `ฐาน: ${c.th}` : `ฐาน? ${c.th}`}</text>
+          </g>
+        )
+      })}
+      {/* stranded groups (only the ones found) */}
+      {act2 && s.points.filter((p) => p.revealed).map((p) => {
+        const [x, y] = proj.pt([p.lon, p.lat])
+        const open = p.status === 'waiting'
+        const urgent = open && p.deadline - t < 180
+        const hex = !open ? (p.status === 'lost' ? '#64748b' : '#22E36B') : p.type === 'critical' ? '#FF3B63' : '#FFB300'
+        return (
+          <g key={p.id} className={open ? 'cursor-pointer' : ''} onClick={() => open && onPoint?.(p.id)} data-point-marker={p.id}>
+            {urgent && <circle cx={x} cy={y} r="14" fill="none" stroke={hex} strokeWidth="2" className="animate-[pulsering_1.6s_ease-out_infinite]" style={{ transformOrigin: `${x}px ${y}px` }} />}
+            <circle cx={x} cy={y} r="17" fill="transparent" />
+            <circle cx={x} cy={y} r="8" fill={hex} stroke="#000" strokeWidth="1.6" />
+            <text x={x} y={y + 3.5} textAnchor="middle" fontSize="9" fontWeight="800" fill="#000" className="num">{open ? p.left : '✓'}</text>
+            {p.injured > 0 && open && <text x={x + 9} y={y - 7} fontSize="11" fill="#7dd3fc" fontWeight="800">+</text>}
+            {open && <text x={x} y={y + 21} textAnchor="middle" fontSize="9" className="num" fill={urgent ? '#FF9DB2' : '#e2e8f0'} style={halo}>{Math.max(0, Math.floor((p.deadline - t) / 60))}h</text>}
+          </g>
+        )
+      })}
+      {/* boats on the move */}
+      {act2 && s.jobs.filter((j) => j.kind === 'boatAtPoint').map((j) => {
+        const outLeg = j.coords.slice(0, j.splitAt)
+        const pos = alongRoute(outLeg, (t - j.start) / Math.max(1, j.at - j.start))
+        if (!pos) return null
+        const [x, y] = proj.pt(pos)
+        return <g key={`b${j.boat}${j.start}`} pointerEvents="none"><circle cx={x} cy={y} r="7" fill="#FF7A1A" stroke="#fff" strokeWidth="1.5" /><text x={x + 9} y={y + 4} fontSize="9.5" className="num" fill="#FFE0A3" style={halo}>{j.boat}</text></g>
+      })}
+      {act2 && s.jobs.filter((j) => j.kind === 'boatAtDest').map((j) => {
+        const leave = j.pointAt + 15
+        const pos = alongRoute(j.coords.slice(j.splitAt - 1), (t - leave) / Math.max(1, j.at - leave))
+        if (!pos) return null
+        const [x, y] = proj.pt(pos)
+        return <g key={`bd${j.boat}${j.start}`} pointerEvents="none"><circle cx={x} cy={y} r="7" fill="#22E36B" stroke="#fff" strokeWidth="1.5" /><text x={x + 9} y={y + 4} fontSize="9.5" className="num" fill="#BFF5CF" style={halo}>{j.boat} · {j.aboard} คน</text></g>
+      })}
+      {act2 && s.jobs.filter((j) => j.kind === 'drone').map((j) => {
+        const z = SECTIONS.find((x) => x.id === j.section)
+        const [x, y] = proj.pt(z.c)
+        return <text key={`d${j.drone}`} x={x + 24} y={y - 14} fontSize="16" pointerEvents="none" className="animate-[flash_1.2s_ease-in-out_infinite]">🛸</text>
+      })}
+      {/* drifting clouds over town (act 2) */}
+      {act2 && cells.map((c, i) => [-1, 0, 1].flatMap((ox) => [-1, 0, 1].map((oy) => {
+        const lon = c.lon + ox * (CLOUD_BOX[2] - CLOUD_BOX[0]), lat = c.lat + oy * (CLOUD_BOX[3] - CLOUD_BOX[1])
+        const [x, y] = proj.pt([lon, lat])
+        if (x < -300 || x > 1300 || y < -300 || y > 1060) return null
+        return <circle key={`c${i}${ox}${oy}`} cx={x} cy={y} r={px(c.rM)} fill="#f8fafc" opacity="0.5" filter="url(#cloud-soft)" pointerEvents="none" />
+      })))}
+      <text x="500" y="40" textAnchor="middle" fontSize="13" fill="#8FA6C4" className="font-mono" letterSpacing="3" style={halo}>TACHILEIK · MYANMAR</text>
+    </g>
+  )
+}
+
+/* ── Corridor · the Sai embankment ───────────────────────────────────────── */
+
+function Corridor({ eng, proj, roofs, gapSel, onGap, onChannel, beacon }) {
+  const { s, scn } = eng
+  const px = (m) => m / proj.metresPerPx
+  const queued = new Set(s.jobs.filter((j) => j.kind === 'seal').map((j) => j.gap))
+  const level = eng.world.level
+  const surge = Math.max(0.15, Math.min(1, (level - 3.6) / 1.2))
+  const shift = (p, [nx, ny], d) => [p[0] + (nx * d) / (111320 * Math.cos((p[1] * Math.PI) / 180)), p[1] + (ny * d) / 110540]
+  const ruler = CHANNEL_RULER && (() => {
+    const w = s.channel.measured ? scn.channel.widthM : 26
+    const a = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, w / 2))
+    const b = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, -w / 2))
+    const lab = proj.pt(shift(CHANNEL_RULER.at, CHANNEL_RULER.normal, -95))
+    return { a, b, lab }
+  })()
+  const riverImg = s.images.some((i) => i.usable && i.readyAt <= s.clock && ['D', 'E', TOWN_TARGET].includes(i.target))
+  return (
+    <g data-corridor>
+      {s.channel.measured && EMBANKMENT_RIVER.length > 1 && (
+        <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#38BDF8" strokeWidth={px(THRESHOLDS.origChannelWidth)} strokeLinecap="round" strokeLinejoin="round" opacity="0.1" pointerEvents="none" />
       )}
-
-      {/* the flood wall, broken at every gap */}
+      {roofs && (
+        <g pointerEvents="none">
+          <path d={roofs.dry} fill="#F8FAFC" fillOpacity="0.06" stroke="#F8FAFC" strokeOpacity="0.55" strokeWidth="0.7" />
+          <path d={roofs.wet} fill="#38BDF8" fillOpacity="0.16" stroke="#7DD3FC" strokeOpacity="0.85" strokeWidth="0.75" />
+        </g>
+      )}
+      {/* the river, flowing */}
+      {EMBANKMENT_RIVER.length > 1 && (
+        <g pointerEvents="none">
+          <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#3b82f6" strokeWidth={px(26)} strokeLinecap="round" opacity={0.25 + surge * 0.3} />
+          <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#dbeafe" strokeWidth="1.6" strokeDasharray="6 12" opacity="0.9" className="animate-[waterflow_5s_linear_infinite]" />
+        </g>
+      )}
+      {/* water through open gaps — jets into town; sealed gaps drain away */}
+      {EMBANKMENT_GAPS.map((g) => {
+        const sealed = s.sealed.includes(g.id)
+        const near = SECTIONS.reduce((m, z) => (metres([g.lon, g.lat], z.c) < metres([g.lon, g.lat], m.c) ? z : m))
+        const dx = near.c[0] - g.lon, dy = near.c[1] - g.lat, dl = Math.hypot(dx * 104000, dy * 110540) || 1
+        const reach = (sealed ? 0 : 60 + surge * 140)
+        const end = [g.lon + (dx * 104000 / dl) * reach / 104000, g.lat + (dy * 110540 / dl) * reach / 110540]
+        const [x0, y0] = proj.pt([g.lon, g.lat]), [x1, y1] = proj.pt(end)
+        if (sealed) return <circle key={`j${g.id}`} cx={x0} cy={y0} r={px(30)} fill="#38BDF8" opacity="0.12" pointerEvents="none" className="animate-[breathe_4s_ease-in-out_infinite]" />
+        return (
+          <g key={`j${g.id}`} pointerEvents="none">
+            <path d={`M ${x0} ${y0} L ${x1} ${y1}`} stroke="#60a5fa" strokeWidth={px(g.len) * 0.7 + 3} strokeLinecap="round" opacity={0.35 + surge * 0.3} />
+            <path d={`M ${x0} ${y0} L ${x1} ${y1}`} stroke="#e0f2fe" strokeWidth="1.8" strokeDasharray="5 7" strokeLinecap="round" className="animate-[waterflow_3s_linear_infinite]" />
+          </g>
+        )
+      })}
       <g pointerEvents="none">
         {EMBANKMENT_WALL.pieces.map((piece, i) => (
           <g key={i}>
@@ -428,82 +378,44 @@ function CorridorScene({ eng, proj, roofs, gapSel, onGap, beacon }) {
         {EMBANKMENT_GAPS.map((g) => {
           const span = EMBANKMENT_WALL.spans[g.id]
           if (!span || span.length < 2) return null
-          const sealed = s.sealed.includes(g.id)
-          return (
-            <path key={g.id} d={linePath(span, proj)} fill="none" stroke={sealed ? '#22E36B' : '#FF003C'} strokeWidth="4.5"
-              strokeDasharray={sealed ? undefined : '3 3'} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${sealed ? '#22E36B' : '#FF003C'})` }} />
-          )
+          const sealed = s.sealed.includes(g.id), q = queued.has(g.id)
+          const hex = sealed ? '#22E36B' : q ? '#FFB300' : '#FF003C'
+          return <path key={g.id} d={linePath(span, proj)} fill="none" stroke={hex} strokeWidth="4.5" strokeDasharray={sealed ? undefined : '3 3'} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${hex})` }} />
         })}
       </g>
-
-      {/* N ruler across the channel */}
       {ruler && (
-        <g className={act1 && !s.channelMeasured ? 'cursor-pointer' : ''} data-ruler={s.channelMeasured ? 'measured' : 'open'}
-          onClick={() => act1 && !s.channelMeasured && eng.measureChannel()}>
+        <g className={riverImg && !s.channel.measured ? 'cursor-pointer' : ''} onClick={() => riverImg && !s.channel.measured && onChannel?.()} data-ruler={s.channel.measured ? 'measured' : 'open'}>
           <line x1={ruler.a[0]} y1={ruler.a[1]} x2={ruler.lab[0]} y2={ruler.lab[1]} stroke="#E0F2FE" strokeWidth="1" strokeDasharray="2 3" opacity="0.8" />
-          <line x1={ruler.a[0]} y1={ruler.a[1]} x2={ruler.b[0]} y2={ruler.b[1]} stroke="#000" strokeWidth="5" opacity="0.6" />
-          <line x1={ruler.a[0]} y1={ruler.a[1]} x2={ruler.b[0]} y2={ruler.b[1]} stroke={s.channelMeasured ? '#22D3EE' : '#fff'} strokeWidth="2.4"
-            strokeDasharray={s.channelMeasured ? undefined : '3 2'} />
-          {[ruler.ta, ruler.tb].map((k, i) => <line key={i} x1={k[0]} y1={k[1]} x2={k[2]} y2={k[3]} stroke={s.channelMeasured ? '#22D3EE' : '#fff'} strokeWidth="2" />)}
-          {beacon === 'ruler' && !s.channelMeasured && (
-            <circle cx={ruler.lab[0]} cy={ruler.lab[1]} r="16" fill="none" stroke="#FFD066" strokeWidth="1.6"
-              className="animate-[pulsering_1.8s_ease-out_infinite]" style={{ transformOrigin: `${ruler.lab[0]}px ${ruler.lab[1]}px` }} />
-          )}
+          <line x1={ruler.a[0]} y1={ruler.a[1]} x2={ruler.b[0]} y2={ruler.b[1]} stroke={s.channel.measured ? '#22D3EE' : '#fff'} strokeWidth="2.4" strokeDasharray={s.channel.measured ? undefined : '3 2'} />
+          {beacon === 'ruler' && !s.channel.measured && <circle cx={ruler.lab[0]} cy={ruler.lab[1]} r="16" fill="none" stroke="#FFD066" strokeWidth="1.6" className="animate-[pulsering_1.8s_ease-out_infinite]" style={{ transformOrigin: `${ruler.lab[0]}px ${ruler.lab[1]}px` }} />}
           <g transform={`translate(${ruler.lab[0]} ${ruler.lab[1]})`}>
-            <rect x="-78" y="-15" width="156" height="30" rx="5" fill="#070D1C" fillOpacity="0.9" stroke={s.channelMeasured ? '#22D3EE' : '#FFD066'} strokeWidth="1.2" />
-            <text y="-2" textAnchor="middle" fontSize="11" fontWeight="700" className="font-thai" fill={s.channelMeasured ? '#A5F3FC' : '#FFE0A3'}>
-              {s.channelMeasured ? `ลำน้ำเหลือ ${Math.round(ruler.w)} ม.` : 'คลิกวัดความกว้างลำน้ำ'}
+            <rect x="-86" y="-15" width="172" height="30" rx="5" fill="#070D1C" fillOpacity="0.92" stroke={s.channel.measured ? '#22D3EE' : '#FFD066'} strokeWidth="1.2" />
+            <text y="-2" textAnchor="middle" fontSize="11" fontWeight="700" className="font-thai" fill={s.channel.measured ? '#A5F3FC' : '#FFE0A3'}>
+              {s.channel.measured ? `ลำน้ำเหลือ ${scn.channel.widthM} ม.` : riverImg ? 'คลิกวัดความกว้างลำน้ำ' : 'ต้องมีภาพ THEOS-2 ก่อน'}
             </text>
-            <text y="10" textAnchor="middle" fontSize="9" className="font-thai" fill="#94A3B8">
-              {s.channelMeasured ? `เดิม ${THRESHOLDS.origChannelWidth} ม. · N = ${(1 - ruler.w / THRESHOLDS.origChannelWidth).toFixed(2)}` : 'ค่า N · ภาพ THEOS-2'}
-            </text>
+            <text y="10" textAnchor="middle" fontSize="9" className="font-thai" fill="#94A3B8">{s.channel.measured ? `เดิม 150 ม. · N = ${(1 - scn.channel.widthM / 150).toFixed(2)}` : 'ค่า N · คำนวณจากพิกเซล'}</text>
           </g>
         </g>
       )}
-
-      {/* community names for orientation */}
       {COMMUNITIES_LIVE.map((c) => {
         const [x, y] = proj.pt([c.lon, c.lat])
-        return (
-          <g key={c.id} pointerEvents="none">
-            <circle cx={x} cy={y} r="3.5" fill="#FDE68A" stroke="#000" strokeWidth="1.2" />
-            <text x={x + 7} y={y + 4} fontSize="12" fontWeight="600" className="font-thai" fill="#FEF3C7" style={halo}>{c.th}</text>
-          </g>
-        )
+        return <g key={c.id} pointerEvents="none"><circle cx={x} cy={y} r="3.5" fill="#FDE68A" stroke="#000" strokeWidth="1.2" /><text x={x + 7} y={y + 4} fontSize="12" fontWeight="600" className="font-thai" fill="#FEF3C7" style={halo}>{c.th}</text></g>
       })}
-
-      {/* the 14 gaps — click to seal */}
       {EMBANKMENT_GAPS.map((g, i) => {
         const [x, y] = proj.pt([g.lon, g.lat])
-        const sealed = s.sealed.includes(g.id)
+        const sealed = s.sealed.includes(g.id), q = queued.has(g.id)
         const on = gapSel === g.id
+        const hex = sealed ? '#22E36B' : q ? '#FFB300' : '#FF003C'
         return (
-          <g key={g.id} className="cursor-pointer" data-gap={g.id} data-sealed={sealed ? '1' : '0'}
-            onClick={(e) => { e.stopPropagation(); onGap?.(on ? null : g, e) }}>
+          <g key={g.id} className="cursor-pointer" data-gap={g.id} data-sealed={sealed ? '1' : q ? 'q' : '0'} onClick={(e) => { e.stopPropagation(); onGap?.(on ? null : g, e) }}>
             <circle cx={x} cy={y} r="16" fill="transparent" />
-            {!sealed && (
-              <circle cx={x} cy={y} r="10" fill="none" stroke="#FF003C" strokeWidth="1.4" opacity="0.7"
-                className="animate-[pulsering_2.4s_ease-out_infinite]" style={{ animationDelay: `${i * 0.17}s`, transformOrigin: `${x}px ${y}px` }} />
-            )}
-            {sealed ? (
-              <g>
-                <circle cx={x} cy={y} r={on ? 8 : 6.5} fill="#22E36B" stroke="#03140a" strokeWidth="1.4" style={{ filter: 'drop-shadow(0 0 5px #22E36B)' }} />
-                <path d={`M ${x - 3} ${y} L ${x - 0.8} ${y + 2.4} L ${x + 3.2} ${y - 2.6}`} fill="none" stroke="#03140a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </g>
-            ) : (
-              <g>
-                <circle cx={x} cy={y} r={on ? 7.5 : 6} fill="#FF003C" stroke="#2b0008" strokeWidth="1.2" style={{ filter: `drop-shadow(0 0 ${on ? 10 : 6}px #FF003C)` }} />
-                <circle cx={x} cy={y} r="2" fill="#fff" />
-              </g>
-            )}
+            {!sealed && <circle cx={x} cy={y} r="10" fill="none" stroke={hex} strokeWidth="1.4" opacity="0.7" className="animate-[pulsering_2.4s_ease-out_infinite]" style={{ animationDelay: `${i * 0.17}s`, transformOrigin: `${x}px ${y}px` }} />}
+            <circle cx={x} cy={y} r={on ? 8 : 6.5} fill={hex} stroke="#000" strokeWidth="1.3" style={{ filter: `drop-shadow(0 0 6px ${hex})` }} />
+            {sealed ? <path d={`M ${x - 3} ${y} L ${x - 0.8} ${y + 2.4} L ${x + 3.2} ${y - 2.6}`} fill="none" stroke="#03140a" strokeWidth="1.8" strokeLinecap="round" /> : <circle cx={x} cy={y} r="2" fill="#fff" />}
             {on && <circle cx={x} cy={y} r="13" fill="none" stroke="#fff" strokeWidth="1.4" />}
-            {(on || i === 0 || i === EMBANKMENT_GAPS.length - 1) && (
-              <text x={x} y={y + 22} textAnchor="middle" fontSize="9.5" className="font-mono" fill={sealed ? '#7CFFA0' : '#FF9DB2'} style={halo}>{g.id}</text>
-            )}
           </g>
         )
       })}
-
       <text x="500" y="80" textAnchor="middle" fontSize="13" fill="#CBD5E1" className="font-mono" letterSpacing="3" style={halo}>TACHILEIK · MYANMAR</text>
       <text x="30" y="690" fontSize="13" fill="#CBD5E1" className="font-mono" letterSpacing="3" style={halo}>MAE SAI · THAILAND</text>
     </g>

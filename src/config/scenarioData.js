@@ -43,6 +43,39 @@ export const COMMUNITIES = [
 /* Evacuation point on higher ground (~416 m vs town ~395 m, SRTM) — ตำแหน่งสมมติ */
 export const SHELTER = { th: 'จุดอพยพบนที่สูง (สมมติ)', name: 'Evacuation point (scenario)', lon: 99.8806, lat: 20.4187 }
 
+/* Real places from OpenStreetMap (scripts/fetch-poi.mjs) · ความสูงจาก SRTM
+   แต่ละเกมสุ่มเปิดจุดอพยพ 3 จาก 7 แห่ง · โรงพยาบาลรับผู้บาดเจ็บ · ที่ตั้งฐานบัญชาการให้เลือก 3 แห่ง */
+export const HOSPITAL = { id: 'hosp', th: 'โรงพยาบาลแม่สาย', lon: 99.87847, lat: 20.42924, elev: 426 }
+export const SHELTER_POOL = [
+  { id: 'sh-mps', th: 'โรงเรียนแม่สายประสิทธิ์ศาสตร์', lon: 99.88146, lat: 20.4297, elev: 416 },
+  { id: 'sh-std', th: 'สนามกีฬากลางอำเภอแม่สาย', lon: 99.88221, lat: 20.42731, elev: 412 },
+  { id: 'sh-prv', th: 'วัดพรหมวิหาร', lon: 99.87996, lat: 20.42643, elev: 423 },
+  { id: 'sh-psk', th: 'วัดพญาสี่ตวงคำ', lon: 99.8797, lat: 20.43549, elev: 419 },
+  { id: 'sh-wvp', th: 'วัดเวียงพาน', lon: 99.88158, lat: 20.43366, elev: 417 },
+  { id: 'sh-dw', th: 'วัดพระธาตุดอยเวา', lon: 99.87831, lat: 20.44255, elev: 446 },
+  { id: 'sh-ptk', th: 'วัดผาแตก', lon: 99.86804, lat: 20.42046, elev: 458 },
+]
+export const CAMP_SITES = [
+  { id: 'cmp-amp', th: 'ที่ว่าการอำเภอแม่สาย', lon: 99.88321, lat: 20.42811, elev: 414, note: 'ห่างแม่น้ำ 1.8 กม. · พื้น 414 ม.' },
+  { id: 'cmp-fire', th: 'สถานีดับเพลิงเมืองแม่สาย', lon: 99.88472, lat: 20.42631, elev: 409, note: 'ห่างแม่น้ำ 2.0 กม. · พื้น 409 ม. · มีรถดับเพลิง/เรือ' },
+  { id: 'cmp-pol', th: 'สถานีตำรวจภูธรอำเภอแม่สาย', lon: 99.8811, lat: 20.44091, elev: 403, note: 'ห่างแม่น้ำ 0.4 กม. · พื้น 403 ม. · ใกล้จุดเกิดเหตุ' },
+]
+
+/* Field equipment — GISTDA data services are the sensors; the rest are field tools ("items") */
+export const EQUIPMENT = {
+  theos: { th: 'สั่งถ่ายภาพ THEOS-2', tech: 'THEOS-2 Tasking', owner: 'GISTDA', what: 'ดาวเทียมหลัก — เห็นดินถล่ม ลำน้ำ ผู้ติดค้าง และโคลน (ถ้าเมฆไม่บัง)' },
+  radar: { th: 'เช็คน้ำ (เรดาร์)', tech: 'RADARSAT-2 · Disaster Platform', owner: 'GISTDA', what: 'ทะลุเมฆ บอกความลึก/ขอบเขตน้ำทุก 6 ชม. แต่ไม่เห็นคน' },
+  sphere: { th: 'Sphere Routing', tech: 'Sphere Routing API', owner: 'GISTDA', what: 'คำนวณเส้นทางบนโครงข่ายถนนจริง' },
+  elevation: { th: 'ความสูงพื้นดิน', tech: 'Sphere Elevation / SRTM DEM', owner: 'GISTDA', what: 'ดูว่าที่ไหนสูงพอเป็นฐาน/จุดอพยพ' },
+  bigbag: { th: 'บิ๊กแบ็ก', tech: 'Big Bag', owner: 'ปภ.', what: 'อุดจุดฟันหลอของแนวตลิ่ง' },
+  boat: { th: 'เรือกู้ภัย', tech: 'Rescue Boat', owner: 'ปภ./อาสา', what: 'อพยพผู้ติดค้าง ส่งเสบียง พาผู้บาดเจ็บไปโรงพยาบาล' },
+  drone: { th: 'โดรนสำรวจ', tech: 'UAV', owner: 'อาสา', what: 'ตัวช่วยส่องจุดอับที่ดาวเทียมมองไม่เห็น (ซอยลึก/ใต้เมฆ)' },
+  pump: { th: 'เครื่องสูบน้ำ', tech: 'Water Pump', owner: 'กรมชลประทาน', what: 'ลดระดับน้ำในโซน เปิดทางให้เรือ/รถ' },
+  tower: { th: 'เสาสื่อสารเคลื่อนที่', tech: 'Mobile Cell Site', owner: 'ผู้ให้บริการ', what: 'กู้สัญญาณในโซนที่พายุตัดการสื่อสาร' },
+  power: { th: 'ตัดไฟ (กฟภ.)', tech: 'Power Isolation', owner: 'กฟภ.', what: 'ตัดไฟโซนที่ไฟฟ้ารั่วก่อนส่งทีมเข้า' },
+  kit: { th: 'ถุงยังชีพ', tech: 'Relief Kit', owner: 'ปภ.', what: 'ส่งให้ครัวเรือนที่ยังอยู่ได้แต่ลำบาก' },
+}
+
 /* Upstream catchment sectors inside Myanmar — no ground sensors reachable.
    lon/lat = ศูนย์กลางแถบถ่ายภาพ THEOS-2 (กว้าง 10.3 กม.) ภายใน AOI-B
    x/y = ตำแหน่งบนฉากจำลอง (ใช้วาดรอยดินถล่มบนภาพ after) */

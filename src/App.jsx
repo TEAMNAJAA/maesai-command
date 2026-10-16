@@ -3,34 +3,37 @@
    Multi-Sensor Geospatial Serious Game & Integrated Disaster Decision Support
    ระบบภารกิจจำลองสถานการณ์และสนับสนุนการตัดสินใจบริหารจัดการอุทกภัยแม่สาย
 
-   Root layout:  briefing → pre-test → 3 acts → post-test
-     act 1 is a 3-step mission quest that closes only through its summary
-     left   · AssessmentRail  (live SFVI · river gauge · trust)
-     centre · MapCanvas       (real AOI geography + procedural sensor scenes)
-     right  · CommandRail     (imagery · resources · decisions · routing · triage)
+   Flow:  briefing (mode) → pre-test → act 1 (clock runs, ends at T−0) → summary
+          → act 2 (ends at T+36) → summary → act 3 relief → score · leaderboard → post-test
+     left   · DataHub     (SFVI · satellite schedule · zone table · resources)
+     centre · MapCanvas   (catchment · town zones · embankment)
+     right  · ActionRail  (mission quest + orders)       bottom · TutorBar (Beginner)
    All tunables live in src/config/missionConfig.js
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { useEngine } from './engine/useEngine'
-import { TopBar, ActStepper, StatusBar, Toast, AlertLog, HintBox, computeHint, ACTS } from './panels/chrome'
-import { AssessmentRail } from './panels/assessment'
-import { CommandRail } from './panels/command'
+import { TopBar, ActStepper, StatusBar, Toast, AlertLog, ACTS } from './panels/chrome'
+import { DataHub } from './panels/datahub'
+import { ActionRail } from './panels/actions'
+import { TutorBar, questFor } from './panels/quest'
 import { MapCanvas } from './map/MapCanvas'
 import { AarShell } from './aar/AarShell'
-import { BriefingModal, QuizModal, VetoAlert, CloudAlert, HoldCompareModal, Act1SummaryModal, TeacherPanel } from './modals/modals'
-import { act1Decided, activeStep } from './panels/quest'
+import { BriefingModal, QuizModal, VetoAlert, WaitCompareModal, Act1SummaryModal, Act2SummaryModal, TeacherPanel } from './modals/modals'
+import { ImageAnalysisModal, ChannelModal } from './modals/analysis'
+import { BoatPlannerModal } from './modals/planner'
+import { GuideModal, LeaderboardModal } from './modals/guide'
+import { ModeContext } from './ui/label'
 import { logger } from './lib/evalLogger'
-import { missionScore } from './lib/sim'
-import { EVAL } from './config/missionConfig'
+import { leaderboard } from './lib/leaderboard'
+import { waitComparison } from './lib/sim'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
 
 function CollapsedRail({ label, side, onOpen }) {
   return (
-    <button onClick={onOpen} title={`เปิดแผง${label}`}
-      className="panel flex h-full w-full flex-col items-center gap-2 py-3 text-slate-400 transition hover:text-white">
+    <button onClick={onOpen} title={`เปิดแผง${label}`} className="panel flex h-full w-full flex-col items-center gap-2 py-3 text-slate-400 hover:text-white">
       {side === 'left' ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       <span className="font-thai text-[11.5px] [writing-mode:vertical-rl]">{label}</span>
     </button>
@@ -46,181 +49,144 @@ export default function App() {
   const [postDone, setPostDone] = useState(false)
   const [preScore, setPreScore] = useState(null)
   const [player, setPlayer] = useState('')
-  const [hintsOn, setHintsOn] = useState(EVAL.hintsEnabled)
-  const [hiddenHint, setHiddenHint] = useState(null)
+  const [tutorOn, setTutorOn] = useState(true)
   const [teacher, setTeacher] = useState(false)
+  const [guide, setGuide] = useState(false)
+  const [board, setBoard] = useState(false)
   const [logVersion, setLogVersion] = useState(0)
-  const [view, setView] = useState('catchment')
-  const [tab, setTab] = useState('data')
-  const [aarTab, setAarTab] = useState('summary')
+  const [view, setView] = useState('urban')
+  const [tab, setTab] = useState('base')
+  const [leftTab, setLeftTab] = useState('sat')
+  const [aarTab, setAarTab] = useState('relief')
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
-  const [holdData, setHoldData] = useState(null)
-  const [focus, setFocus] = useState(null)
-  const [summaryOpen, setSummaryOpen] = useState(false)
+  const [analyze, setAnalyze] = useState(null)
+  const [channel, setChannel] = useState(false)
+  const [plan, setPlan] = useState(null)
+  const [wait, setWait] = useState(null)
+  const [saved, setSaved] = useState(null)
+  const startedAt = useRef(Date.now())
 
-  /* one evaluation session per run of the mission */
+  /* one evaluation session per run */
   const sessionFor = useRef(-1)
   useEffect(() => {
     if (sessionFor.current === s.resetSeq) return
     const prev = logger.current
-    if (prev && prev.rounds.length && !prev.result) {
-      logger.finish({ trust: Math.round(s.trust), score: null, exposed: null, abandoned: true })
-    }
+    if (prev && prev.rounds.length && !prev.result) logger.finish({ trust: Math.round(s.trust), score: null, exposed: null, abandoned: true })
     sessionFor.current = s.resetSeq
-    logger.start({ hintsEnabled: hintsOn, demo: DEMO })
+    logger.start({ hintsEnabled: eng.mode.tutor, demo: DEMO })
     if (DEMO) logger.briefingDone()
     logger.enterAct(1)
+    startedAt.current = Date.now()
     if (s.resetSeq > 0) {
       setPhase(DEMO ? 'play' : 'briefing'); setPreScore(null); setPostDone(false); setPostOpen(false)
-      setHoldData(null); setAarTab('summary'); setFocus(null); setSummaryOpen(false)
+      setWait(null); setPlan(null); setAnalyze(null); setChannel(false); setSaved(null); setAarTab('relief')
     }
   }, [s.resetSeq]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => logger.subscribe(() => setLogVersion((v) => v + 1)), [])
+  useEffect(() => { if (DEMO) eng.start() }, [s.resetSeq]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* act changes: log, default view and tab */
+  /* act changes: default view, tabs */
   useEffect(() => {
     logger.enterAct(s.act)
-    setView(s.act === 2 ? 'sar' : 'catchment')
-    setTab('data')
+    if (s.act === 1) { setView('urban'); setTab('base'); setLeftTab('sat') }
+    if (s.act === 2) { setView('urban'); setTab('ops'); setLeftTab('zones') }
+    if (s.act === 3) setAarTab('relief')
   }, [s.act])
 
-  /* every evacuation / standby order in act 1 ends on the decision summary */
-  const seenDecisions = useRef(0)
-  useEffect(() => {
-    const n = s.decisions.length
-    if (n > seenDecisions.current) {
-      const last = s.decisions[n - 1]
-      if (last.act === 1 && last.kind !== 'HOLD') setSummaryOpen(true)
-    }
-    seenDecisions.current = n
-  }, [s.decisions])
-
-  /** Act navigation — act 1 can only be left through its summary, after a decision. */
-  const requestAct = useCallback((n) => {
-    if (s.act === 1 && n > 1) {
-      if (!act1Decided(s) && !s.act1Timeout) {
-        eng.toast('warn', 'ต้องตัดสินใจก่อน — ประกาศอพยพ / แจ้งเตรียมพร้อม / ยังไม่สั่งการ')
-        setTab('decide'); setRightOpen(true)
-        return
-      }
-      setSummaryOpen(true)
-      return
-    }
-    eng.goAct(n)
-  }, [eng, s])
-
-  /* keyboard: 1/2/3 acts · Space clock · Ctrl+Shift+L teacher log */
+  /* keyboard: Space clock (Beginner) · Ctrl+Shift+L teacher log */
   useEffect(() => {
     const h = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
       if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l')) { e.preventDefault(); setTeacher((t) => !t); return }
-      if (phase !== 'play') return
-      if (e.key === '1') requestAct(1)
-      if (e.key === '2') requestAct(2)
-      if (e.key === '3') requestAct(3)
-      if (e.code === 'Space' && s.act !== 3) { e.preventDefault(); eng.setRunning((r) => !r) }
+      if (phase === 'play' && e.code === 'Space' && s.act !== 3) { e.preventDefault(); eng.setRunning((r) => !r) }
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [eng, phase, s.act, requestAct])
+  }, [eng, phase, s.act])
 
   const go = useCallback((g) => {
+    if (!g) return
     if (g.tab) { setTab(g.tab); setRightOpen(true) }
     if (g.view) setView(g.view)
+    if (g.left) { setLeftTab(g.left); setLeftOpen(true) }
     if (g.aar) setAarTab(g.aar)
-    if (g.post) setPostOpen(true)
+    if (g.analyze) setAnalyze(g.analyze)
+    if (g.channel) setChannel(true)
+    if (g.plan) setPlan(g.plan)
   }, [])
 
-  const onRoute = useCallback(async (cid) => {
-    const r = await eng.computeRoute(cid)
-    if (r) { setView('urban'); setFocus(cid) }
-    return r
-  }, [eng])
-
-  const onCommunity = useCallback((cid) => {
-    setFocus(cid)
-    if (s.act === 2 && tab === 'triage' && !s.convoy) eng.setPriority(cid)
-  }, [eng, s.act, s.convoy, tab])
-
   const finishPost = (score) => {
-    setPostOpen(false); setPostDone(true); setAarTab('summary')
-    const ms = missionScore(eng.s)
-    logger.finish({ trust: Math.round(eng.s.trust), score: Math.round(ms.total * 100), exposed: ms.exposure.exposed, post: score })
+    setPostOpen(false); setPostDone(true)
+    logger.finish({ trust: Math.round(eng.s.trust), score: saved?.score ?? null, exposed: eng.exposure.exposed, post: score })
+  }
+  const saveScore = (score) => {
+    const entry = { name: player || 'ไม่ระบุชื่อ', mode: s.modeId, score: score.total * 100, sec: (Date.now() - startedAt.current) / 1000, seed: s.seed, parts: score.parts }
+    const rank = leaderboard.add(entry)
+    const top = leaderboard.top(s.modeId, 999)
+    setSaved({ rank, at: top[rank - 1]?.at, score: Math.round(score.total * 100) })
+    eng.finishMission()
+    logger.finish({ trust: Math.round(s.trust), score: Math.round(score.total * 100), exposed: eng.exposure.exposed })
+    setBoard(true)
   }
 
   const playing = phase === 'play'
-  const hint = hintsOn && playing ? computeHint(eng, { tab, view, postDone }) : null
-  const showHint = hint && hint.text !== hiddenHint
+  const quest = playing && s.act < 3 && eng.mode.tutor && tutorOn ? questFor(eng) : null
+  const target = quest?.hint?.go
+  const beaconTab = target?.tab && target.tab !== tab ? target.tab : null
+  const beaconView = target?.view && target.view !== view ? target.view : null
+  const beaconMap = s.act === 1 && view === 'corridor' && !s.channel.measured && eng.mode.tutor ? 'ruler' : null
   const act = ACTS[s.act - 1]
-  // mission-quest beacons: blink the tab / map view / map control the next step needs
-  const quest = playing && s.act === 1 && hintsOn ? activeStep(eng) : null
-  const beaconTab = quest?.go.tab && quest.go.tab !== tab ? quest.go.tab : null
-  const beaconView = quest?.go.view && quest.go.view !== view ? quest.go.view : null
-  const beaconMap = quest?.id === 'bank' && view === 'corridor' && !s.channelMeasured ? 'ruler' : null
-  const summaryShown = playing && s.act === 1 && (summaryOpen || s.act1Timeout) && !holdData
 
   return (
-    <div className="crt grid-bg flex h-screen w-screen flex-col overflow-hidden bg-[#050912]">
-      <div className="pointer-events-none fixed inset-0 z-0 transition-all duration-700"
-        style={{ background: `radial-gradient(120% 70% at 50% 0%, ${act.hex}0F, transparent 62%)` }} />
+    <ModeContext.Provider value={eng.mode}>
+      <div className="crt grid-bg flex h-screen w-screen flex-col overflow-hidden bg-[#050912]">
+        <div className="pointer-events-none fixed inset-0 z-0 transition-all duration-700" style={{ background: `radial-gradient(120% 70% at 50% 0%, ${act.hex}0F, transparent 62%)` }} />
+        <TopBar eng={eng} onGuide={() => setGuide(true)} onBoard={() => setBoard(true)} onTeacher={() => setTeacher(true)} tutorOn={tutorOn} setTutorOn={setTutorOn}
+          onReset={() => eng.newGame()} />
+        <ActStepper eng={eng} />
 
-      <TopBar eng={eng} onBriefing={() => setBriefingOpen(true)} onTeacher={() => setTeacher(true)} hintsOn={hintsOn} setHintsOn={setHintsOn}
-        onNextAct={() => requestAct(s.act + 1)} act1Ready={act1Decided(s)} />
-      <ActStepper eng={eng} onAct={requestAct} />
-
-      {s.act === 3 ? (
-        <>
-          <AarShell eng={eng} tab={aarTab} setTab={setAarTab} onPostTest={() => setPostOpen(true)} postDone={postDone} />
-          {showHint && (
-            <div className="fixed bottom-10 left-1/2 z-40 w-[440px] -translate-x-1/2">
-              <HintBox hint={hint} onGo={go} onHide={() => setHiddenHint(hint.text)} />
+        {s.act === 3 ? (
+          <AarShell eng={eng} tab={aarTab} setTab={setAarTab} onPostTest={() => setPostOpen(true)} postDone={postDone} player={player} onSaveScore={saveScore} saved={saved} />
+        ) : (
+          <div className="relative z-10 grid min-h-0 flex-1 gap-3 p-3"
+            style={{ gridTemplateColumns: `${leftOpen ? 'minmax(272px,300px)' : '34px'} minmax(0,1fr) ${rightOpen ? 'minmax(312px,350px)' : '34px'}` }}>
+            {leftOpen ? <DataHub eng={eng} tab={leftTab} setTab={setLeftTab} onCollapse={() => setLeftOpen(false)} />
+              : <CollapsedRail side="left" label="ข้อมูล" onOpen={() => setLeftOpen(true)} />}
+            <div className="flex min-h-0 flex-col gap-2">
+              <div className="min-h-[300px] flex-1">
+                <MapCanvas key={`${s.act}-${s.resetSeq}`} eng={eng} view={view} setView={setView} onPoint={setPlan} onChannel={() => setChannel(true)}
+                  beaconView={beaconView} beaconMap={beaconMap} />
+              </div>
+              <AlertLog eng={eng} />
             </div>
-          )}
-        </>
-      ) : (
-        <div className="relative z-10 grid min-h-0 flex-1 gap-3 p-3"
-          style={{ gridTemplateColumns: `${leftOpen ? 'minmax(232px,268px)' : '34px'} minmax(0,1fr) ${rightOpen ? 'minmax(304px,344px)' : '34px'}` }}>
-          {leftOpen ? <AssessmentRail eng={eng} onCollapse={() => setLeftOpen(false)} />
-            : <CollapsedRail side="left" label="การประเมินสถานการณ์" onOpen={() => setLeftOpen(true)} />}
-
-          <div className="flex min-h-0 flex-col gap-2">
-            <div className="min-h-[300px] flex-1">
-              <MapCanvas key={`${s.act}-${s.resetSeq}`} eng={eng} view={view} setView={setView} focus={focus}
-                onCommunity={onCommunity} onRouteTool={() => go({ tab: 'route', view: 'urban' })} beaconView={beaconView} beaconMap={beaconMap}
-                hint={showHint ? <HintBox hint={hint} onGo={go} onHide={() => setHiddenHint(hint.text)} /> : null} />
-            </div>
-            <AlertLog eng={eng} />
+            {rightOpen ? (
+              <ActionRail eng={eng} tab={tab} setTab={setTab} onGo={go} onAnalyze={setAnalyze} onChannel={() => setChannel(true)} onPlan={setPlan}
+                onWait={() => setWait(waitComparison(eng.s, eng.scn, 180))} beaconTab={beaconTab} onCollapse={() => setRightOpen(false)} />
+            ) : <CollapsedRail side="right" label="แผงสั่งการ" onOpen={() => setRightOpen(true)} />}
           </div>
+        )}
 
-          {rightOpen ? (
-            <CommandRail eng={eng} tab={tab} setTab={setTab} setView={setView} onCollapse={() => setRightOpen(false)}
-              onRoute={onRoute} onHoldResult={setHoldData} onGo={go} onFinish={() => requestAct(2)} beaconTab={beaconTab} />
-          ) : <CollapsedRail side="right" label="แผงสั่งการ" onOpen={() => setRightOpen(true)} />}
-        </div>
-      )}
+        {quest && <TutorBar eng={eng} onGo={go} onHide={() => setTutorOn(false)} />}
+        <StatusBar eng={eng} />
+        <Toast flash={eng.flash} />
 
-      <StatusBar eng={eng} />
-      <Toast flash={eng.flash} />
-
-      {/* ── Modals ─────────────────────────────────────────────────────── */}
-      <BriefingModal open={phase === 'briefing' || briefingOpen} firstRun={phase === 'briefing'} player={player} setPlayer={setPlayer}
-        onEnter={() => { logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') }}
-        onClose={() => setBriefingOpen(false)} />
-      <QuizModal open={phase === 'pretest'} kind="pre"
-        onDone={(score) => { setPreScore(score); setPhase('play') }} onSkip={() => setPhase('play')} />
-      <QuizModal open={postOpen} kind="post" preScore={preScore} onDone={finishPost} onSkip={() => setPostOpen(false)} />
-      <VetoAlert open={playing && eng.veto1 && s.act === 1 && !s.vetoAck && !summaryShown && !s.act1Timeout} eng={eng}
-        onAck={eng.ackVeto} onDecide={() => go({ tab: 'decide' })} />
-      <CloudAlert open={playing && s.act === 2 && !s.cloudAck}
-        onSar={() => { eng.ackCloud(); setView('sar'); go({ tab: 'data' }) }}
-        onRouting={() => { eng.ackCloud(); go({ tab: 'route', view: 'urban' }) }} />
-      <HoldCompareModal data={holdData} onClose={() => setHoldData(null)}
-        onEvacuate={() => { setHoldData(null); go({ tab: 'decide' }) }} />
-      <Act1SummaryModal open={summaryShown} eng={eng} timeout={s.act1Timeout}
-        onStay={() => setSummaryOpen(false)}
-        onNext={() => { setSummaryOpen(false); eng.goAct(2) }} />
-      <TeacherPanel open={teacher} onClose={() => setTeacher(false)} version={logVersion} />
-    </div>
+        <BriefingModal open={phase === 'briefing' || briefingOpen} firstRun={phase === 'briefing'} player={player} setPlayer={setPlayer}
+          modeId={s.modeId} setMode={eng.setMode} onGuide={() => setGuide(true)} seed={s.seed}
+          onEnter={() => { logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') }} onClose={() => setBriefingOpen(false)} />
+        <QuizModal open={phase === 'pretest'} kind="pre" onDone={(score) => { setPreScore(score); setPhase('play'); eng.start() }} onSkip={() => { setPhase('play'); eng.start() }} />
+        <QuizModal open={postOpen} kind="post" preScore={preScore} onDone={finishPost} onSkip={() => setPostOpen(false)} />
+        <VetoAlert open={playing && eng.veto1 && s.act === 1 && !s.vetoAck && !eng.act1Over} eng={eng} onAck={eng.ackVeto} onDecide={() => go({ tab: 'zones', view: 'urban', left: 'zones' })} />
+        <WaitCompareModal data={wait} onClose={() => setWait(null)} onEvacuate={() => { setWait(null); go({ tab: 'zones' }) }} />
+        <Act1SummaryModal open={playing && eng.act1Over} eng={eng} onNext={eng.goAct2} />
+        <Act2SummaryModal open={playing && eng.act2Over} eng={eng} onNext={eng.goAct3} />
+        {analyze && <ImageAnalysisModal eng={eng} imageId={analyze} onClose={() => setAnalyze(null)} />}
+        {channel && <ChannelModal eng={eng} onClose={() => setChannel(false)} />}
+        {plan && <BoatPlannerModal eng={eng} pointId={plan} onClose={() => setPlan(null)} />}
+        <GuideModal open={guide} onClose={() => setGuide(false)} />
+        <LeaderboardModal open={board} onClose={() => setBoard(false)} highlight={saved} version={saved?.at} />
+        <TeacherPanel open={teacher} onClose={() => setTeacher(false)} version={logVersion} />
+      </div>
+    </ModeContext.Provider>
   )
 }

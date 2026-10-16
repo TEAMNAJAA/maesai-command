@@ -68,23 +68,86 @@ export const RELIEF = {
 }
 
 /* ── 6 · THEOS-2 ─────────────────────────────────────────────────────────── */
-export const THEOS2 = { swathKm: 10.3, panM: 0.5, msM: 2, revisitDays: 1.9, product: 'Level 3 Ortho (AWAGAD)' }
+export const THEOS2 = {
+  swathKm: 10.3, panM: 0.5, msM: 2, revisitDays: 1.9, product: 'Level 3 Ortho (AWAGAD)',
+  act1Passes: 4,              // รอบโคจรผ่านช่วง T−48 → T0 (เวลาแต่ละรอบสุ่มต่อเกม)
+  targetsPerPass: 2,          // สั่งถ่ายได้รอบละไม่เกิน 2 เป้าหมาย (ความคล่องตัวของดาวเทียม)
+  processingMin: 120,         // จากเวลาถ่าย → ได้ภาพ L3 Ortho ผ่าน AWAGAD
+  act2Passes: 3,              // รอบผ่าน AOI-A ช่วงวิกฤต (ถ่ายเห็นเฉพาะโซนที่เมฆไม่บัง)
+  cloudUsablePct: 60,         // เมฆเหนือเป้าหมายเกินค่านี้ = ภาพใช้ไม่ได้
+}
 
-/* ── 7 · กติกาเกม ────────────────────────────────────────────────────────── */
-export const GAME = {
-  apMax: 10000,
-  coinsMax: 14,
-  swaths: 3,
-  swathAP: 1200,
-  swathMinutes: 95,        // เวลาที่ใช้ต่อการสั่งถ่าย 1 แถบ
-  evacAP: { 1: 1500, 2: 700, 3: 700 },
-  standbyAP: 700,
-  holdMinutes: 180,        // "ยังไม่สั่งการ รอภาพรอบหน้า"
-  detourAP: 500,
-  autoRunStepMin: 15,
-  autoRunTickMs: 900,
-  act2Seed: { ap: 1250, trust: 42 },  // ค่าตั้งต้นเมื่อกระโดดเข้าองก์ 2 ผ่านแถบองก์
-  act3SeedTrust: 72,
+/* ── 7 · กติกาเกม — เวลา + งบประมาณ (ไม่มีแต้ม AP) ───────────────────────────── */
+// นาฬิกาเดินตามเวลาจริง: องก์ 1 (48 ชม.) ≈ 7.5 นาที · องก์ 2 (36 ชม.) ≈ 6 นาที · องก์ 3 นับเป็นวัน
+export const PACE = {
+  act1MinPerSec: 6.4,        // นาทีในเกมต่อวินาทีจริง
+  act2MinPerSec: 6,
+  tickMs: 250,
+}
+export const MISSION = {
+  deadlineDays: 60,          // ทั้งภารกิจ (เตือนภัย → เยียวยา) ต้องจบใน 2 เดือนในเกม
+  act2EndMin: 36 * 60,       // T+36 ชม. = น้ำลด เข้าสู่การฟื้นฟู
+  act3StartDay: 2,
+}
+export const MODES = {
+  beginner: {
+    th: 'ผู้เริ่มต้น', en: 'Beginner', budget: 11_000_000, crews: 3, boats: 6, drones: 3, pumps: 4,
+    pause: true, tutor: true, labels: 'dual', routeHints: true, reliefHints: true,
+  },
+  expert: {
+    th: 'ผู้เชี่ยวชาญ', en: 'Expert', budget: 8_500_000, crews: 2, boats: 4, drones: 2, pumps: 3,
+    pause: false, tutor: false, labels: 'tech', routeHints: false, reliefHints: false,
+  },
+}
+// งบปฏิบัติการ (บาท) — งบเยียวยาตามมติ ครม. แยกบัญชีอยู่ในองก์ 3
+export const COSTS = {
+  camp: 400_000,             // ตั้งฐานบัญชาการ + ระบบสื่อสาร
+  evacBase: 220_000,         // สั่งอพยพ 1 โซน: รถ ที่พักชั่วคราว อาหาร 3 วัน
+  evacPerHH: 900,
+  bigbag: 1_500,             // ต่อใบ
+  pump: 85_000,              // ต่อเครื่อง ต่อการติดตั้ง
+  drone: 15_000,             // ต่อเที่ยวบิน
+  tower: 180_000,            // เสาสื่อสารเคลื่อนที่
+  kit: 1_200,                // ถุงยังชีพต่อครัวเรือน
+  boatTrip: 6_000,           // ค่าเบี้ยเลี้ยง/ซ่อมบำรุงต่อเที่ยวเรือ
+}
+export const DURATIONS = {
+  bigbagPerMetre: 2.4,       // นาทีทีมต่อความยาว 1 ม. (จุด 40 ม. ≈ 1.6 ชม.)
+  pumpSetup: 120,
+  towerSetup: 180,
+  droneSortie: 45,
+  powerCut: 60,              // ประสาน กฟภ. ตัดไฟทั้งโซน
+  load: 15,                  // ขึ้น/ลงเรือ
+  evacMobilise: 30,
+  evacHHPerMin: 4,           // อัตราอพยพต่อโซน (ครัวเรือน/นาที)
+  reviewDays: 0.5,           // องก์ 3: พิจารณา 1 หลังคา
+  surveyDays: 2,
+}
+export const BOAT = { speedKmh: 9, capacity: 10, fuelLPerKm: 1.6 }
+export const FUEL_FACTOR = 1.4   // น้ำมันที่ได้ = 140% ของที่ต้องใช้จริงถ้าวางเส้นทางถูกทุกเที่ยว
+export const ACT2 = {
+  cloudMinPct: 35, cloudMaxPct: 65,     // เมฆเคลื่อนผ่านเมือง ครอบคลุมราว 35–65%
+  windKmh: 14,
+  radarRevisitH: 6,                     // เช็คน้ำ / RADARSAT-2 อัปเดตความลึกน้ำทุก 6 ชม.
+  stormAtH: [4, 9],                     // พายุตัดสัญญาณสื่อสารช่วงนี้
+  commDownSections: 3,
+  powerHazardSections: 2,
+  blindSpotSections: 2,                 // ซอยลึก/ใต้ร่มไม้ — ดาวเทียมมองไม่เห็นคน ต้องใช้โดรน
+  deepWaterM: 1.6,                      // โซนลึกเกินนี้ (ไม่ได้สูบ) เรือผ่านไม่ปลอดภัย
+  riverBandM: 110,                      // แนวริมแม่น้ำ = กระแสแรง
+  pumpReliefM: 0.5,
+  hotlineDelayH: [1, 7],                // สายด่วน 1784 แจ้งจุดติดค้าง (ถ้าโซนมีสัญญาณ)
+}
+export const RESCUE = {
+  vulnerable: [0.02, 0.05],             // ครัวเรือนที่ไปเองไม่ได้ (ผู้สูงอายุ ผู้ป่วยติดเตียง)
+  refuseBase: 0.03,                     // ไม่เชื่อคำเตือน — เพิ่มตามการเตือนผิดและความเชื่อมั่นที่ลดลง
+  refusePerFalseAlarm: 0.04,
+  selfEvacuate: 0.35,                   // โซนที่ไม่ได้สั่งอพยพ ประชาชนหนีเองได้ราวนี้
+  peoplePerHH: 3.2,
+  maxPointsPerSection: 5,
+  maxPeoplePerPoint: 30,
+  criticalDepthM: 1.5,                  // ลึกกว่านี้ = อยู่ไม่ได้ ต้องใช้เรืออพยพ
+  injuredShare: 0.3,
 }
 
 /* ── 8 · Scenario hydrograph (ค่าสถานการณ์ — ปรับเมื่อได้ข้อมูลสถานีจริง) ─── */
@@ -202,11 +265,12 @@ export const OFFLINE_ROUTING = {
 
 /* ── 12 · คะแนนความสำเร็จภารกิจ (AAR) — น้ำหนักรวม = 1 ─────────────────────── */
 export const SCORE = {
-  warning: 0.35,   // ครัวเรือนที่พ้นภัยทัน (จากเวลาที่สั่งอพยพแต่ละชุมชน)
-  relief: 0.25,    // ตัดสินเยียวยาถูกต้อง
-  triage: 0.15,    // จัดลำดับ 4 ชุมชนตรงกฎ SFVI + tie-break
-  trust: 0.15,     // ความเชื่อมั่นประชาชนตอนจบ
-  evidence: 0.10,  // ใช้หลักฐาน (สั่งถ่ายภาพ + เปิดชั้นข้อมูลก่อนตัดสินใจ)
+  theos: 0.20,     // ใช้ THEOS-2 เป็นหลักฐานหลัก: วางแผนถ่ายภาพ แปลภาพดินถล่ม วัดลำน้ำ ค้นหาผู้ติดค้าง ตรวจโคลน
+  evac: 0.20,      // สั่งอพยพรายโซนถูกที่ ถูกเวลา ไม่เปลืองงบกับโซนที่น้ำไม่ถึง
+  rescue: 0.20,    // ช่วยผู้ติดค้างทันเวลา ผู้บาดเจ็บถึงโรงพยาบาล
+  logistics: 0.10, // เส้นทางถูก น้ำมันพอ งบไม่บานปลาย ส่งทันกรอบ 60 วัน
+  relief: 0.20,    // ตัดสินเยียวยาถูกต้อง
+  trust: 0.10,     // ความเชื่อมั่นประชาชนตอนจบ
 }
 
 /* ── 13 · Sandbox test / logging ─────────────────────────────────────────── */

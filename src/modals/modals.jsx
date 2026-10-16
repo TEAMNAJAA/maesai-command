@@ -1,35 +1,32 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   MODALS — briefing · pre/post test · veto-1 alert · cloud rule · hold
-   comparison · act-1 summary · teacher log panel
+   MODALS — briefing (mode choice) · pre/post test · veto-1 alert · "wait 3 h"
+   comparison · act-1 and act-2 summaries · teacher log panel
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useState, useMemo } from 'react'
 import {
-  Shield, Satellite, Radar, Building2, AlertTriangle, Cloud, Route, Megaphone, CheckCircle2, XCircle, Clock, Database, Download, Trash2, ArrowRight, GraduationCap, Flag, Bell, CornerUpLeft, Check, X,
+  Shield, Satellite, Ship, Building2, AlertTriangle, Megaphone, CheckCircle2, XCircle, Clock, Database, Download, Trash2, ArrowRight, GraduationCap, Flag, BookOpen, Trophy, Users, HeartPulse, Fuel, Route, Wallet,
 } from 'lucide-react'
 import { Modal, Btn, Src, SrcLegend } from '../ui/atoms'
-import { QUIZ, COMMUNITIES } from '../config/scenarioData'
-import { SFVI, THRESHOLDS, RELIEF, TRUST, GAME, EVAL } from '../config/missionConfig'
-import { clockLabel, clockToDate, fmt, pct } from '../lib/format'
+import { QUIZ } from '../config/scenarioData'
+import { SFVI, THRESHOLDS, RELIEF, TRUST, EVAL, MODES, PACE } from '../config/missionConfig'
+import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
+import { questFor } from '../panels/quest'
+import { leaderboard } from '../lib/leaderboard'
+import { clockLabel, clockToDate, fmt, pct, mmss } from '../lib/format'
 import { logger, downloadText } from '../lib/evalLogger'
-import { evacCostFor } from '../engine/useEngine'
-import { questSteps } from '../panels/quest'
-import { TOTAL_AT_RISK } from '../lib/sim'
-import { EMBANKMENT_GAPS } from '../lib/embankment'
 
-/* ── Mission briefing ───────────────────────────────────────────────────── */
+/* ── Mission briefing + mode choice ─────────────────────────────────────── */
 
-export function BriefingModal({ open, firstRun, onEnter, onClose, player, setPlayer }) {
+export function BriefingModal({ open, firstRun, onEnter, onClose, player, setPlayer, modeId, setMode, onGuide, seed }) {
   const acts = [
-    { n: 1, hex: '#22E36B', icon: Satellite, title: 'องก์ 1: เฝ้าระวัง', time: 'T−48 → T−0 ชม.', sensor: 'THEOS-2 (ภาพเชิงแสง)',
-      body: 'ภารกิจ 3 สเต็ป: ① สั่งถ่ายภาพ THEOS-2 ป่าต้นน้ำในเมียนมาหารอยดินถล่ม (L) ② ตรวจแนวตลิ่งแม่น้ำสายบนภาพดาวเทียม วัดความกว้างลำน้ำ (N) และอุดจุดฟันหลอ ③ ดู SFVI แล้วตัดสินใจ — ต้องตัดสินใจก่อนจึงไปองก์ 2 ได้' },
-    { n: 2, hex: '#FF003C', icon: Radar, title: 'องก์ 2: วิกฤต', time: 'T+0 → T+36 ชม.', sensor: 'เรดาร์ RADARSAT-2 (เช็คน้ำ)',
-      body: 'เมฆบัง 100% ภาพเชิงแสงถูกปิดอัตโนมัติ สลับไปใช้เรดาร์ ใช้ Sphere Routing หาเส้นทางหนีน้ำเมื่อถนนขาด และจัดลำดับส่งกำลังให้ 4 ชุมชน' },
-    { n: 3, hex: '#38BDF8', icon: Building2, title: 'องก์ 3: ฟื้นฟู', time: 'T+36 ชม. →', sensor: 'THEOS-2 Pan 0.5 ม. + เรดาร์',
-      body: `เทียบภาพก่อน–หลังรายหลังคา อนุมัติเงินเยียวยา ${fmt(RELIEF.flatGrant)} บ. (ท่วมขัง ≥ ${RELIEF.inundationMinDays} วัน) + ค่าล้างโคลน ${fmt(RELIEF.mudGrant)} บ. หรือส่งสำรวจภาคพื้น` },
+    { n: 1, hex: '#22E36B', icon: Satellite, title: 'องก์ 1: เฝ้าระวัง', time: `T−48 → T−0 · ~${Math.round(48 * 60 / PACE.act1MinPerSec / 60)} นาที`, body: 'ตั้งฐาน · วางแผนถ่าย THEOS-2 ตามรอบโคจรและเมฆ · แปลภาพหาดินถล่ม (L) · วัดลำน้ำคำนวณ N · อุดตลิ่ง · สั่งอพยพรายโซน' },
+    { n: 2, hex: '#FF003C', icon: Ship, title: 'องก์ 2: วิกฤต', time: `T+0 → T+36 · ~${Math.round(36 * 60 / PACE.act2MinPerSec / 60)} นาที`, body: 'เมฆเคลื่อนผ่าน 35–65% · THEOS-2 ถ่ายช่องเมฆหาผู้ติดค้าง · เรือ/เสบียง/โรงพยาบาล · ตัดไฟ · เสาสื่อสาร · สูบน้ำเปิดทาง' },
+    { n: 3, hex: '#38BDF8', icon: Building2, title: 'องก์ 3: ฟื้นฟู', time: 'วันที่ 2 → 60', body: `ภาพ THEOS-2 ก่อน–หลังรายหลังคา + กราฟเรดาร์ · อนุมัติ ฿${fmt(RELIEF.flatGrant)} / +฿${fmt(RELIEF.mudGrant)} · ส่งสำรวจเมื่อหลักฐานไม่พอ` },
   ]
+  const top = leaderboard.top(modeId, 3)
   return (
-    <Modal open={open} onClose={onClose} closable={!firstRun} width={880} z={90}>
+    <Modal open={open} onClose={onClose} closable={!firstRun} width={940} z={90}>
       <div className="p-6" data-modal="briefing">
         <div className="flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-lg border border-sky-400/40 bg-sky-400/10"><Shield size={22} className="text-sky-300" /></div>
@@ -37,63 +34,65 @@ export function BriefingModal({ open, firstRun, onEnter, onClose, player, setPla
             <div className="hud-label">MISSION BRIEFING · THEOS-2 MAE SAI COMMAND</div>
             <h1 className="font-thai text-[22px] font-bold leading-tight text-white">ภารกิจผู้บัญชาการ EOC แม่สาย</h1>
           </div>
+          <Btn variant="ghost" className="ml-auto" icon={BookOpen} onClick={onGuide}><span className="font-thai normal-case tracking-normal text-[12px]">คู่มือการเล่น</span></Btn>
         </div>
-
         <p className="font-thai mt-3 text-[13.5px] leading-relaxed text-slate-300">
-          คุณคือ <b className="text-sky-200">ผู้บัญชาการศูนย์ปฏิบัติการฉุกเฉิน (EOC) อำเภอแม่สาย</b> จ.เชียงราย — ฝนตกหนักต่อเนื่อง
-          แต่ <b className="text-[#FFD066]">ต้นน้ำแม่น้ำสายราว 965 ตร.กม. อยู่ในเมียนมา</b> ไทยตั้งสถานีวัดที่นั่นไม่ได้ และโดรนบินข้ามพรมแดนไม่ได้
-          ดาวเทียมจึงเป็นเซนเซอร์เดียวที่มองเห็นต้นเหตุ เป้าหมายของคุณ: ปกป้องครัวเรือนใน 4 ชุมชนเฝ้าระวัง
-          (สายลมจอย · เกาะทราย · ไม้ลุงขน · เหมืองแดง) รักษาความเชื่อมั่นของประชาชน และเยียวยาอย่างเป็นธรรม
+          ฝนตกหนักต่อเนื่อง แต่ <b className="text-[#FFD066]">ต้นน้ำแม่น้ำสายราว 965 ตร.กม. อยู่ในเมียนมา</b> ไทยตั้งสถานีวัดไม่ได้ —
+          <b className="text-sky-200"> ดาวเทียม THEOS-2 คือตาหลักของคุณ</b> ทุกคำสั่งใช้ <b>เวลา</b> (นาฬิกาเดินจริง) และ <b>งบประมาณ</b> ทั้งภารกิจต้องจบใน 60 วัน
+          เป้าหมาย: เตือนถูกที่ ถูกเวลา ช่วยคนติดค้างให้ทัน และเยียวยาอย่างเป็นธรรม
         </p>
-
-        <div className="mt-4 grid grid-cols-3 gap-2.5">
+        <div className="mt-3 grid grid-cols-3 gap-2.5">
           {acts.map((a) => (
             <div key={a.n} className="rounded-lg border p-3" style={{ borderColor: `${a.hex}44`, background: `${a.hex}0B` }}>
-              <div className="flex items-center gap-2">
-                <a.icon size={15} style={{ color: a.hex }} />
-                <span className="font-thai text-[14px] font-bold text-white">{a.title}</span>
-              </div>
+              <div className="flex items-center gap-2"><a.icon size={15} style={{ color: a.hex }} /><span className="font-thai text-[14px] font-bold text-white">{a.title}</span></div>
               <div className="num mt-0.5 text-[11px]" style={{ color: a.hex }}>{a.time}</div>
-              <div className="font-thai mt-0.5 text-[11px] text-slate-400">{a.sensor}</div>
               <div className="font-thai mt-1.5 text-[12px] leading-snug text-slate-300">{a.body}</div>
             </div>
           ))}
         </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
+        <div className="font-thai mt-4 text-[13px] font-bold text-white">เลือกโหมด</div>
+        <div className="mt-1.5 grid grid-cols-2 gap-2.5">
+          {Object.entries(MODES).map(([id, m]) => (
+            <button key={id} onClick={() => setMode(id)} data-mode-pick={id}
+              className={`rounded-lg border-2 p-3 text-left transition ${modeId === id ? (id === 'expert' ? 'border-[#FF6B8A] bg-[#FF003C]/10' : 'border-[#22E36B] bg-[#22E36B]/10') : 'border-white/10 bg-white/[0.02] hover:border-white/25'}`}>
+              <div className="flex items-center gap-2">
+                <span className="font-thai text-[15px] font-bold text-white">{m.th}</span>
+                <span className="text-[12px] text-slate-400">{m.en}</span>
+                {modeId === id && <CheckCircle2 size={15} className="ml-auto" style={{ color: id === 'expert' ? '#FF6B8A' : '#22E36B' }} />}
+              </div>
+              <ul className="font-thai mt-1 space-y-0.5 text-[11.5px] leading-snug text-slate-300">
+                {id === 'beginner' ? (
+                  <><li>• ป้าย 2 บรรทัด: ไทยเข้าใจง่าย + (ศัพท์เทคนิค)</li><li>• แถบผู้ช่วยสอน + ไฟชี้เป้า · หยุดเวลาได้</li><li>• บอกอันตรายของเส้นทางเรือ · คำใบ้ในการแปลภาพ</li></>
+                ) : (
+                  <><li>• ศัพท์เทคนิคล้วน ไม่มีผู้ช่วยสอน</li><li>• หยุดเวลาไม่ได้ ภาพ/ข้อมูลต้องตีความเอง</li><li>• อ่านอันตรายจากแผนที่เอง · ทรัพยากรน้อยกว่า</li></>
+                )}
+                <li className="num text-slate-400">งบ ฿{fmt(m.budget / 1e6, 1)}M · เรือ {m.boats} · โดรน {m.drones} · เครื่องสูบ {m.pumps} · ทีมบิ๊กแบ็ก {m.crews}</li>
+              </ul>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 grid grid-cols-[1fr_260px] gap-2.5">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="font-thai text-[13px] font-bold text-white">กฎการตัดสินใจ</div>
-            <div className="num mt-1 text-[12px] text-sky-200">SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P</div>
-            <ul className="font-thai mt-1.5 space-y-1 text-[12px] leading-snug text-slate-300">
-              <li>• SFVI ≥ {SFVI.decisionBand} = มีหลักฐานพอสั่งอพยพ</li>
-              <li>• <b className="text-[#FF6B8A]">Veto 1:</b> ระดับน้ำถ้ำผาจม ≥ {THRESHOLDS.criticalLevel.toFixed(2)} ม. → อพยพทันที ไม่รอภาพ</li>
-              <li>• <b className="text-[#C4B5FD]">Cloud Rule:</b> เมฆบัง → ลดน้ำหนัก L และความเชื่อมั่นต่ำ</li>
-              <li>• เตือนผิดเสียความเชื่อมั่นทบ −{TRUST.falseAlarmPenalties.join('/−')} · เตือนช้า −{TRUST.lateWarningPenalty}</li>
-              <li>• "ยังไม่สั่งการ" ได้เสมอ — แต่เวลาเดินต่อ {GAME.holdMinutes / 60} ชม. และมีราคา</li>
-            </ul>
+            <div className="font-thai text-[12.5px] font-bold text-white">กฎการตัดสินใจ</div>
+            <div className="num mt-1 text-[12px] text-sky-200">SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ {SFVI.decisionBand})</div>
+            <div className="font-thai mt-1 text-[11.5px] leading-snug text-slate-400">Veto 1: น้ำ ≥ {THRESHOLDS.criticalLevel} ม. อพยพทันที · เตือนผิดทบ −{TRUST.falseAlarmPenalties.join('/−')} · ทุกตัวเลขมีป้ายที่มา</div>
+            <SrcLegend className="mt-1.5" />
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="font-thai text-[13px] font-bold text-white">อ่านหน้าจอ</div>
-            <ul className="font-thai mt-1.5 space-y-1 text-[12px] leading-snug text-slate-300">
-              <li>• <b>ซ้าย</b> = แผงประเมิน (SFVI สด · ระดับน้ำ · ความเชื่อมั่น)</li>
-              <li>• <b>กลาง</b> = แผนที่ — สลับมุมมองด้านบน · ปุ่ม 3D เอียงภูมิประเทศ</li>
-              <li>• <b>ขวาบน</b> = กล่องภารกิจ 3 สเต็ป — ทำตามช่องที่กระพริบ เสร็จแล้วติ๊กเขียว</li>
-              <li>• <b>ขวา</b> = แผงสั่งการ (① ภาพต้นน้ำ · ② แนวตลิ่ง · ③ ตัดสินใจ)</li>
-              <li>• ◈ เหรียญข้อมูลซื้อชั้นข้อมูล · AP ใช้สั่งการ</li>
-            </ul>
-            <div className="font-thai mt-2 text-[11.5px] text-slate-400">ทุกตัวเลขมีป้ายบอกที่มา:</div>
-            <SrcLegend className="mt-1" />
+          <div className="rounded-lg border border-[#FFD066]/25 bg-[#FFD066]/[0.05] p-3">
+            <div className="font-thai flex items-center gap-1.5 text-[12.5px] font-bold text-[#FFE0A3]"><Trophy size={13} /> อันดับสูงสุด ({MODES[modeId].th})</div>
+            {top.length === 0 ? <div className="font-thai mt-1 text-[11px] text-slate-500">ยังไม่มีคะแนน — เป็นคนแรก!</div>
+              : top.map((r, i) => <div key={r.at} className="font-thai flex justify-between text-[11.5px] text-slate-200"><span>{i + 1}. {r.name}</span><span className="num text-[#7CFFA0]">{r.score}%</span></div>)}
           </div>
         </div>
-
         <div className="mt-4 flex items-end gap-3">
           {firstRun && (
             <label className="flex-1">
-              <span className="font-thai text-[11.5px] text-slate-400">รหัสผู้เล่น / ชื่อเล่น (ไม่บังคับ — ใช้จับคู่ผลแบบทดสอบในบันทึกครู)</span>
-              <input value={player} onChange={(e) => setPlayer(e.target.value)} maxLength={40} placeholder="เช่น ม.6/2-05"
+              <span className="font-thai text-[11.5px] text-slate-400">ชื่อ / รหัสผู้เล่น (ใช้ใน Leaderboard และบันทึกครู)</span>
+              <input value={player} onChange={(e) => setPlayer(e.target.value)} maxLength={24} placeholder="เช่น ม.6/2-05" data-player
                 className="font-thai mt-1 w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-sky-400/60" />
             </label>
           )}
+          <span className="num pb-2 text-[10.5px] text-slate-500">SEED {seed}</span>
           <Btn variant="primary" size="lg" icon={ArrowRight} className={firstRun ? '' : 'ml-auto'} onClick={firstRun ? onEnter : onClose}>
             <span className="font-thai normal-case tracking-normal text-[14px]">{firstRun ? 'เข้าสู่ศูนย์บัญชาการ' : 'กลับสู่ศูนย์บัญชาการ'}</span>
           </Btn>
@@ -198,291 +197,213 @@ export function QuizModal({ open, kind, preScore, onDone, onSkip }) {
   )
 }
 
-/* ── Veto 1 red alert ───────────────────────────────────────────────────── */
+/* ── Veto 1 red alert (zones) ───────────────────────────────────────────── */
 
 export function VetoAlert({ open, eng, onAck, onDecide }) {
-  const { s, world } = eng
-  const pending = COMMUNITIES.filter((c) => s.evacOrders[c.id] === undefined)
-  const cost = evacCostFor(1, pending.length || 4)
+  const { s, sfvi, world } = eng
+  if (!open) return null
+  const hot = sfvi.perSection.filter((z) => z.P >= 0.25 && s.orders[z.id] === undefined)
   return (
-    <Modal open={open} closable={false} width={560} tone="#FF003C" z={85}>
+    <Modal open closable={false} width={580} tone="#FF003C" z={85}>
       <div className="p-6 text-center" data-modal="veto">
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border-2 border-[#FF003C] bg-[#FF003C]/15 animate-[softflash_1.1s_ease-in-out_infinite]">
           <AlertTriangle size={30} className="text-[#FF003C]" />
         </div>
         <div className="mt-3 font-mono text-[12px] font-bold tracking-[0.2em] text-[#FF3B63]">VETO RULE 1 · CRITICAL ALERT</div>
-        <h2 className="font-thai mt-1 text-[22px] font-bold text-white">บังคับอพยพทันที</h2>
+        <h2 className="font-thai mt-1 text-[22px] font-bold text-white">ระดับน้ำถึงเกณฑ์วิกฤต</h2>
         <p className="font-thai mt-2 text-[14px] leading-relaxed text-slate-300">
-          ระดับน้ำสถานีบ้านถ้ำผาจม <b className="num text-[#FF6B8A]">{world.level.toFixed(2)} ม.</b> ถึงระดับวิกฤต
-          ({THRESHOLDS.criticalLevel.toFixed(2)} ม. กรมทรัพยากรน้ำ) — ต้องสั่งอพยพโดย<b>ไม่รอภาพยืนยัน</b> ไม่ว่าค่า SFVI จะเป็นเท่าใด
+          สถานีบ้านถ้ำผาจม <b className="num text-[#FF6B8A]">{world.level.toFixed(2)} ม.</b> ≥ {THRESHOLDS.criticalLevel.toFixed(2)} ม. — สั่งอพยพโซนเสี่ยงทันทีโดยไม่รอภาพยืนยัน
         </p>
         <div className="mt-2 flex justify-center"><Src t="measured" /></div>
-        {pending.length > 0 ? (
-          <div className="font-thai mt-3 text-[12.5px] text-[#FFB3C2]">ยังไม่ได้รับคำสั่ง: {pending.map((c) => c.th).join(' · ')}</div>
-        ) : (
-          <div className="font-thai mt-3 text-[12.5px] text-[#7CFFA0]">ทุกชุมชนได้รับคำสั่งอพยพแล้ว</div>
-        )}
+        <div className="font-thai mt-3 text-[12.5px] text-[#FFB3C2]">{hot.length ? `โซนเสี่ยงที่ยังไม่ได้สั่ง: ${hot.map((z) => z.id).join(' · ')}` : 'โซนเสี่ยงได้รับคำสั่งครบแล้ว'}</div>
         <div className="mt-5 flex flex-col gap-2">
-          {pending.length > 0 && (
-            <Btn variant="danger" size="lg" icon={Megaphone} disabled={s.ap < cost}
-              onClick={() => { eng.issueOrder('EVACUATE', pending.map((c) => c.id)); onAck() }}>
-              <span className="font-thai normal-case tracking-normal text-[14px]">สั่งอพยพ {pending.length} ชุมชนที่เหลือทันที · {fmt(cost)} AP</span>
+          {hot.length > 0 && (
+            <Btn variant="danger" size="lg" icon={Megaphone} onClick={() => { eng.orderZones(hot.map((z) => z.id)); onAck() }}>
+              <span className="font-thai normal-case tracking-normal text-[14px]">สั่งอพยพ {hot.length} โซนเสี่ยงทันที</span>
             </Btn>
           )}
-          <Btn variant="solid" onClick={() => { onAck(); onDecide() }}>
-            <span className="font-thai normal-case tracking-normal text-[12.5px]">รับทราบ — ไปที่แผงตัดสินใจ</span>
-          </Btn>
+          <Btn variant="solid" onClick={() => { onAck(); onDecide() }}><span className="font-thai normal-case tracking-normal text-[12.5px]">รับทราบ — ไปเลือกโซนเอง</span></Btn>
         </div>
       </div>
     </Modal>
   )
 }
 
-/* ── Cloud rule (act 2 entry) ───────────────────────────────────────────── */
-
-export function CloudAlert({ open, onSar, onRouting }) {
-  return (
-    <Modal open={open} closable={false} width={580} tone="#FF8A3D" z={85}>
-      <div className="p-6" data-modal="cloud">
-        <div className="flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-full border-2 border-[#FF8A3D] bg-[#FF8A3D]/15"><Cloud size={24} className="text-[#FFC59A]" /></div>
-          <div>
-            <div className="font-mono text-[11px] font-bold tracking-[0.2em] text-[#FFC59A]">CLOUD RULE · T+0</div>
-            <h2 className="font-thai text-[20px] font-bold text-white">เมฆปกคลุม 100% — ภาพเชิงแสงใช้ไม่ได้</h2>
-          </div>
-        </div>
-        <p className="font-thai mt-3 text-[13.5px] leading-relaxed text-slate-300">
-          มวลน้ำเข้าเมืองแล้ว ชั้นภาพ THEOS-2 / อาคาร / LANDX <b>ถูกปิดอัตโนมัติ</b> เพราะดาวเทียมเชิงแสงถ่ายทะลุเมฆไม่ได้
-          ค่า L ถูกลดน้ำหนักและติดป้ายความเชื่อมั่นต่ำ ให้สลับไปใช้ <b className="text-[#FFC59A]">เรดาร์ RADARSAT-2 ผ่าน เช็คน้ำ</b> ซึ่งทะลุเมฆได้
-          — เหมือนที่ GISTDA ใช้จริงเมื่อ 10 และ 12 ก.ย. 2567
-        </p>
-        <div className="mt-2 flex gap-2"><Src t="radar" /><Src t="image" /></div>
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <Btn variant="warn" size="lg" icon={Radar} onClick={onSar}>
-            <span className="font-thai normal-case tracking-normal text-[13px]">เปิดเรดาร์ SAR (เช็คน้ำ)</span>
-          </Btn>
-          <Btn variant="go" size="lg" icon={Route} onClick={onRouting}>
-            <span className="font-thai normal-case tracking-normal text-[13px]">เปิดเครื่องมือ Sphere Routing</span>
-          </Btn>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-/* ── "ยังไม่สั่งการ" dual comparison ─────────────────────────────────────── */
+/* ── "ดูผลถ้ารอ 3 ชม." comparison (no time passes) ──────────────────────── */
 
 const margin = (m) => {
-  const sign = m >= 0 ? '+' : '−'
-  const a = Math.abs(m)
+  if (!Number.isFinite(m)) return '—'
+  const sign = m >= 0 ? '+' : '−', a = Math.abs(m)
   return a >= 120 ? `${sign}${(a / 60).toFixed(1)} ชม.` : `${sign}${Math.round(a)} นาที`
 }
 
-export function HoldCompareModal({ data, onClose, onEvacuate }) {
+export function WaitCompareModal({ data, onClose, onEvacuate }) {
   if (!data) return null
-  const diff = data.exposedLater - data.exposedNow
-  const cell = (a, b, unit, d = 2, worse = (x, y) => y > x) => (
-    <span className="num text-[12px]">
-      <span className="text-slate-300">{a.toFixed(d)}</span>
-      <span className="mx-1 text-slate-600">→</span>
-      <span style={{ color: worse(a, b) ? '#FF6B8A' : '#cbd5e1' }}>{b.toFixed(d)}</span>
-      <span className="text-[10px] text-slate-500"> {unit}</span>
-    </span>
-  )
+  const diff = data.remainingLater - data.remainingNow
   return (
-    <Modal open onClose={onClose} width={860} tone="#FFB300" z={85}>
-      <div className="p-6" data-modal="hold">
+    <Modal open onClose={onClose} width={880} tone="#FFB300" z={85}>
+      <div className="p-6" data-modal="wait">
         <div className="flex items-center gap-3">
           <Clock size={22} className="text-[#FFD066]" />
           <div>
-            <div className="hud-label">INACTION DECISION · DUAL COMPARISON</div>
-            <h2 className="font-thai text-[19px] font-bold text-white">ผลของการ "ยังไม่สั่งการ" {GAME.holdMinutes / 60} ชั่วโมง</h2>
+            <div className="hud-label">COST OF INACTION · DUAL COMPARISON</div>
+            <h2 className="font-thai text-[19px] font-bold text-white">ถ้ารอข้อมูลอีก 3 ชั่วโมงแล้วค่อยสั่ง จะเป็นอย่างไร</h2>
           </div>
           <div className="ml-auto"><Src t="scenario" /></div>
         </div>
-        <div className="font-thai mt-1 text-[12px] text-slate-400">
-          {clockLabel(data.t0)} ({clockToDate(data.t0)}) → {clockLabel(data.t1)} ({clockToDate(data.t1)})
-        </div>
-
-        <div className="mt-4 grid grid-cols-3 gap-2.5">
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="font-thai text-[11.5px] text-slate-400">ระดับน้ำสถานีถ้ำผาจม</div>
-            <div className="mt-1 text-[16px]">{cell(data.levelNow, data.levelLater, 'ม.')}</div>
-          </div>
+        <div className="font-thai mt-1 text-[12px] text-slate-400">{clockLabel(data.t0)} ({clockToDate(data.t0)}) เทียบ {clockLabel(data.t1)} · ระดับน้ำ {data.levelNow.toFixed(2)} → {data.levelLater.toFixed(2)} ม.</div>
+        <div className="mt-4 grid grid-cols-2 gap-2.5">
           <div className="rounded-lg border border-[#22E36B]/30 bg-[#22E36B]/[0.06] p-3">
-            <div className="font-thai text-[11.5px] text-slate-400">ทาง ก: สั่งอพยพตอน {clockLabel(data.t0)}</div>
-            <div className="num mt-1 text-[22px] font-bold text-[#7CFFA0]">{fmt(data.exposedNow)} <span className="font-thai text-[12px] font-normal text-slate-400">หลังคาเรือนเสี่ยง</span></div>
+            <div className="font-thai text-[11.5px] text-slate-400">ทาง ก: สั่งโซนที่เหลือตอนนี้</div>
+            <div className="num mt-1 text-[22px] font-bold text-[#7CFFA0]">{fmt(data.remainingNow)} <span className="font-thai text-[12px] font-normal text-slate-400">ครัวเรือนยังติดอยู่เมื่อน้ำมา</span></div>
           </div>
           <div className="rounded-lg border border-[#FF003C]/30 bg-[#FF003C]/[0.06] p-3">
-            <div className="font-thai text-[11.5px] text-slate-400">ทาง ข: รอแล้วสั่งตอน {clockLabel(data.t1)}</div>
-            <div className="num mt-1 text-[22px] font-bold text-[#FF6B8A]">{fmt(data.exposedLater)} <span className="font-thai text-[12px] font-normal text-slate-400">หลังคาเรือนเสี่ยง</span></div>
+            <div className="font-thai text-[11.5px] text-slate-400">ทาง ข: รอ 3 ชม. แล้วค่อยสั่ง</div>
+            <div className="num mt-1 text-[22px] font-bold text-[#FF6B8A]">{fmt(data.remainingLater)} <span className="font-thai text-[12px] font-normal text-slate-400">ครัวเรือนยังติดอยู่</span></div>
           </div>
         </div>
-
         <table className="mt-4 w-full border-collapse">
-          <thead>
-            <tr className="border-b border-white/10">
-              {['ชุมชน', 'น้ำถึงชุมชน', 'ทาง ก · เสี่ยง (เวลาเหลือ)', 'ทาง ข · เสี่ยง (เวลาเหลือ)', 'ความลึกน้ำในชุมชน', 'โคลนสะสม'].map((h) => (
-                <th key={h} className="font-thai px-2 py-2 text-left text-[11px] font-semibold text-slate-400">{h}</th>
-              ))}
-            </tr>
-          </thead>
+          <thead><tr className="border-b border-white/10">
+            {['โซน', 'น้ำถึง', 'ลึกสูงสุด', 'ทาง ก · ติดค้าง (เวลาเหลือ)', 'ทาง ข · ติดค้าง (เวลาเหลือ)'].map((h) => <th key={h} className="font-thai px-2 py-2 text-left text-[11px] font-semibold text-slate-400">{h}</th>)}
+          </tr></thead>
           <tbody>
-            {data.rows.map((r) => (
-              <tr key={r.c.id} className="border-b border-white/[0.05]">
-                <td className="font-thai px-2 py-2 text-[13px] text-white">{r.c.th}{r.c.exits === 1 && <span className="ml-1 text-[10px] text-[#FF6B8A]">ทางออก 1</span>}</td>
-                <td className="num px-2 py-2 text-[11.5px] text-slate-300">{Number.isFinite(r.arrival) ? clockLabel(r.arrival) : '—'}</td>
-                {r.ordered ? (
-                  <td colSpan={2} className="font-thai px-2 py-2 text-[12px] text-[#7CFFA0]">สั่งอพยพไปแล้ว — ไม่เปลี่ยน ({fmt(r.exposedNow)} เสี่ยง)</td>
-                ) : (
+            {data.rows.filter((r) => r.peak >= 0.5).map((r) => (
+              <tr key={r.sec.id} className="border-b border-white/[0.05]">
+                <td className="font-thai px-2 py-1.5 text-[12.5px] text-white"><span className="num font-bold">{r.sec.id}</span> {r.sec.name}</td>
+                <td className="num px-2 py-1.5 text-[11.5px] text-slate-300">{Number.isFinite(r.arrival) ? clockLabel(r.arrival) : '—'}</td>
+                <td className="num px-2 py-1.5 text-[11.5px] text-slate-300">{r.peak.toFixed(1)} ม.</td>
+                {r.ordered ? <td colSpan={2} className="font-thai px-2 py-1.5 text-[12px] text-[#7CFFA0]">สั่งไปแล้ว</td> : (
                   <>
-                    <td className="px-2 py-2"><span className="num text-[12px] text-[#7CFFA0]">{fmt(r.exposedNow)}</span>
-                      <span className="num ml-1 text-[10.5px]" style={{ color: r.marginNow >= 0 ? '#64748b' : '#FF6B8A' }}>({margin(r.marginNow)})</span></td>
-                    <td className="px-2 py-2"><span className="num text-[12px] text-[#FF6B8A]">{fmt(r.exposedLater)}</span>
-                      <span className="num ml-1 text-[10.5px]" style={{ color: r.marginLater >= 0 ? '#64748b' : '#FF6B8A' }}>({margin(r.marginLater)})</span></td>
+                    <td className="px-2 py-1.5"><span className="num text-[12px] text-[#7CFFA0]">{fmt(r.remainingNow)}</span><span className="num ml-1 text-[10.5px] text-slate-500">({margin(r.arrival - data.t0 - r.need)})</span></td>
+                    <td className="px-2 py-1.5"><span className="num text-[12px] text-[#FF6B8A]">{fmt(r.remainingLater)}</span><span className="num ml-1 text-[10.5px] text-slate-500">({margin(r.arrival - data.t1 - r.need)})</span></td>
                   </>
                 )}
-                <td className="px-2 py-2">{cell(r.depthNow, r.depthLater, 'ม.')}</td>
-                <td className="px-2 py-2">{cell(r.mudNow, r.mudLater, 'ซม.', 0)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-
         <div className="font-thai mt-3 rounded-lg border border-[#FFB300]/30 bg-[#FFB300]/[0.07] px-3 py-2.5 text-[13px] leading-relaxed text-[#FFE0A3]">
-          {diff > 0
-            ? <>การรอ {GAME.holdMinutes / 60} ชม. ทำให้หลังคาเรือนเสี่ยงเพิ่มขึ้น <b className="num">{fmt(diff)}</b> หลัง — เวลาเหลือสำหรับอพยพลดลง ขณะที่ระดับน้ำและโคลนในชุมชนสูงขึ้น</>
-            : <>การรอครั้งนี้ยังไม่ทำให้หลังคาเรือนเสี่ยงเพิ่ม — แต่เวลาที่เหลือก่อนน้ำถึงลดลง และ SFVI ไม่ได้เพิ่มหลักฐานใหม่ ({data.sfviNow.basin.toFixed(3)} → {data.sfviLater.basin.toFixed(3)})</>}
-          <div className="mt-1 text-[11.5px] text-slate-400">"เวลาเหลือ" = เวลาตั้งแต่สั่งจนน้ำถึง ลบเวลาที่ต้องใช้อพยพ (ติดลบ = อพยพไม่ทัน)</div>
+          {diff > 0 ? <>การรอ 3 ชม. ทำให้มีครัวเรือนติดค้างเพิ่ม <b className="num">{fmt(diff)}</b> ครัวเรือน — ผู้ติดค้างเหล่านี้จะกลายเป็นงานของเรือกู้ภัยในองก์ 2</>
+            : <>การรอครั้งนี้ยังไม่ทำให้ติดค้างเพิ่ม แต่เวลาเหลือก่อนน้ำถึงลดลง — หลักฐานใหม่จะมาจากรอบโคจร THEOS-2 ถัดไปเท่านั้น</>}
+          <div className="mt-1 text-[11.5px] text-slate-400">ไม่มีเวลาผ่านไปจากการดูหน้านี้ · "เวลาเหลือ" = เวลาตั้งแต่สั่งจนน้ำถึง ลบเวลาที่ต้องใช้อพยพ</div>
         </div>
-
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="solid" onClick={onClose}><span className="font-thai normal-case tracking-normal text-[12.5px]">รับทราบ</span></Btn>
-          <Btn variant="danger" icon={Megaphone} onClick={onEvacuate}><span className="font-thai normal-case tracking-normal text-[12.5px]">ไปสั่งอพยพตอนนี้</span></Btn>
+          <Btn variant="danger" icon={Megaphone} onClick={onEvacuate}><span className="font-thai normal-case tracking-normal text-[12.5px]">ไปเลือกโซนอพยพ</span></Btn>
         </div>
       </div>
     </Modal>
   )
 }
 
-/* ── End of act 1 · decision summary → act 2 ────────────────────────────── */
+/* ── End of act 1 (T−0) ─────────────────────────────────────────────────── */
 
-const KIND_TH = { EVACUATE: 'ประกาศอพยพ', STANDBY: 'แจ้งเตรียมพร้อม', HOLD: 'ยังไม่สั่งการ (รอภาพ)' }
-const OUTCOME = {
-  justified: ['มีหลักฐานรองรับ', '#7CFFA0'], 'false-alarm': ['เตือนผิด', '#FF6B8A'],
-  standby: ['เตรียมพร้อม', '#FFD066'], hold: ['รอ +3 ชม.', '#FFD066'],
-}
-
-export function Act1SummaryModal({ open, eng, timeout, onNext, onStay }) {
+export function Act1SummaryModal({ open, eng, onNext }) {
   if (!open) return null
-  const { s, exposure } = eng
-  const steps = questSteps(eng)
-  const rounds = s.decisions.filter((d) => d.act === 1)
-  const ordered = COMMUNITIES.filter((c) => s.evacOrders[c.id] !== undefined)
-  const exposed = exposure.exposed
-  const verdict = !rounds.length
-    ? ['crit', 'ไม่ได้ตัดสินใจก่อนน้ำมาถึง — การประกาศครั้งแรกในองก์ 2 จะนับเป็น "เตือนช้า" (ความเชื่อมั่น −30%)']
-    : ordered.length === COMMUNITIES.length && exposed === 0
-      ? ['good', 'ยอดเยี่ยม — ทั้ง 4 ชุมชนได้รับคำสั่งอพยพทันก่อนน้ำมาถึง']
-      : ordered.length === COMMUNITIES.length
-        ? ['warn', `สั่งอพยพครบ 4 ชุมชน แต่บางชุมชนอพยพไม่ทัน — ยังเสี่ยง ${fmt(exposed)} หลังคาเรือน`]
-        : ordered.length
-          ? ['warn', `สั่งอพยพ ${ordered.length}/4 ชุมชน — ชุมชนที่เหลือยังไม่ได้รับคำสั่ง (ยังเสี่ยง ${fmt(exposed)} หลังคาเรือน)`]
-          : ['warn', 'ยังไม่มีชุมชนใดได้รับคำสั่งอพยพ — ถ้าเข้าองก์ 2 ตอนนี้ การประกาศครั้งแรกจะนับเป็นการเตือนช้า']
+  const { s, scn, sfvi, exposure } = eng
+  const q = questFor(eng)
+  const ordered = Object.keys(s.orders)
+  const wet = exposure.rows.filter((r) => r.atRisk > 0)
+  const missedZones = wet.filter((r) => r.order === null)
+  const wasted = exposure.rows.filter((r) => r.wasted)
+  const verdict = !ordered.length ? ['crit', 'ไม่ได้สั่งอพยพเลย — ทุกโซนที่น้ำถึงจะมีผู้ติดค้างจำนวนมากในองก์ 2']
+    : missedZones.length ? ['warn', `ยังไม่ได้สั่ง ${missedZones.length} โซนที่น้ำถึง (${missedZones.map((r) => r.sec.id).join(', ')}) — เตรียมเรือให้พร้อม`]
+      : exposure.exposed === 0 ? ['good', 'ยอดเยี่ยม — ทุกโซนที่น้ำถึงอพยพทันก่อนน้ำมา']
+        : ['good', `สั่งครบทุกโซนที่น้ำถึง ยังเหลือคนที่อพยพไม่ทัน/ไม่ยอมไป ${fmt(exposure.exposed)} ครัวเรือน`]
   const vhex = { good: '#22E36B', warn: '#FFB300', crit: '#FF003C' }[verdict[0]]
+  const usable = s.images.filter((i) => i.usable).length
   const stat = (label, value, src, hex = '#fff') => (
     <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
-      <div className="flex items-center justify-between gap-1">
-        <span className="font-thai text-[11px] text-slate-400">{label}</span>
-        {src && <Src t={src} mini />}
-      </div>
-      <div className="num mt-0.5 text-[20px] font-bold leading-tight" style={{ color: hex }}>{value}</div>
+      <div className="flex items-center justify-between gap-1"><span className="font-thai text-[11px] text-slate-400">{label}</span>{src && <Src t={src} mini />}</div>
+      <div className="num mt-0.5 text-[19px] font-bold leading-tight" style={{ color: hex }}>{value}</div>
     </div>
   )
   return (
-    <Modal open closable={false} width={720} tone={vhex} z={86}>
+    <Modal open closable={false} width={760} tone={vhex} z={86}>
       <div className="p-6" data-modal="act1-summary">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-lg border-2" style={{ borderColor: vhex, background: `${vhex}1A` }}>
-            {timeout ? <Clock size={21} style={{ color: vhex }} /> : <Flag size={21} style={{ color: vhex }} />}
-          </div>
+          <div className="grid h-11 w-11 place-items-center rounded-lg border-2" style={{ borderColor: vhex, background: `${vhex}1A` }}><Flag size={21} style={{ color: vhex }} /></div>
           <div>
-            <div className="hud-label">ACT I COMPLETE · {clockLabel(s.clock)} · {clockToDate(s.clock)}</div>
-            <h2 className="font-thai text-[20px] font-bold leading-tight text-white">
-              {timeout ? 'หมดเวลา — มวลน้ำถึงตัวเมืองแล้ว' : 'สรุปผลการตัดสินใจ องก์ 1'}
-            </h2>
+            <div className="hud-label">ACT I COMPLETE · T−0 · {clockToDate(0)}</div>
+            <h2 className="font-thai text-[20px] font-bold leading-tight text-white">มวลน้ำถึงตัวเมือง — สรุปผลองก์ 1</h2>
           </div>
         </div>
-
-        <div className="font-thai mt-3 rounded-lg border px-3 py-2.5 text-[13.5px] font-semibold leading-snug"
-          style={{ borderColor: `${vhex}55`, background: `${vhex}12`, color: verdict[0] === 'good' ? '#C8FFD9' : verdict[0] === 'crit' ? '#FFC2CE' : '#FFE0A3' }}>
+        <div className="font-thai mt-3 rounded-lg border px-3 py-2.5 text-[13.5px] font-semibold leading-snug" style={{ borderColor: `${vhex}55`, background: `${vhex}12`, color: verdict[0] === 'good' ? '#C8FFD9' : verdict[0] === 'crit' ? '#FFC2CE' : '#FFE0A3' }}>
           {verdict[1]}
-          {s.falseAlarms > 0 && <div className="mt-0.5 text-[12px] font-normal text-[#FFB3C2]">เตือนโดยหลักฐานไม่พอ {s.falseAlarms} ครั้ง — ความเชื่อมั่นลดลงแบบทบ</div>}
+          {wasted.length > 0 && <div className="mt-0.5 text-[12px] font-normal text-[#FFE0A3]">สั่งอพยพโซนที่น้ำไม่ถึง {wasted.map((r) => r.sec.id).join(', ')} — งบเสียเปล่า</div>}
+          {s.falseAlarms > 0 && <div className="mt-0.5 text-[12px] font-normal text-[#FFB3C2]">เตือนผิด {s.falseAlarms} ครั้ง — คนไม่เชื่อคำเตือนมากขึ้น</div>}
         </div>
-
         <div className="mt-3 grid grid-cols-4 gap-2">
-          {stat('หลังคาเรือนยังเสี่ยง', <>{fmt(exposed)}<span className="text-[12px] font-normal text-slate-500"> / {fmt(TOTAL_AT_RISK)}</span></>, 'scenario', exposed ? '#FF6B8A' : '#7CFFA0')}
-          {stat('ชุมชนที่สั่งอพยพ', `${ordered.length}/4`, 'scenario', ordered.length === 4 ? '#7CFFA0' : '#FFD066')}
-          {stat('ความเชื่อมั่น', `${Math.round(s.trust)}%`, 'scenario', s.trust >= 75 ? '#7CFFA0' : s.trust >= 50 ? '#FFD066' : '#FF6B8A')}
-          {stat('SFVI ตอนนี้', eng.sfvi.basin.toFixed(2), null, eng.sfvi.basin >= SFVI.decisionBand ? '#FFB300' : '#7CFFA0')}
+          {stat('ครัวเรือนยังติดอยู่', fmt(exposure.exposed), 'scenario', exposure.exposed ? '#FF6B8A' : '#7CFFA0')}
+          {stat('โซนที่สั่ง / ที่น้ำถึง', `${ordered.length} / ${wet.length}`, 'scenario', missedZones.length ? '#FFD066' : '#7CFFA0')}
+          {stat('ภาพ THEOS-2 ใช้ได้', `${usable}`, 'image', usable >= 3 ? '#7CFFA0' : '#FFD066')}
+          {stat('งบคงเหลือ', `฿${fmt((s.budget.total - s.budget.spent) / 1e6, 2)}M`, null, '#FFD066')}
         </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2.5">
-          <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
-            <div className="font-thai text-[12px] font-bold text-white">ภารกิจ 3 สเต็ป</div>
-            <div className="mt-1.5 space-y-1.5">
-              {steps.map((st) => (
-                <div key={st.id} className="flex items-start gap-2">
-                  <span className={`mt-[1px] grid h-4 w-4 shrink-0 place-items-center rounded-[3px] ${st.state === 'done' ? 'bg-[#22E36B]' : 'border border-slate-600'}`}>
-                    {st.state === 'done' ? <Check size={11} strokeWidth={4} className="text-[#04121F]" /> : st.state === 'missed' ? <X size={10} className="text-[#C4B5FD]" /> : null}
-                  </span>
-                  <span className="min-w-0">
-                    <span className={`font-thai block text-[12px] leading-tight ${st.state === 'done' ? 'text-[#BFF5CF]' : 'text-slate-400'}`}>{st.n}. {st.title}</span>
-                    <span className="font-thai block text-[10.5px] text-slate-500">{st.detail}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1"><Src t="image" mini /><Src t="scenario" mini /></div>
+        <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.025] p-3">
+          <div className="font-thai text-[12px] font-bold text-white">ภารกิจองก์ 1</div>
+          <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
+            {q.steps.map((st) => (
+              <div key={st.id} className="flex items-start gap-2">
+                {st.done ? <CheckCircle2 size={14} className="mt-[1px] shrink-0 text-[#22E36B]" /> : <XCircle size={14} className="mt-[1px] shrink-0 text-slate-500" />}
+                <span className="min-w-0"><span className={`font-thai block text-[12px] ${st.done ? 'text-[#BFF5CF]' : 'text-slate-400'}`}>{st.title}</span><span className="font-thai block text-[10.5px] text-slate-500">{st.detail}</span></span>
+              </div>
+            ))}
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
-            <div className="font-thai text-[12px] font-bold text-white">การตัดสินใจของคุณ</div>
-            {rounds.length === 0 && <div className="font-thai mt-2 text-[12px] text-[#FF9DB2]">— ไม่มีคำสั่งในองก์ 1 —</div>}
-            <div className="mt-1.5 space-y-1.5">
-              {rounds.map((r, i) => {
-                const [lab, hex] = OUTCOME[r.outcome || (r.kind === 'HOLD' ? 'hold' : 'standby')] || ['', '#cbd5e1']
-                const Icon = r.kind === 'EVACUATE' ? Megaphone : r.kind === 'STANDBY' ? Bell : Clock
-                return (
-                  <div key={i} className="flex items-start gap-2 border-b border-white/[0.05] pb-1.5 last:border-0">
-                    <Icon size={13} className="mt-[2px] shrink-0" style={{ color: hex }} />
-                    <span className="min-w-0 flex-1">
-                      <span className="font-thai block text-[12px] text-white">{KIND_TH[r.kind]}
-                        {r.communities?.length > 0 && <span className="text-slate-400"> · {r.communities.map((id) => COMMUNITIES.find((c) => c.id === id)?.th).join(', ')}</span>}
-                      </span>
-                      <span className="num block text-[10.5px] text-slate-500">{r.clockLabel} · SFVI {r.sfvi.toFixed(2)} · น้ำ {r.water.toFixed(2)} ม.</span>
-                    </span>
-                    <span className="font-thai shrink-0 text-[10.5px] font-semibold" style={{ color: hex }}>{lab}</span>
-                  </div>
-                )
-              })}
-            </div>
+          <div className="font-thai mt-2 text-[11px] text-slate-400">SFVI ล่าสุด {sfvi.basin.toFixed(2)} · L = {sfvi.scars.labelled}/{scn.totalScars} (ระบุถูก {sfvi.scars.tp} · ผิด {sfvi.scars.fp}) · N = {sfvi.N.toFixed(2)} · ความเชื่อมั่น {Math.round(s.trust)}%</div>
+        </div>
+        <div className="font-thai mt-3 text-[11.5px] leading-snug text-slate-400">องก์ 2: เมฆเคลื่อนผ่านเมือง 35–65% — ใช้ THEOS-2 ถ่ายช่องเมฆหาผู้ติดค้าง · เรดาร์เช็คน้ำบอกความลึก · เรือกู้ภัยออกจากฐานของคุณ</div>
+        <div className="mt-4 flex justify-end">
+          <Btn variant="danger" size="lg" icon={ArrowRight} onClick={onNext}><span className="font-thai normal-case tracking-normal text-[14px]" data-act1-next>เข้าสู่ องก์ 2: วิกฤตน้ำท่วม</span></Btn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/* ── End of act 2 (T+36) ────────────────────────────────────────────────── */
+
+export function Act2SummaryModal({ open, eng, onNext }) {
+  if (!open) return null
+  const { s } = eng
+  const pts = s.points
+  const need = pts.reduce((a, p) => a + p.people, 0)
+  const saved = pts.reduce((a, p) => a + p.rescued + (p.status === 'supplied' ? p.people : 0), 0)
+  const lost = pts.reduce((a, p) => a + p.lost + (p.status === 'waiting' && p.type === 'critical' ? p.left : 0), 0)
+  const injured = pts.reduce((a, p) => a + p.injured, 0), injOk = pts.reduce((a, p) => a + p.toHospital, 0)
+  const found = pts.filter((p) => p.revealed)
+  const byTheos = found.filter((p) => p.revealed === 'theos').length
+  const share = need ? saved / need : 1
+  const hex = share >= 0.8 ? '#22E36B' : share >= 0.5 ? '#FFB300' : '#FF003C'
+  const stat = (Icon, label, value, color = '#fff') => (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
+      <div className="font-thai flex items-center gap-1.5 text-[11px] text-slate-400"><Icon size={12} />{label}</div>
+      <div className="num mt-0.5 text-[19px] font-bold leading-tight" style={{ color }}>{value}</div>
+    </div>
+  )
+  return (
+    <Modal open closable={false} width={720} tone={hex} z={86}>
+      <div className="p-6" data-modal="act2-summary">
+        <div className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-lg border-2" style={{ borderColor: hex, background: `${hex}1A` }}><Flag size={21} style={{ color: hex }} /></div>
+          <div>
+            <div className="hud-label">ACT II COMPLETE · T+36 · {clockToDate(36 * 60)}</div>
+            <h2 className="font-thai text-[20px] font-bold leading-tight text-white">น้ำเริ่มลด — สรุปผลการช่วยเหลือ</h2>
           </div>
         </div>
-
-        <div className="font-thai mt-3 text-[11.5px] leading-snug text-slate-400">
-          องก์ 2: เมฆบัง 100% ภาพเชิงแสงใช้ไม่ได้ ต้องสลับไปใช้เรดาร์ หาเส้นทางหนีน้ำด้วย Sphere Routing และจัดลำดับส่งกำลังให้ 4 ชุมชน
-          {s.sealed.length < EMBANKMENT_GAPS.length && <> · จุดฟันหลอที่ยังไม่อุด {EMBANKMENT_GAPS.length - s.sealed.length} จุดจะเป็นทางให้น้ำเข้าเมือง</>}
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {stat(Users, 'ผู้ที่ต้องการความช่วยเหลือ', fmt(need))}
+          {stat(CheckCircle2, 'ช่วยได้ (อพยพ + เสบียง)', `${fmt(saved)} (${Math.round(share * 100)}%)`, hex)}
+          {stat(AlertTriangle, 'สูญเสีย/ช่วยไม่ทัน', fmt(lost), lost ? '#FF6B8A' : '#7CFFA0')}
+          {stat(HeartPulse, 'ผู้บาดเจ็บถึงโรงพยาบาล', `${injOk}/${injured}`, injOk === injured ? '#7CFFA0' : '#FFD066')}
+          {stat(Satellite, 'จุดที่ THEOS-2 พบ', `${byTheos}/${found.length}`, '#7dd3fc')}
+          {stat(Route, 'เส้นทางผิด', s.routeErrors, s.routeErrors ? '#FF6B8A' : '#7CFFA0')}
+          {stat(Fuel, 'น้ำมันที่ใช้', `${fmt(s.fuel.used)} / ${fmt(s.fuel.total)} L`)}
+          {stat(Wallet, 'งบคงเหลือ', `฿${fmt((s.budget.total - s.budget.spent) / 1e6, 2)}M`, '#FFD066')}
+          {stat(Users, 'ส่งถึงโรงพยาบาล/จุดอพยพ', `${s.hospital} / ${s.sheltered}`)}
         </div>
-
-        <div className="mt-4 flex items-center justify-end gap-2">
-          {!timeout && (
-            <Btn variant="solid" icon={CornerUpLeft} onClick={onStay}>
-              <span className="font-thai normal-case tracking-normal text-[12.5px]">กลับไปสั่งการต่อในองก์ 1</span>
-            </Btn>
-          )}
-          <Btn variant="danger" size="lg" icon={ArrowRight} onClick={onNext}>
-            <span className="font-thai normal-case tracking-normal text-[14px]" data-act1-next>เข้าสู่ องก์ 2: วิกฤตน้ำท่วม</span>
-          </Btn>
+        <div className="font-thai mt-3 text-[11.5px] leading-snug text-slate-400">องก์ 3: ภาพ THEOS-2 หลังน้ำลดและไทม์ซีรีส์เรดาร์มาถึงแล้ว — ตัดสินเยียวยา 12 หลังคาให้ครบภายในวันที่ 60</div>
+        <div className="mt-4 flex justify-end">
+          <Btn variant="primary" size="lg" icon={ArrowRight} onClick={onNext}><span className="font-thai normal-case tracking-normal text-[14px]" data-act2-next>เข้าสู่ องก์ 3: ฟื้นฟู</span></Btn>
         </div>
       </div>
     </Modal>

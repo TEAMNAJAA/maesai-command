@@ -182,11 +182,13 @@ function graph() {
   }
   for (const f of osmRoads) {
     const c = f.geometry.coordinates
-    const slow = MAJOR.test(f.properties.class) ? 1 : 1.35   // prefer main roads for a convoy
+    const major = MAJOR.test(f.properties.class)
+    const osm = f.properties.osm, name = f.properties.name
     for (let i = 1; i < c.length; i++) {
       const a = node(c[i - 1]), b = node(c[i]), w = metres(c[i - 1], c[i])
-      a.edges.push({ to: b, w, cost: w * slow, mid: [(c[i - 1][0] + c[i][0]) / 2, (c[i - 1][1] + c[i][1]) / 2] })
-      b.edges.push({ to: a, w, cost: w * slow, mid: [(c[i - 1][0] + c[i][0]) / 2, (c[i - 1][1] + c[i][1]) / 2] })
+      const mid = [(c[i - 1][0] + c[i][0]) / 2, (c[i - 1][1] + c[i][1]) / 2]
+      a.edges.push({ to: b, w, major, osm, name, mid })
+      b.edges.push({ to: a, w, major, osm, name, mid })
     }
   }
   GRAPH = { nodes: [...nodes.values()] }
@@ -203,11 +205,14 @@ function nearestNode(p, ok = () => true) {
   return best
 }
 
+/** Default edge weighting: a convoy prefers main roads. */
+const convoyCost = (e) => (e.major ? 1 : 1.35)
+
 /**
- * Shortest path from `from` to `to` (lon/lat). `blocked(midLonLat)` closes a road
- * segment — used for the flooded riverside streets. Returns null if unreachable.
+ * Shortest path from `from` to `to` (lon/lat). `blocked(midLonLat, edge)` closes a road
+ * segment (flooded / debris); `mult(edge)` scales its cost. Returns null if unreachable.
  */
-export function routeOffline(from, to, blocked = () => false) {
+export function routeOffline(from, to, blocked = () => false, mult = convoyCost) {
   const a = nearestNode(from), b = nearestNode(to)
   if (!a || !b) return null
   const dist = new Map([[a.k, 0]]), prev = new Map(), done = new Set()
@@ -238,20 +243,20 @@ export function routeOffline(from, to, blocked = () => false) {
     done.add(n.k)
     if (n === b) break
     for (const e of n.edges) {
-      if (done.has(e.to.k) || blocked(e.mid)) continue
-      const nd = d + e.cost
-      if (nd < (dist.get(e.to.k) ?? Infinity)) { dist.set(e.to.k, nd); prev.set(e.to.k, [n, e.w]); pushH([nd, e.to]) }
+      if (done.has(e.to.k) || blocked(e.mid, e)) continue
+      const nd = d + e.w * mult(e)
+      if (nd < (dist.get(e.to.k) ?? Infinity)) { dist.set(e.to.k, nd); prev.set(e.to.k, [n, e.w, e.name]); pushH([nd, e.to]) }
     }
   }
   if (!done.has(b.k)) return null
-  const coords = [], seen = new Set()
+  const coords = [], seen = new Set(), names = []
   let cur = b, metresTotal = 0
   while (cur && !seen.has(cur.k)) {
     seen.add(cur.k); coords.push(cur.p)
     const pr = prev.get(cur.k)
     if (!pr) break
-    metresTotal += pr[1]; cur = pr[0]
+    metresTotal += pr[1]; if (pr[2]) names.push(pr[2]); cur = pr[0]
   }
-  coords.reverse()
-  return { coords: [from, ...coords, to], distanceM: metresTotal + metres(from, coords[0]) + metres(coords[coords.length - 1], to) }
+  coords.reverse(); names.reverse()
+  return { coords: [from, ...coords, to], distanceM: metresTotal + metres(from, coords[0]) + metres(coords[coords.length - 1], to), steps: names.filter((x, i) => x && x !== names[i - 1]) }
 }
