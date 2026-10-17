@@ -27,7 +27,7 @@ import { playMission } from './scripts/demo-flow.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SEED = Number(process.env.RECORD_SEED) || 4242
-const SPEED = Number(process.env.RECORD_SPEED) || 3
+const SPEED = Number(process.env.RECORD_SPEED) || 4
 const APP = (process.env.RECORD_URL || pathToFileURL(join(HERE, 'dist', 'index.html')).href) + `?rec&seed=${SEED}&speed=${SPEED}`
 const OUT = resolve(HERE, process.env.RECORD_OUT || join('recordings', `perfect-run-${new Date().toISOString().slice(0, 19).replace(/\D/g, '')}`))
 const NAME = 'demo_gameplay'
@@ -38,7 +38,7 @@ const { mark } = timer
 async function main() {
   const session = await launch(OUT, { width: W, height: H })
   const { page } = session
-  const say = (step, text) => caption(page, step, text)
+  const say = (step, text) => { console.log(`  [${((Date.now() - timer.t0) / 1000).toFixed(0)}s] ${step}: ${text}`); return caption(page, step, text) }
 
   await page.goto(APP, { waitUntil: 'load' })
   await page.waitForSelector('[data-modal="briefing"]', { timeout: 20000 })
@@ -57,7 +57,7 @@ async function main() {
   await page.waitForSelector('[data-quest]')
   await page.waitForFunction(() => !!window.__maesai)
 
-  const { score } = await playMission(page, { say, mark })
+  const { score } = await playMission(page, { say, mark, slow: 0.7 })
   await click(page, page.locator('[data-aar-tab="report"]'), { after: 1200 })
   await say('Perfect Run', `จบภารกิจ — คะแนนภารกิจ ${score}%`)
   await wait(4500)

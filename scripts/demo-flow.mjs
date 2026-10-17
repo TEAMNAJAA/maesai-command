@@ -131,8 +131,14 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
   /* ══════════ ACT II ══════════ */
   mark('ACT II · crisis')
   await say('องก์ 2', 'เมฆเคลื่อนผ่านเมือง 35–65% — สั่ง THEOS-2 ถ่ายทุกรอบเพื่อหาผู้ติดค้างในช่องที่เมฆเปิด')
+  await run(false)
   await openTab('sensors')
-  for (const b of await page.locator('[data-pass2] button', { hasText: 'สั่งถ่าย' }).all()) await click(page, b, { hold: ms(350), after: ms(400) })
+  for (let i = 0; i < 4; i++) {
+    const b = page.locator('[data-pass2] button', { hasText: 'สั่งถ่าย' }).first()
+    if (!(await b.count())) break
+    await click(page, b, { hold: ms(350), after: ms(400) })
+  }
+  await run(true)
   const droneAt = {}
   for (let guard = 0; guard < 4000; guard++) {
     if (await has('[data-modal="act2-summary"]')) break
@@ -155,14 +161,18 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
     })
     if (a.power.length) {
       await say('ไฟฟ้ารั่ว', `พบไฟฟ้ารั่วโซน ${a.power[0]} — สั่ง กฟภ. ตัดไฟก่อนส่งทีมเข้า`)
+      await run(false)
       await openTab('field')
       await click(page, page.locator(`[data-power="${a.power[0]}"] button`), { hold: ms(500), after: ms(700) })
+      await run(true)
       continue
     }
     if (a.comm.length) {
       await say('สื่อสาร', `พายุตัดสัญญาณโซน ${a.comm[0]} — ตั้งเสาสื่อสารเคลื่อนที่ (ใช้เวลา 3 ชม.)`)
+      await run(false)
       await openTab('field')
       await click(page, page.locator(`[data-comm="${a.comm[0]}"] button`), { hold: ms(500), after: ms(700) })
+      await run(true)
       continue
     }
     if (a.point && a.boatFree) {
@@ -192,13 +202,15 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       await run(true)
       continue
     }
-    const blind = a.blind.find((id) => a.clock - (droneAt[id] ?? -999) >= 180)
+    const blind = a.blind.find((id) => a.clock - (droneAt[id] ?? -999) >= 360)
     if (blind && a.droneFree) {
       droneAt[blind] = a.clock
       await say('โดรน', `โซน ${blind} เป็นจุดอับ (ซอยลึก/ใต้ร่มไม้) — ดาวเทียมมองไม่เห็นคน ส่งโดรนช่วยส่อง`)
+      await run(false)
       await openTab('sensors')
       await click(page, page.locator(`[data-drone-zone="${blind}"]`), { hold: ms(300), after: ms(300) })
       await click(page, page.locator('[data-panel="sensors"] button', { hasText: 'ส่งโดรน' }), { hold: ms(400), after: ms(600) })
+      await run(true)
       continue
     }
     await wait(300)
