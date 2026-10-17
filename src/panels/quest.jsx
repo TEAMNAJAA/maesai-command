@@ -36,12 +36,14 @@ export function questFor(eng) {
     let hint
     if (sfvi.veto1 && hot.length) hint = { lv: 'crit', text: `Veto 1: ระดับน้ำ ≥ 4.20 ม. — สั่งอพยพโซนเสี่ยงทันที (${hot.map((z) => z.id).join(', ')})`, go: { tab: 'zones', view: 'urban' }, cta: 'ไปที่อพยพรายโซน' }
     else if (!s.camp) hint = { text: 'เริ่มจากตั้งฐานบัญชาการ — เลือกที่ที่พื้นสูงและห่างแม่น้ำ (ดูค่าความสูงในแท็บ ④)', go: { tab: 'base', view: 'urban' }, cta: 'เลือกที่ตั้งฐาน' }
-    else if (next && !(s.taskings[next.id] || []).length) hint = { text: `ดาวเทียม THEOS-2 รอบ ${next.id} จะผ่านใน ${hm(next.t - s.clock)} — เลือกเป้าหมาย 2 แห่งที่เมฆพยากรณ์ต่ำกว่า 60% (ดูแท็บ "ดาวเทียม" ทางซ้าย)`, go: { tab: 'theos', view: 'catchment', left: 'sat' }, cta: 'วางแผนถ่ายภาพ' }
+    else if (next && !(s.taskings[next.id] || []).length && !toRead.length) hint = { text: `ดาวเทียม THEOS-2 รอบ ${next.id} จะผ่านใน ${hm(next.t - s.clock)} — เลือกเป้าหมาย 2 แห่งที่เมฆพยากรณ์ต่ำกว่า 60% (ดูแท็บ "ดาวเทียม" ทางซ้าย)`, go: { tab: 'theos', view: 'catchment', left: 'sat' }, cta: 'วางแผนถ่ายภาพ' }
     else if (toRead.length) hint = { lv: 'warn', text: `ภาพ THEOS-2 ${toRead.length} ภาพพร้อมแล้ว — แปลภาพ: เทียบภาพก่อน/หลัง หาเฉพาะรอยดินถล่ม "ใหม่"`, go: { tab: 'theos', analyze: toRead[0].id }, cta: 'เปิดภาพวิเคราะห์' }
     else if (!s.channel.measured && riverImg) hint = { text: 'มีภาพลำน้ำแล้ว — นับพิกเซลความกว้าง แล้วคำนวณ N = 1 − (พิกเซล × 0.5 ม.) ÷ 150', go: { tab: 'bank', channel: true }, cta: 'เปิดเครื่องมือวัดลำน้ำ' }
     else if (sealedOrQueued < EMBANKMENT_GAPS.length) hint = { text: `จุดฟันหลอยังเปิด ${EMBANKMENT_GAPS.length - sealedOrQueued} จุด — น้ำจะเข้าโซนหลังแนวตลิ่งเร็วขึ้น ส่งทีมบิ๊กแบ็กไปอุด`, go: { tab: 'bank', view: 'corridor' }, cta: 'ดูแนวตลิ่ง' }
     else if (hot.length) hint = { text: `โซน ${hot.map((z) => z.id).join(', ')} มี SFVI ≥ ${SFVI.decisionBand} แล้ว — เทียบเวลาน้ำถึงกับเวลาที่ต้องใช้อพยพ แล้วสั่งเฉพาะโซนที่น้ำจะถึง`, go: { tab: 'zones', view: 'urban', left: 'zones' }, cta: 'ดูตารางโซน' }
-    else hint = { text: `รอหลักฐานเพิ่ม — รอบโคจรถัดไป ${next ? `${next.id} (${clockLabel(next.t)})` : 'ไม่มีแล้ว'} · ตรวจตารางโซนทางซ้ายว่าโซนใดน้ำจะถึง`, go: { left: 'zones' }, cta: 'ดูตารางโซน' }
+    else if (next && (s.taskings[next.id] || []).length) hint = { text: `เลือกเป้าหมายรอบ ${next.id} แล้ว — กด "ให้ THEOS-2 ถ่ายรอบ ${next.id}" ที่แถบเวลาใต้แผนที่ (เวลาจะเดินไปจนได้ภาพ)`, go: { advance: true }, cta: `ให้ THEOS-2 ถ่ายรอบ ${next.id}` }
+    else if (!ordered) hint = { text: 'หมดรอบดาวเทียมแล้ว — ดูตารางโซนว่าโซนใดน้ำจะถึง แล้วสั่งอพยพก่อนเวลาที่เหลือหมด หรือกด +1 ชม. ดูระดับน้ำ', go: { tab: 'zones', view: 'urban', left: 'zones' }, cta: 'ดูตารางโซน' }
+    else hint = { text: 'สั่งการครบแล้ว — กด "ข้ามไป T−0" ที่แถบเวลา เพื่อดูผลองก์ 1', go: { advance: 'end' }, cta: 'ข้ามไป T−0' }
     return { title: 'ภารกิจองก์ 1 · เฝ้าระวัง', steps, hint }
   }
 
@@ -67,7 +69,8 @@ export function questFor(eng) {
     else if (nextQ && !s.act2Orders[nextQ.id] && nextQ.t - s.clock < 240) hint = { lv: 'warn', text: `THEOS-2 รอบ ${nextQ.id} ผ่านเมืองใน ${hm(nextQ.t - s.clock)} — สั่งถ่ายเพื่อหาผู้ติดค้างในโซนที่เมฆเปิด`, go: { tab: 'sensors' }, cta: 'สั่งถ่าย THEOS-2' }
     else if (unattended.length && idle) hint = { lv: unattended[0].deadline - s.clock < 180 ? 'crit' : 'warn', text: `${unattended[0].id}: ${unattended[0].people} คน ${unattended[0].type === 'critical' ? 'อยู่ไม่ได้ ต้องอพยพ' : 'ยังอยู่ได้ ต้องการเสบียง'}${unattended[0].injured ? ` · บาดเจ็บ ${unattended[0].injured} → โรงพยาบาล` : ''} · เหลือ ${hm(unattended[0].deadline - s.clock)}`, go: { plan: unattended[0].id }, cta: 'วางแผนเรือ' }
     else if (scn.blindSpots.some((id) => !s.jobs.some((j) => j.kind === 'drone' && j.section === id))) hint = { text: `โซน ${scn.blindSpots.join(', ')} เป็นจุดอับ (ซอยลึก/ใต้ร่มไม้) — ดาวเทียมมองไม่เห็นคน ส่งโดรนช่วยส่อง`, go: { tab: 'sensors' }, cta: 'ส่งโดรน' }
-    else hint = { text: 'ติดตามข้อมูลเรดาร์ (ความลึกรายโซน) และรอรอบ THEOS-2 ถัดไป — ใช้เครื่องสูบน้ำเปิดทางถ้าเส้นทางผ่านโซนน้ำลึก', go: { left: 'zones' }, cta: 'ดูข้อมูลโซน' }
+    else if (unattended.length && !idle) hint = { text: 'เรือออกหมดทุกลำ — กดเดินเวลาให้เรือกลับมา แล้วส่งต่อ', go: { advance: true }, cta: 'เดินเวลา' }
+    else hint = { text: 'ยังไม่มีงานค้าง — กด "เดินเวลา → เหตุการณ์ถัดไป" เพื่อรอรอบ THEOS-2 / สายด่วน / ทีมรายงานผล', go: { advance: true }, cta: 'เดินเวลา' }
     return { title: 'ภารกิจองก์ 2 · วิกฤต', steps, hint }
   }
 

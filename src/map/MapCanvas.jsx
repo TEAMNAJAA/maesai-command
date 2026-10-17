@@ -4,7 +4,7 @@
    Act 2: urban (operations: clouds, stranded groups, boats) · corridor
    ══════════════════════════════════════════════════════════════════════════ */
 
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useSyncExternalStore } from 'react'
 import { AlertTriangle, CheckCircle2, X, Plus, Minus, MousePointer2, Hand, Maximize2, ShieldCheck, Satellite, Cloud, Ruler } from 'lucide-react'
 import { GeoMap, EXTENTS } from './GeoMap'
 import { Panel, Corners, Src, SrcLegend, Btn } from '../ui/atoms'
@@ -29,7 +29,9 @@ export function MapCanvas({ eng, view, setView, onPoint, onChannel, beaconView, 
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [tilt, setTilt] = useState(false)
-  const [cursor, setCursor] = useState(null)
+  // cursor readout lives outside React state: a mouse move must not redraw thousands of roofs
+  const cursorVal = useRef(null), cursorSubs = useRef(new Set())
+  const setCursor = useCallback((v) => { cursorVal.current = v; cursorSubs.current.forEach((f) => f()) }, [])
   const drag = useRef(null)
   const rootRef = useRef(null)
   const level = sfvi.world.level
@@ -107,7 +109,7 @@ export function MapCanvas({ eng, view, setView, onPoint, onChannel, beaconView, 
         <SrcLegend vertical />
       </div>
       <div className="absolute bottom-2.5 right-3 z-20 flex max-w-[52%] items-center gap-2 overflow-hidden whitespace-nowrap rounded border border-white/10 bg-[#060B17]/80 px-2 py-[3px] font-mono text-[9px] tracking-[0.08em] text-sky-300/60 backdrop-blur">
-        {cursor ? <><span>{cursor.lat.toFixed(4)}°N {cursor.lon.toFixed(4)}°E</span>{cursor.elev !== null && <span className="text-[#FFC59A]">ELEV {cursor.elev} m</span>}</> : <span>{EXTENTS[view].label}</span>}
+        <CursorReadout val={cursorVal} subs={cursorSubs} label={EXTENTS[view].label} />
         <span className="h-3 w-px bg-white/10" /><span>{meta.sensor}</span><Src t={meta.src} mini />
       </div>
     </div>
@@ -170,4 +172,11 @@ function GapCard({ eng, gap, onClose }) {
       </Panel>
     </div>
   )
+}
+
+function CursorReadout({ val, subs, label }) {
+  const cursor = useSyncExternalStore((cb) => { subs.current.add(cb); return () => subs.current.delete(cb) }, () => val.current)
+  return cursor
+    ? <><span>{cursor.lat.toFixed(4)}°N {cursor.lon.toFixed(4)}°E</span>{cursor.elev !== null && <span className="text-[#FFC59A]">ELEV {cursor.elev} m</span>}</>
+    : <span>{label}</span>
 }

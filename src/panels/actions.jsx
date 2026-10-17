@@ -2,7 +2,7 @@
    RIGHT RAIL — ACTIONS · แผงสั่งการ
    องก์ 1: ① THEOS-2 (วางแผนรอบโคจร + แปลภาพ) ② ตลิ่ง/ลำน้ำ ③ อพยพรายโซน ④ ฐาน/ชั้นข้อมูล
    องก์ 2: ① ผู้ติดค้าง (วางแผนเรือ) ② THEOS-2 · โดรน ③ ภาคสนาม (ตัดไฟ · เสาสื่อสาร · สูบน้ำ)
-   ทุกคำสั่งใช้เวลา (งานของทีม) และงบประมาณ — ไม่มีแต้ม AP
+   ทุกคำสั่งมีผลทันที กินเวลาสั่งการในเกม และใช้งบประมาณ — ไม่มีแต้ม AP · ไม่ต้องนั่งรอ
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useState, useMemo } from 'react'
@@ -101,6 +101,12 @@ function TheosPlanner({ eng, onAnalyze }) {
               })}
             </div>
             <div className="font-thai mt-1 text-[9.5px] text-slate-500">{chosen.length ? `สั่งถ่าย: ${chosen.map(tgt).join(', ')}` : 'ยังไม่ได้เลือกเป้าหมาย — ถ้าไม่เลือก รอบนี้จะเสียเปล่า'}</div>
+            {i === 0 && chosen.length > 0 && (
+              <button onClick={() => eng.advance({ mode: 'until', to: p.t + THEOS2.processingMin })} disabled={!!eng.cut} data-capture={p.id}
+                className="btn mt-1.5 flex w-full items-center justify-center gap-1.5 border-[#22E36B]/60 bg-[#22E36B]/15 py-1.5 text-[#BFF5CF] hover:bg-[#22E36B]/25 disabled:opacity-40">
+                <Satellite size={12} /><span className="font-thai normal-case tracking-normal text-[11.5px] font-bold">ให้ THEOS-2 ถ่ายรอบ {p.id} → ได้ภาพ</span>
+              </button>
+            )}
           </div>
         )
       })}

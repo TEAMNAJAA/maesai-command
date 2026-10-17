@@ -3,14 +3,14 @@
    ไม่มีแต้ม AP: คำสั่งใช้ "เวลา" (งานของทีมใช้เวลาจริงในเกม) และ "งบประมาณ" (บาท)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { THEOS2, COSTS, DURATIONS, MODES, TRUST, SFVI, RELIEF, BOAT, THRESHOLDS, EMBANKMENT } from '../config/missionConfig'
+import { THEOS2, COSTS, DURATIONS, MODES, TRUST, SFVI, RELIEF, BOAT, THRESHOLDS, EMBANKMENT, CMD_MIN } from '../config/missionConfig'
 import { CAMP_SITES, HOSPITAL } from '../config/scenarioData'
 import { SECTION_BY_ID } from '../lib/sections'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
 import { computeSfvi, scarStats } from '../lib/sim'
 import { levelAt } from '../lib/hydro'
 import { planTrip, gradeChoice } from '../lib/routes'
-import { log, toast, campOf, destOf } from './world'
+import { log, toast, campOf, destOf, advanceTo } from './world'
 import { clockLabel, clockToDate, fmt } from '../lib/format'
 
 const clone = (s) => structuredClone(s)
@@ -24,6 +24,8 @@ const afford = (n, cost, what) => {
   n.budget.spent += cost
   return true
 }
+/** Orders take effect at once; the command time they take moves the mission clock on. */
+const spend = (n, scn, min) => (min > 0 ? advanceTo(n, scn, n.clock + min) : n)
 const withTrust = (n, t) => { n.trust = Math.max(0, Math.min(100, t)); n.trustHist = [...n.trustHist.slice(-30), n.trust] }
 
 /* ── Act 1 · base camp ───────────────────────────────────────────────────── */
@@ -36,7 +38,7 @@ export function setCamp(s, scn, id) {
   n.camp = id
   log(n, 'good', 'CAMP', `Forward base set up at ${site.th}.`, `ตั้งฐานบัญชาการที่${site.th} (${site.note})`)
   toast(n, 'ok', `ตั้งฐานที่${site.th}`)
-  return n
+  return spend(n, scn, CMD_MIN.camp)
 }
 
 /* ── Act 1 · THEOS-2 tasking per pass ────────────────────────────────────── */
@@ -63,7 +65,7 @@ export function submitAnalysis(s, scn, imageId, labels) {
     `แปลภาพ Sector ${img.target}: ระบุรอยดินถล่ม ${tp + fp} จุด${fp ? ` (ในนี้ ${fp} จุดไม่ใช่ดินถล่ม)` : ''}${missed ? ` · พลาด ${missed} จุด` : ''}`)
   const st = scarStats(n, scn)
   toast(n, fp ? 'warn' : 'ok', `L = ${st.labelled}/${scn.totalScars}`)
-  return n
+  return spend(n, scn, CMD_MIN.analysis)
 }
 
 /** N: the player computes the channel width from the Pan pixel count and enters N. */
@@ -84,7 +86,7 @@ export function submitChannel(s, scn, valueN) {
     log(n, 'warn', 'CHANNEL', `N = ${valueN} rejected.`, `ค่า N = ${valueN} ยังไม่ถูก — ความกว้าง = จำนวนพิกเซล × 0.5 ม. แล้ว N = 1 − ความกว้าง ÷ 150`)
     toast(n, 'warn', 'ค่า N ยังไม่ถูก ลองคำนวณใหม่')
   }
-  return n
+  return spend(n, scn, CMD_MIN.channel)
 }
 
 /* ── Act 1 · embankment crews ─────────────────────────────────────────────── */
@@ -109,6 +111,7 @@ export function sealGaps(s, scn, ids) {
   if (started) {
     log(n, 'info', 'EMBANKMENT', `${started} gap(s) queued for big-bag crews.`, `สั่งทีมวางบิ๊กแบ็ก ${started} จุด — ทีมมี ${n.crews.length} ชุด ทำตามคิว`)
     toast(n, 'ok', `ทีมบิ๊กแบ็กรับงาน ${started} จุด`)
+    return spend(n, scn, CMD_MIN.seal)
   }
   return n
 }
@@ -148,7 +151,7 @@ export function orderZones(s, scn, ids) {
     log(n, 'good', 'ORDER', `Evacuation ordered: ${names} (฿${fmt(cost)}).`, `สั่งอพยพ ${names} · งบ ฿${fmt(cost)}`)
     toast(n, 'ok', `สั่งอพยพ ${targets.length} โซน`)
   }
-  return n
+  return spend(n, scn, CMD_MIN.evacuate)
 }
 
 export function decisionRecord(n, sf, rec) {
@@ -169,7 +172,7 @@ export function orderPass2(s, scn, passId) {
   const n = clone(s)
   n.act2Orders[passId] = true
   log(n, 'info', 'THEOS-2', `${passId} tasked over AOI-A at ${clockLabel(q.t)}.`, `สั่ง THEOS-2 รอบ ${passId} ถ่ายตัวเมือง เวลา ${clockLabel(q.t)} — จะเห็นเฉพาะโซนที่เมฆไม่บังตอนนั้น`)
-  return n
+  return spend(n, scn, CMD_MIN.pass2)
 }
 
 const free = (list, t) => list.find((x) => x.busyUntil <= t)
@@ -182,7 +185,7 @@ export function droneSortie(s, scn, sectionId) {
   d.busyUntil = n.clock + DURATIONS.droneSortie
   n.jobs.push({ kind: 'drone', section: sectionId, drone: d.id, start: n.clock, at: d.busyUntil })
   log(n, 'info', 'UAV', `Drone ${d.id} to ${sectionId}.`, `ส่งโดรน ${d.id} สำรวจโซน ${sectionId} (${DURATIONS.droneSortie} นาที) — ตัวช่วยสำหรับจุดอับ/ใต้เมฆ`)
-  return n
+  return spend(n, scn, CMD_MIN.drone)
 }
 
 export function deployPump(s, scn, sectionId) {
@@ -193,7 +196,7 @@ export function deployPump(s, scn, sectionId) {
   n.pumps[sectionId] = { readyAt: n.clock + DURATIONS.pumpSetup }
   n.jobs.push({ kind: 'pump', section: sectionId, start: n.clock, at: n.clock + DURATIONS.pumpSetup })
   log(n, 'info', 'PUMP', `Pump to ${sectionId}.`, `ติดตั้งเครื่องสูบน้ำโซน ${sectionId} (${DURATIONS.pumpSetup / 60} ชม.)`)
-  return n
+  return spend(n, scn, CMD_MIN.pump)
 }
 
 export function cutPower(s, scn, sectionId) {
@@ -201,7 +204,7 @@ export function cutPower(s, scn, sectionId) {
   const n = clone(s)
   n.jobs.push({ kind: 'power', section: sectionId, start: n.clock, at: n.clock + DURATIONS.powerCut })
   log(n, 'info', 'กฟภ.', `Power isolation requested for ${sectionId}.`, `ประสาน กฟภ. ตัดไฟโซน ${sectionId} (${DURATIONS.powerCut} นาที)`)
-  return n
+  return spend(n, scn, CMD_MIN.power)
 }
 
 export function buildTower(s, scn, sectionId) {
@@ -210,7 +213,7 @@ export function buildTower(s, scn, sectionId) {
   if (!afford(n, COSTS.tower, 'เสาสื่อสาร')) return n
   n.jobs.push({ kind: 'tower', section: sectionId, start: n.clock, at: n.clock + DURATIONS.towerSetup })
   log(n, 'info', 'COMMS', `Mobile cell site for ${sectionId}.`, `ส่งเสาสื่อสารเคลื่อนที่ไปโซน ${sectionId} (${DURATIONS.towerSetup / 60} ชม.)`)
-  return n
+  return spend(n, scn, CMD_MIN.tower)
 }
 
 /** Boat dispatch with the route the player chose. `plan` comes from routes.planTrip. */
@@ -244,7 +247,7 @@ export function dispatchBoat(s, scn, { pointId, mission, dest, plan, optionIdx }
   p.assigned = (p.assigned || 0) + 1
   const dn = mission === 'supply' ? 'ส่งถุงยังชีพ' : `อพยพไป${destOf(dest)?.th}`
   log(n, 'info', 'BOAT', `${boat.id} → ${p.id} (${(opt.distanceM / 1000).toFixed(1)} km, ${opt.fuelL} L).`, `เรือ ${boat.id} ออกไป ${p.id} · ${dn} · ${(opt.distanceM / 1000).toFixed(1)} กม. · น้ำมัน ${opt.fuelL} ลิตร`)
-  return n
+  return spend(n, scn, CMD_MIN.boat)
 }
 
 /* ── Act 3 · relief ───────────────────────────────────────────────────────── */

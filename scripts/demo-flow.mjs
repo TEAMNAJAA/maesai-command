@@ -4,6 +4,8 @@
    The app must be opened with ?rec so window.__maesai exposes the scenario
    (correct scar labels, wet zones, best boat route). Every action is still
    a real click on the UI so the video shows what a player would do.
+   Time only moves when the player acts: the flow presses the time bar
+   (THEOS-2 capture / next event / skip to the end) and waits out each cut scene.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { wait, point, click, sweep } from './demo-kit.mjs'
@@ -14,7 +16,17 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
   const has = async (sel) => (await page.locator(sel).count()) > 0
   const tab = (id) => page.locator(`[data-rail="command"] [data-tab="${id}"]`)
   const ms = (n) => Math.round(n * slow)
-  const run = (on) => page.evaluate((v) => window.__maesai.run(v), on)
+  const idle = () => page.waitForFunction(() => !window.__maesai.busy, null, { timeout: 30000 })
+  /** Press a time-bar control and sit through the cut scene. */
+  const advance = async (sel, text) => {
+    if (text) await say('เวลา', text)
+    await idle()
+    const b = page.locator(sel).first()
+    if (!(await b.count()) || !(await b.isEnabled())) return false
+    await click(page, b, { hold: ms(450), after: 200 })
+    await wait(300); await idle(); await wait(ms(500))
+    return true
+  }
   const st = () => page.evaluate(() => {
     const { s, scn } = window.__maesai
     return {
@@ -22,12 +34,13 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       queued: s.sealed.length + s.jobs.filter((j) => j.kind === 'seal').length,
       passes: scn.passes.map((p) => ({ id: p.id, t: p.t, reach: p.reach, forecast: p.forecast, chosen: s.taskings[p.id] || [] })),
       images: s.images.map((i) => ({ id: i.id, target: i.target, usable: i.usable, ready: i.readyAt <= s.clock, analyzed: !!i.analyzed })),
-      measured: s.channel.measured, ordered: Object.keys(s.orders),
+      measured: s.channel.measured, ordered: Object.keys(s.orders), orderAt: window.__maesai.orderAt(),
     }
   })
   const openTab = async (id, after = 500) => { if (await has(`[data-rail="command"] [data-tab="${id}"]`)) await click(page, tab(id), { hold: ms(250), after: ms(after) }) }
   const ensureView = async (id) => { const v = page.locator(`[data-view="${id}"]`); if (await v.count()) await click(page, v, { hold: ms(200), after: ms(700) }) }
 
+  let swept = false                      // show the before/after slider once, then work fast like a trained player
   /* ══════════ ACT I ══════════ */
   mark('ACT I · watch')
   for (let guard = 0; guard < 2000; guard++) {
@@ -45,7 +58,7 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       continue
     }
     if (s.queued < s.gapsTotal) {
-      await say('ตลิ่ง', 'แนวตลิ่งเมือง: ส่งทีมบิ๊กแบ็กอุดจุดฟันหลอทั้งหมด — ใช้เวลาจริง ทีมทยอยอุดทีละจุด')
+      await say('ตลิ่ง', 'แนวตลิ่งเมือง: ส่งทีมบิ๊กแบ็กอุดจุดฟันหลอทั้งหมด — ทีมทยอยอุดระหว่างที่เวลาเดิน')
       await openTab('bank'); await ensureView('corridor')
       await wait(ms(1200))
       const b = page.locator('[data-panel="bank"] button', { hasText: 'ส่งทีมอุด' })
@@ -54,41 +67,36 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       continue
     }
     const next = s.passes.find((p) => p.t > s.clock && !p.chosen.length)
-    if (next && next.t - s.clock < 14 * 60) {
+    if (next && next === s.passes.find((p) => p.t > s.clock)) {
       const needRiver = !s.measured && !s.images.some((i) => i.usable && RIVER.includes(i.target))
       const order = [...next.reach].sort((a, b) => (next.forecast[a] - next.forecast[b]) || (RIVER.includes(a) ? -1 : 1))
       let pick = order.filter((t) => next.forecast[t] <= 50).slice(0, 2)
       if (needRiver) { const r = order.find((t) => RIVER.includes(t) && next.forecast[t] <= 55); if (r && !pick.includes(r)) pick = [r, ...pick].slice(0, 2) }
       if (!pick.length) pick = order.slice(0, 1)
       await say('THEOS-2', `วางแผนถ่ายภาพรอบ ${next.id}: เลือกเป้าหมายที่เมฆพยากรณ์ต่ำ (${pick.map((t) => (t === 'TOWN' ? 'ตัวเมือง' : `Sector ${t}`) + ` ${next.forecast[t]}%`).join(' · ')})`)
-      await run(false)
       await openTab('theos'); await ensureView('catchment')
       for (const t of pick) await click(page, page.locator(`[data-target="${next.id}-${t}"]`), { hold: ms(500), after: ms(500) })
-      await run(true)
       continue
     }
     const img = s.images.find((i) => i.usable && i.ready && !i.analyzed && i.target !== 'TOWN')
     if (img) {
-      await run(false)
       await say('แปลภาพ', `ภาพ THEOS-2 Sector ${img.target} พร้อม — เทียบก่อน/หลัง แล้วระบุเฉพาะรอยดินถล่ม "ใหม่" (ค่า L)`)
       await openTab('theos')
       await click(page, page.locator(`[data-image="${img.id}"] button`), { hold: ms(500), after: ms(1200) })
       const handle = page.locator('[data-analysis-handle]')
-      if (await handle.count()) await sweep(page, handle, { left: 260, right: 320, end: 0 })
+      if (!swept && await handle.count()) { await sweep(page, handle, { left: 260, right: 320, end: 0 }); swept = true }
       const cands = await page.evaluate((id) => {
         const { s, scn } = window.__maesai
         const im = s.images.find((x) => x.id === id)
         return scn.scenes[im.target].cands.map((c) => ({ id: c.id, scar: c.kind === 'scar' }))
       }, img.id)
-      for (const c of cands) await click(page, page.locator(`[data-label="${c.id}-${c.scar ? 'scar' : 'none'}"]`), { hold: ms(180), after: ms(220) })
-      await click(page, page.locator('[data-modal="analysis"] button', { hasText: 'ส่งผล' }), { hold: ms(500), after: ms(1600) })
+      for (const c of cands.filter((x) => x.scar)) await click(page, page.locator(`[data-cand="${c.id}"]`), { hold: ms(260), after: ms(240) })
+      await click(page, page.locator('[data-modal="analysis"] button', { hasText: 'ส่งผล' }), { hold: ms(500), after: ms(2200) })
       await click(page, page.locator('[data-modal="analysis"] button', { hasText: 'ปิด' }), { hold: ms(200), after: ms(400) })
-      await run(true)
       continue
     }
     const riverImg = s.images.find((i) => i.usable && i.ready && RIVER.includes(i.target))
     if (!s.measured && riverImg) {
-      await run(false)
       await say('ค่า N', 'วัดความกว้างลำน้ำจากภาพ Pan 0.5 ม.: ลากเส้นวัดไปที่ขอบน้ำ → พิกเซล × 0.5 = เมตร → N = 1 − เมตร ÷ 150')
       await openTab('bank')
       await click(page, page.locator('[data-panel="bank"] button', { hasText: 'เปิดเครื่องมือวัด' }), { hold: ms(500), after: ms(1000) })
@@ -104,25 +112,30 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       await page.keyboard.type(n, { delay: 120 })
       await click(page, page.locator('[data-modal="channel"] button', { hasText: 'ส่งค่า N' }), { hold: ms(500), after: ms(1600) })
       await click(page, page.locator('[data-modal="channel"] button', { hasText: 'ปิด' }), { hold: ms(200), after: ms(400) })
-      await run(true)
       continue
     }
+    const upcoming = s.passes.find((p) => p.t > s.clock)
     if (!s.ordered.length) {
-      const at = await page.evaluate(() => window.__maesai.orderAt())
+      const at = s.orderAt
       if (s.clock >= at) {
         const wet = await page.evaluate(() => window.__maesai.wetZones())
-        await run(false)
         await say('อพยพ', `ตารางโซน: น้ำจะถึงโซน ${wet.join(', ')} — สั่งอพยพเฉพาะโซนเหล่านี้ ก่อนเวลาที่ต้องใช้อพยพจะไม่พอ`)
         await click(page, page.locator('[data-left-tab="zones"]'), { hold: ms(400), after: ms(800) })
         await openTab('zones'); await ensureView('urban')
         await point(page, page.locator('[data-panel="zones"]'), { hold: ms(1600) })
         for (const z of wet) await click(page, page.locator(`[data-pick="${z}"]`), { hold: ms(220), after: ms(250) })
         await click(page, page.locator('[data-panel="zones-order"] button', { hasText: 'สั่งอพยพ' }), { hold: ms(700), after: ms(1200) })
-        await run(true)
         continue
       }
+      // the next capture would jump past the moment to order: step the clock an hour at a time
+      if (!upcoming || upcoming.t + 120 > at) { await advance('[data-advance="hour"]', 'เดินเวลาทีละชั่วโมง — ดูระดับน้ำและตารางโซนก่อนสั่งอพยพ'); continue }
     }
-    await wait(300)
+    if (upcoming) {
+      await openTab('theos')
+      await advance('[data-capture]', `ให้ THEOS-2 ถ่ายรอบ ${upcoming.id} — คัตซีน: ดาวเทียมโคจร → ถ่ายภาพ → ประมวลผล L3 Ortho`)
+      continue
+    }
+    if (!(await advance('[data-advance="end"]', 'สั่งการครบแล้ว — ข้ามไป T−0'))) await advance('[data-advance="next"]')
   }
   await say('สรุปองก์ 1', 'มวลน้ำถึงตัวเมือง — สรุปผลองก์ 1')
   await wait(ms(3500))
@@ -131,17 +144,17 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
   /* ══════════ ACT II ══════════ */
   mark('ACT II · crisis')
   await say('องก์ 2', 'เมฆเคลื่อนผ่านเมือง 35–65% — สั่ง THEOS-2 ถ่ายทุกรอบเพื่อหาผู้ติดค้างในช่องที่เมฆเปิด')
-  await run(false)
   await openTab('sensors')
   for (let i = 0; i < 4; i++) {
     const b = page.locator('[data-pass2] button', { hasText: 'สั่งถ่าย' }).first()
     if (!(await b.count())) break
     await click(page, b, { hold: ms(350), after: ms(400) })
   }
-  await run(true)
   const droneAt = {}
+  const skip = new Set()                 // points with no safe route right now — retried after the next event
   for (let guard = 0; guard < 4000; guard++) {
     if (await has('[data-modal="act2-summary"]')) break
+    await page.evaluate((ids) => { window.__skip = ids }, [...skip])
     const a = await page.evaluate(() => {
       const { s, scn } = window.__maesai
       const busy = (k, id) => s.jobs.some((j) => j.kind === k && j.section === id)
@@ -152,8 +165,14 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
         blind: scn.blindSpots, droneFree: s.drones.some((d) => d.busyUntil <= s.clock),
         boatFree: s.boats.some((b) => b.busyUntil <= s.clock),
         pumps: Object.keys(s.pumps).length,
-        point: s.points.filter((p) => p.revealed && p.status === 'waiting' && !s.commDown.includes(p.section))
-          .filter((p) => s.jobs.filter((j) => j.point === p.id && j.kind === 'boatAtPoint').length * 10 < p.left)
+        // one shuttling boat clears a point; a second only when the deadline is close · supply needs one trip
+        point: s.points.filter((p) => p.revealed && p.status === 'waiting' && !s.commDown.includes(p.section) && !(s.pumps[p.section] && s.pumps[p.section].readyAt > s.clock))
+          .filter((p) => {
+            const going = s.jobs.filter((j) => j.point === p.id && (j.kind === 'boatAtPoint' || j.kind === 'boatAtDest')).length
+            if (p.type === 'hardship') return going === 0
+            return going === 0 || (going < 2 && p.deadline - s.clock < 8 * 60 && p.left > 10)
+          })
+          .filter((p) => !window.__skip?.includes(p.id))
           .sort((x, y) => x.deadline - y.deadline)
           .map((p) => ({ id: p.id, section: p.section, type: p.type, injured: p.injured, people: p.left }))[0] || null,
         shelter: scn.shelters[0],
@@ -161,34 +180,33 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
     })
     if (a.power.length) {
       await say('ไฟฟ้ารั่ว', `พบไฟฟ้ารั่วโซน ${a.power[0]} — สั่ง กฟภ. ตัดไฟก่อนส่งทีมเข้า`)
-      await run(false)
       await openTab('field')
       await click(page, page.locator(`[data-power="${a.power[0]}"] button`), { hold: ms(500), after: ms(700) })
-      await run(true)
       continue
     }
     if (a.comm.length) {
       await say('สื่อสาร', `พายุตัดสัญญาณโซน ${a.comm[0]} — ตั้งเสาสื่อสารเคลื่อนที่ (ใช้เวลา 3 ชม.)`)
-      await run(false)
       await openTab('field')
       await click(page, page.locator(`[data-comm="${a.comm[0]}"] button`), { hold: ms(500), after: ms(700) })
-      await run(true)
       continue
     }
     if (a.point && a.boatFree) {
-      await run(false)
       const mission = a.point.type === 'hardship' ? 'supply' : 'rescue'
       const dest = a.point.injured ? 'hosp' : a.shelter
       const idx = await page.evaluate(([id, m, d]) => { const p = window.__maesai.planFor(id, m, d); return p && p.best ? p.options.indexOf(p.best) : -1 }, [a.point.id, mission, dest])
       if (idx < 0) {
-        if (a.pumps < 3) {
-          await say('สูบน้ำ', `ทุกเส้นทางไป ${a.point.id} อันตราย — ติดตั้งเครื่องสูบน้ำโซน ${a.point.section} เพื่อเปิดทาง`)
+        // every route crosses deep water: pump the zone on the way (or wait for the water to drop)
+        const deep = await page.evaluate(([id, m, d]) => { const { s } = window.__maesai; return window.__maesai.deepAlong(id, m, d).filter((z) => !s.pumps[z]) }, [a.point.id, mission, dest])
+        if (deep.length && a.pumps < 3) {
+          await say('สูบน้ำ', `ทุกเส้นทางไป ${a.point.id} ผ่านโซนน้ำลึก ${deep[0]} — ติดตั้งเครื่องสูบน้ำโซน ${deep[0]} เพื่อเปิดทาง`)
           await openTab('field')
-          await click(page, page.locator(`[data-pump-zone="${a.point.section}"]`), { hold: ms(350), after: ms(300) })
+          await click(page, page.locator(`[data-pump-zone="${deep[0]}"]`), { hold: ms(350), after: ms(300) })
           const pb = page.locator('[data-panel="field"] button', { hasText: 'ติดตั้งเครื่องสูบ' })
           if (await pb.count() && await pb.isEnabled()) await click(page, pb, { hold: ms(400), after: ms(600) })
+          continue
         }
-        await run(true); await wait(1500)
+        skip.add(a.point.id)
+        await advance('[data-advance="next"]')
         continue
       }
       const why = mission === 'supply' ? 'บ้านยังอยู่ได้ → ส่งถุงยังชีพ' : a.point.injured ? `มีผู้บาดเจ็บ ${a.point.injured} คน → ส่งโรงพยาบาล` : 'อยู่ไม่ได้ → อพยพไปจุดอพยพ'
@@ -199,21 +217,21 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       if (mission === 'rescue') await click(page, page.locator(`[data-dest="${dest}"]`), { hold: ms(300), after: ms(500) })
       await click(page, page.locator(`[data-route-opt="${idx}"]`), { hold: ms(600), after: ms(900) })
       await click(page, page.locator('[data-modal="planner"] button', { hasText: 'ส่งเรือออก' }), { hold: ms(450), after: ms(600) })
-      await run(true)
       continue
     }
     const blind = a.blind.find((id) => a.clock - (droneAt[id] ?? -999) >= 360)
     if (blind && a.droneFree) {
       droneAt[blind] = a.clock
       await say('โดรน', `โซน ${blind} เป็นจุดอับ (ซอยลึก/ใต้ร่มไม้) — ดาวเทียมมองไม่เห็นคน ส่งโดรนช่วยส่อง`)
-      await run(false)
       await openTab('sensors')
       await click(page, page.locator(`[data-drone-zone="${blind}"]`), { hold: ms(300), after: ms(300) })
       await click(page, page.locator('[data-panel="sensors"] button', { hasText: 'ส่งโดรน' }), { hold: ms(400), after: ms(600) })
-      await run(true)
       continue
     }
-    await wait(300)
+    // skip to the recession only once every group has had time to be found and helped
+    const late = await page.evaluate(() => { const { s } = window.__maesai; return s.clock >= 26 * 60 && s.points.every((p) => p.status !== 'waiting' || s.jobs.some((j) => j.point === p.id)) })
+    if (!(late && await advance('[data-advance="end"]', 'ช่วยครบทุกจุดแล้ว — ข้ามไปน้ำลด'))) await advance('[data-advance="next"]', 'เดินเวลา → เหตุการณ์ถัดไป (เรือแล่น · สายด่วน · รอบดาวเทียม)')
+    skip.clear()
   }
   await say('สรุปองก์ 2', 'น้ำเริ่มลด — สรุปผลการช่วยเหลือ')
   await wait(ms(3500))

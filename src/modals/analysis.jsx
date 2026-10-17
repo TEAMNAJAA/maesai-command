@@ -78,10 +78,11 @@ function Candidate({ c, after }) {
   )
 }
 
-function SectorImage({ sceneId, seed, cands, after, clipW }) {
+/** Rendered once per image; the before/after slider only moves a clip on the wrapper (no re-render while dragging). */
+const SectorImage = React.memo(function SectorImage({ sceneId, seed, cands, after }) {
   const sc = useScene(sceneId, seed)
   return (
-    <svg viewBox={`0 0 ${VW} ${VH}`} className="absolute inset-0 h-full w-full" preserveAspectRatio="none" style={clipW !== undefined ? { clipPath: `inset(0 ${100 - clipW}% 0 0)` } : undefined}>
+    <svg viewBox={`0 0 ${VW} ${VH}`} className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
       <defs>
         <filter id="cl-blur"><feGaussianBlur stdDeviation="5" /></filter>
         <filter id="sat-grain" x="0" y="0" width="100%" height="100%">
@@ -99,7 +100,7 @@ function SectorImage({ sceneId, seed, cands, after, clipW }) {
       <rect width={VW} height={VH} filter="url(#sat-grain)" opacity="0.13" style={{ mixBlendMode: 'overlay' }} />
     </svg>
   )
-}
+})
 
 const KIND_TH = { scar: 'ดินถล่มใหม่', field: 'ทุ่งนา/ไร่ (มีในภาพก่อน)', shadow: 'เงาเมฆ (ไม่ใช่พื้นดินเปลี่ยน)', old: 'รอยดินถล่มเก่า (มีในภาพก่อน)' }
 
@@ -111,6 +112,7 @@ export function ImageAnalysisModal({ eng, imageId, onClose }) {
   const [focus, setFocus] = useState(null)
   const [pos, setPos] = useState(50)
   const [done, setDone] = useState(img?.analyzed || false)
+  const [checking, setChecking] = useState(false)
   const box = useRef(null)
   const drag = useRef(false)
   useEffect(() => {
@@ -123,7 +125,11 @@ export function ImageAnalysisModal({ eng, imageId, onClose }) {
   const sec = SECTORS.find((x) => x.id === img.target)
   const set = (id, v) => { if (!done) setLabels((l) => ({ ...l, [id]: v })) }
   const nScar = Object.values(labels).filter((v) => v === 'scar').length
-  const submit = () => { eng.submitAnalysis(img.id, Object.fromEntries(scene.cands.map((c) => [c.id, labels[c.id] === 'scar' ? 'scar' : 'none']))); setDone(true) }
+  // short "scan" before the reveal so the check reads as a step, not an instant answer
+  const submit = () => {
+    setChecking(true)
+    setTimeout(() => { eng.submitAnalysis(img.id, Object.fromEntries(scene.cands.map((c) => [c.id, labels[c.id] === 'scar' ? 'scar' : 'none']))); setChecking(false); setDone(true) }, 900)
+  }
   const result = (c) => (labels[c.id] === 'scar') === (c.kind === 'scar')
   return (
     <Modal open onClose={onClose} width={1120} tone="#38BDF8" z={88}>
@@ -141,8 +147,16 @@ export function ImageAnalysisModal({ eng, imageId, onClose }) {
             <div ref={box} className="relative aspect-[760/440] w-full select-none overflow-hidden rounded-lg border border-white/15 bg-black"
               onPointerDown={(e) => { if (e.target.closest('[data-cand]')) return; drag.current = true; const r = box.current.getBoundingClientRect(); setPos(clamp(((e.clientX - r.left) / r.width) * 100, 0, 100)) }}>
               <SectorImage sceneId={img.target} seed={eng.s.seed} cands={scene.cands} after />
-              <SectorImage sceneId={img.target} seed={eng.s.seed} cands={scene.cands} after={false} clipW={pos} />
+              <div className="absolute inset-0 [will-change:clip-path]" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
+                <SectorImage sceneId={img.target} seed={eng.s.seed} cands={scene.cands} after={false} />
+              </div>
               <div className="pointer-events-none absolute inset-y-0 w-[2px] bg-white/90" style={{ left: `${pos}%` }} />
+              {checking && (
+                <div className="pointer-events-none absolute inset-0 z-10 bg-sky-400/10">
+                  <div className="absolute inset-x-0 h-10 bg-gradient-to-b from-transparent via-sky-300/50 to-transparent animate-[scanY_.9s_linear]" />
+                  <span className="font-thai absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded bg-black/80 px-3 py-1.5 text-[14px] font-bold text-sky-100">กำลังตรวจกับข้อมูลภาคพื้น…</span>
+                </div>
+              )}
               <div className="absolute top-1/2 grid h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize place-items-center rounded-full border-2 border-white bg-black/70 text-white" style={{ left: `${pos}%` }}
                 onPointerDown={(e) => { e.stopPropagation(); drag.current = true }} data-analysis-handle>⇆</div>
               <span className="font-thai pointer-events-none absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] text-white">◀ ก่อนเหตุการณ์ (มี.ค. 2567)</span>
@@ -151,7 +165,7 @@ export function ImageAnalysisModal({ eng, imageId, onClose }) {
                 const lab = labels[c.id]
                 const hex = done ? (result(c) ? '#22E36B' : '#FF003C') : lab === 'scar' ? '#FF7A1A' : lab === 'none' ? '#94A3B8' : '#FFD066'
                 return (
-                  <button key={c.id} data-cand={c.id} onClick={() => setFocus(c.id)}
+                  <button key={c.id} data-cand={c.id} onClick={() => { setFocus(c.id); set(c.id, labels[c.id] === 'scar' ? 'none' : 'scar') }}
                     className="absolute grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 text-[11px] font-bold text-white shadow-lg"
                     style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, borderColor: hex, background: focus === c.id ? `${hex}cc` : `${hex}55` }}>
                     {i + 1}
@@ -159,7 +173,7 @@ export function ImageAnalysisModal({ eng, imageId, onClose }) {
                 )
               })}
             </div>
-            <div className="font-thai mt-1.5 text-[11px] text-slate-400">ลากเส้นกลางเพื่อเทียบภาพก่อน/หลัง · คลิกหมุดตัวเลขแล้วเลือกว่าเป็นดินถล่มใหม่หรือไม่ · ภาพจำลองเพื่อการฝึก (รอภาพ THEOS-2 จริงจาก GISTDA)</div>
+            <div className="font-thai mt-1.5 text-[11px] text-slate-400">ลากเส้นกลางเพื่อเทียบภาพก่อน/หลัง · คลิกหมุดบนภาพ = ระบุว่าเป็นดินถล่มใหม่ (คลิกซ้ำเพื่อยกเลิก) · หมุดที่ไม่ได้คลิกนับเป็น "ไม่ใช่" · ภาพจำลองเพื่อการฝึก (รอภาพ THEOS-2 จริงจาก GISTDA)</div>
           </div>
           <div className="flex min-h-0 flex-col gap-2">
             {mode.tutor && !done && (
@@ -194,7 +208,7 @@ export function ImageAnalysisModal({ eng, imageId, onClose }) {
                 <div className="text-[10px] text-slate-400">ค่า L ใน SFVI ใช้จำนวนที่คุณระบุ — ระบุเกินทำให้ SFVI สูงเกินจริง</div>
               </div>
             ) : (
-              <Btn variant="primary" size="lg" icon={Check} onClick={submit}><span className="font-thai normal-case tracking-normal text-[12.5px]">ส่งผลการแปลภาพ (ระบุดินถล่ม {nScar} จุด)</span></Btn>
+              <Btn variant="primary" size="lg" icon={Check} onClick={submit} disabled={checking}><span className="font-thai normal-case tracking-normal text-[12.5px]">ส่งผลการแปลภาพ (ระบุดินถล่ม {nScar} จุด)</span></Btn>
             )}
             <Btn variant="solid" onClick={onClose}><span className="font-thai normal-case tracking-normal">{done ? 'ปิด' : 'ไว้ทีหลัง'}</span></Btn>
           </div>

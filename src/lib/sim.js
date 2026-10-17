@@ -147,10 +147,13 @@ export function timeToDepth(s, sec, depth, from = 0) {
 export function makePoints(s, scn) {
   const r = substream(scn.seed, 'points')
   const points = []
-  for (const sec of SECTIONS) {
-    const out = zoneOutcome(s, scn, sec)
-    if (out.remaining <= 0 || out.peak < HARM_M) continue
-    const n = Math.min(RESCUE.maxPointsPerSection, Math.max(1, Math.ceil(out.remaining / 12)))
+  // deepest zones first, capped city-wide so a good commander can clear act 2 in a few minutes
+  const hit = SECTIONS.map((sec) => ({ sec, out: zoneOutcome(s, scn, sec) }))
+    .filter(({ out }) => out.remaining > 0 && out.peak >= HARM_M)
+    .sort((a, b) => b.out.peak - a.out.peak)
+  for (const { sec, out } of hit) {
+    const n = Math.min(RESCUE.maxPointsPerSection, Math.max(1, Math.ceil(out.remaining / 40)), RESCUE.maxPoints - points.length)
+    if (n <= 0) break
     const roofs = sec.idx.filter((i) => BUILDINGS[i].flood)
     // people sit out the crest on upper floors and roofs: windows run from the start of act 2
     const arrival = Number.isFinite(out.arrival) ? Math.max(0, out.arrival) : 0

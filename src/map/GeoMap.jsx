@@ -177,6 +177,12 @@ function Urban({ eng, proj, roofs, onPoint }) {
   const camp = campOf(s)
   const px = (m) => m / proj.metresPerPx
   const boats = act2 ? s.jobs.filter((j) => j.kind === 'boatAtPoint' || j.kind === 'boatAtDest') : []
+  // static geometry projected once per view (re-projecting every road on each order made clicks lag)
+  const geo = useMemo(() => ({
+    hull: Object.fromEntries(SECTIONS.map((z) => [z.id, linePath([...z.hull, z.hull[0]], proj)])),
+    roads: osmRoads.map((f) => ({ f, d: linePath(f.geometry.coordinates, proj), w: roadWeight(f.properties.class) })),
+    rivers: (L.river ? osmRivers : saiRiver).map((f) => ({ f, d: linePath(f.geometry.coordinates, proj) })),
+  }), [proj, L.river])
   return (
     <g>
       {/* zones: a soft boundary + the zone's real roofs tinted by the metric that matters now */}
@@ -186,7 +192,7 @@ function Urban({ eng, proj, roofs, onPoint }) {
         const hex = act2 ? (d >= ACT2.deepWaterM ? '#3b82f6' : d >= 0.3 ? '#7dd3fc' : '#94a3b8') : sfviHex(score[z.id])
         return (
           <g key={z.id} data-zone={z.id}>
-            <path d={linePath([...z.hull, z.hull[0]], proj)} fill={hex} fillOpacity={act2 ? Math.min(0.32, d / 5) : 0.05}
+            <path d={geo.hull[z.id]} fill={hex} fillOpacity={act2 ? Math.min(0.32, d / 5) : 0.05}
               stroke={ordered ? '#22E36B' : hex} strokeOpacity={0.75} strokeWidth={ordered ? 2.4 : 1.1} strokeDasharray={ordered ? undefined : '5 4'} />
             {roofs && <path d={roofs.zone[z.id]} fill={hex} fillOpacity={act2 ? 0.55 : 0.32} stroke={hex} strokeOpacity="0.8" strokeWidth="0.5" pointerEvents="none" />}
           </g>
@@ -196,23 +202,22 @@ function Urban({ eng, proj, roofs, onPoint }) {
       {act2 && SECTIONS.map((z) => {
         const d = depthAt(s, z, t)
         if (d < 0.3) return null
-        return <path key={`fl${z.id}`} d={linePath([...z.hull, z.hull[0]], proj)} fill="none" stroke="#bfdbfe" strokeOpacity={Math.min(0.7, d / 2.5)}
+        return <path key={`fl${z.id}`} d={geo.hull[z.id]} fill="none" stroke="#bfdbfe" strokeOpacity={Math.min(0.7, d / 2.5)}
           strokeWidth="1.6" strokeDasharray="3 9" className="animate-[waterflow_14s_linear_infinite]" pointerEvents="none" />
       })}
-      {L.roads && osmRoads.map((f) => {
-        const w = roadWeight(f.properties.class)
+      {L.roads && geo.roads.map(({ f, d, w }) => {
         const blocked = act2 && scn.blockedRoads.includes(f.properties.osm)
-        return <path key={f.properties.osm} d={linePath(f.geometry.coordinates, proj)} fill="none" stroke={blocked ? '#FF3B63' : w > 1 ? '#E8E2D4' : '#9FB4CC'} strokeWidth={blocked ? 3 : w} strokeDasharray={blocked ? '4 3' : undefined} opacity={blocked ? 0.95 : w > 1 ? 0.75 : 0.4} />
+        return <path key={f.properties.osm} d={d} fill="none" stroke={blocked ? '#FF3B63' : w > 1 ? '#E8E2D4' : '#9FB4CC'} strokeWidth={blocked ? 3 : w} strokeDasharray={blocked ? '4 3' : undefined} opacity={blocked ? 0.95 : w > 1 ? 0.75 : 0.4} />
       })}
       {L.buildings && roofs && (
         <g pointerEvents="none" opacity="0.6">
           <path d={roofs.dry} fill="none" stroke="#F1F5F9" strokeOpacity="0.35" strokeWidth="0.5" />
         </g>
       )}
-      {(L.river ? osmRivers : saiRiver).map((f) => (
+      {geo.rivers.map(({ f, d }) => (
         <g key={`r${f.properties.osm}`}>
-          <path d={linePath(f.geometry.coordinates, proj)} fill="none" stroke="#38BDF8" strokeWidth={f.properties.class === 'river' ? 3.4 : 1.4} opacity="0.95" filter="url(#geo-glow)" />
-          {f.properties.class === 'river' && <path d={linePath(f.geometry.coordinates, proj)} fill="none" stroke="#e0f2fe" strokeWidth="1.4" strokeDasharray="6 10" className="animate-[waterflow_9s_linear_infinite]" opacity="0.8" />}
+          <path d={d} fill="none" stroke="#38BDF8" strokeWidth={f.properties.class === 'river' ? 3.4 : 1.4} opacity="0.95" filter="url(#geo-glow)" />
+          {f.properties.class === 'river' && <path d={d} fill="none" stroke="#e0f2fe" strokeWidth="1.4" strokeDasharray="6 10" className="animate-[waterflow_9s_linear_infinite]" opacity="0.8" />}
         </g>
       ))}
       {/* evacuation routes computed for ordered zones (Sphere / offline) */}

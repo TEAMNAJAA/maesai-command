@@ -13,7 +13,7 @@ import {
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts'
 import { Panel, PanelHead, Src, Btn, ArcGauge, Spark, StatLine, Corners } from '../ui/atoms'
 import { useMode } from '../ui/label'
-import { RELIEF, EVENT, SCORE, MODES, MISSION } from '../config/missionConfig'
+import { RELIEF, EVENT, SCORE, MODES, MISSION, TIME } from '../config/missionConfig'
 import { LESSONS, RES_PROOF } from '../config/scenarioData'
 import { BUILDINGS } from '../lib/buildings'
 import { SECTION_BY_ID } from '../lib/sections'
@@ -77,7 +77,7 @@ function useRoofView(roof) {
  * mask the wash), a deposit hugging the compound sized by the roof's mud level, standing water if it
  * stayed wet, optional cloud.
  */
-function RoofScene({ roof, after, view, pan }) {
+const RoofScene = React.memo(function RoofScene({ roof, after, view, pan }) {
   const id = `r${roof.fid}${after ? 'a' : 'b'}`
   const mud = after ? roof.mudLevel : 0
   const wet = after ? Math.min(1, roof.days / 12) : 0
@@ -143,7 +143,7 @@ function RoofScene({ roof, after, view, pan }) {
       {after && roof.theosCloud && <rect width="640" height="360" filter={`url(#${id}-cloud)`} opacity="0.92" />}
     </svg>
   )
-}
+})
 
 function RoofCompare({ roof, eng, pan, setPan }) {
   const { pos, box, start, grab } = useDragSlider(55)
@@ -153,7 +153,7 @@ function RoofCompare({ roof, eng, pan, setPan }) {
     <div ref={box} className="relative h-[300px] w-full select-none overflow-hidden rounded-lg border border-white/15" onPointerDown={start} data-roof-compare={roof.id}>
       <RoofScene roof={roof} after view={view} pan={pan} />
       <div className="absolute inset-0 overflow-hidden" style={{ width: `${pos}%` }}>
-        <div className="absolute inset-0" style={{ width: `${(100 / pos) * 100}%` }}><RoofScene roof={roof} view={view} pan={pan} /></div>
+        <div className="absolute inset-0 [will-change:transform]" style={{ width: `${(100 / pos) * 100}%` }}><RoofScene roof={roof} view={view} pan={pan} /></div>
       </div>
       <span className="font-thai pointer-events-none absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10.5px] text-white">◀ ก่อน · {online ? 'ภาพดาวเทียม GISTDA sphere' : 'ภาพจำลอง'}</span>
       <span className="font-thai pointer-events-none absolute right-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10.5px] text-white">หลัง · THEOS-2 {EVENT.afterImageLabel.split('·')[1]?.trim()} (จำลอง) ▶</span>
@@ -319,7 +319,8 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
           <Trophy size={22} className="text-[#FFD066]" />
           <div>
             <div className="font-thai text-[16px] font-bold text-white">{allDone ? `ภารกิจจบ — คะแนน ${Math.round(score.total * 100)}%` : `ยังตัดสินเยียวยาไม่ครบ (${rel.done}/${rel.total})`}</div>
-            <div className="font-thai text-[12px] text-slate-400">{MODES[s.modeId].th} · seed {s.seed} · ผู้เล่น {player || 'ไม่ระบุชื่อ'}</div>
+            <div className="font-thai text-[12px] text-slate-400">{MODES[s.modeId].th} · seed {s.seed} · ผู้เล่น {player || 'ไม่ระบุชื่อ'} · เวลาเล่นจริง <b className="num text-white">{mmss(eng.realMs() / 1000)}</b>
+              {eng.realMs() > 0 && eng.realMs() / 1000 <= TIME.expertTargetSec && <span className="ml-1.5 rounded bg-[#FFD066]/20 px-1.5 py-[1px] text-[11px] font-bold text-[#FFE0A3]">⚡ ภายใน {TIME.expertTargetSec / 60} นาที</span>}</div>
           </div>
           <div className="ml-auto flex gap-2">
             <Btn variant={postDone ? 'solid' : 'go'} icon={GraduationCap} onClick={onPostTest} disabled={postDone}><span className="font-thai normal-case tracking-normal">{postDone ? 'ทำแบบทดสอบแล้ว' : 'แบบทดสอบหลังเรียน'}</span></Btn>

@@ -28,23 +28,23 @@ describe('scenario', () => {
     const widths = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((s) => makeScenario(s).channel.widthM))
     expect(widths.size).toBeGreaterThan(2)
   })
-  it('has 4 act-1 passes in order, each with reachable targets and a forecast', () => {
+  it('has 3 act-1 passes in order, each with reachable targets and a forecast', () => {
     const s = makeScenario(42)
-    expect(s.passes).toHaveLength(4)
+    expect(s.passes).toHaveLength(3)
     s.passes.forEach((p, i) => {
       expect(p.reach.length).toBeGreaterThanOrEqual(3)
       for (const id of p.reach) expect(p.forecast[id]).toBeTypeOf('number')
       if (i) expect(p.t).toBeGreaterThan(s.passes[i - 1].t)
     })
-    expect(s.totalScars).toBeGreaterThan(8)
+    expect(s.totalScars).toBeGreaterThanOrEqual(6)
   })
-  it('opens 3 shelters and picks 12 relief roofs with a balanced truth', () => {
+  it('opens 3 shelters and picks 8 relief roofs with a balanced truth', () => {
     const s = makeScenario(99)
     expect(s.shelters).toHaveLength(3)
-    expect(s.roofs).toHaveLength(12)
-    expect(new Set(s.roofs.map((r) => r.id)).size).toBe(12)
+    expect(s.roofs).toHaveLength(8)
+    expect(new Set(s.roofs.map((r) => r.id)).size).toBe(8)
     const both = s.roofs.filter((r) => r.truth.flat && r.truth.mud).length
-    expect(both).toBe(4)
+    expect(both).toBe(3)
   })
 })
 

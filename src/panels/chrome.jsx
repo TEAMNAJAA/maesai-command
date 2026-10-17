@@ -2,14 +2,14 @@
    CHROME — top bar · act stepper · alert log · status bar · toast
    ══════════════════════════════════════════════════════════════════════════ */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
-  AlertTriangle, Pause, Play, ChevronRight, ChevronUp, ChevronDown, RotateCcw, BookOpen, Database, Lightbulb, Check, ScrollText, Trophy, Wallet, Fuel, CalendarClock,
+  AlertTriangle, Timer, ChevronRight, ChevronUp, ChevronDown, RotateCcw, BookOpen, Database, Lightbulb, Check, ScrollText, Trophy, Wallet, Fuel, CalendarClock,
 } from 'lucide-react'
 import { Panel } from '../ui/atoms'
-import { SPHERE, MISSION, PACE } from '../config/missionConfig'
+import { SPHERE, MISSION, TIME } from '../config/missionConfig'
 import { ACT_WINDOW } from '../lib/sim'
-import { fmt, clockHeadline, clockToDate, clamp } from '../lib/format'
+import { fmt, clockHeadline, clockToDate, clamp, mmss } from '../lib/format'
 import { sphereReady } from '../lib/sphere'
 
 export const ACTS = [
@@ -48,15 +48,30 @@ function Meter({ icon: Icon, label, value, sub, hex, title }) {
   )
 }
 
+/** Real playing time — skilled commanders finish the three acts in about 7 minutes. */
+function PlayTimer({ eng }) {
+  const [, tick] = useState(0)
+  useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(id) }, [])
+  const sec = eng.realMs() / 1000
+  const fast = sec > 0 && sec <= TIME.expertTargetSec
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1" title={`เวลาเล่นจริง · เป้าหมายผู้เล่นเก่ง ≤ ${TIME.expertTargetSec / 60} นาที`} data-playtime>
+      <Timer size={14} className={fast ? 'text-[#7CFFA0]' : 'text-[#FFB300]'} />
+      <div className="leading-none">
+        <div className="font-thai text-[9.5px] text-slate-400">เวลาเล่นจริง</div>
+        <div className="num mt-0.5 text-[12.5px] font-bold" style={{ color: fast ? '#7CFFA0' : '#FFD066' }}>{mmss(sec)}<span className="text-[9.5px] font-normal text-slate-500"> / เป้า {TIME.expertTargetSec / 60}:00</span></div>
+      </div>
+    </div>
+  )
+}
+
 export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, onReset }) {
-  const { s, mode, situation, veto1, running, setRunning } = eng
+  const { s, mode, situation, veto1 } = eng
   const act = ACTS[s.act - 1]
   const sitHex = situation === 'CRITICAL' ? '#FF003C' : situation === 'HIGH' ? '#FF7A1A' : situation === 'REVIEW' ? '#38BDF8' : '#FFB300'
   const sitTh = { CRITICAL: 'วิกฤต', HIGH: 'สูง', REVIEW: 'ทบทวน', ELEVATED: 'เฝ้าระวัง' }[situation]
   const left = s.budget.total - s.budget.spent
   const day = s.clock / 1440
-  const hi = ACT_WINDOW[s.act][1]
-  const remainSec = s.act < 3 ? (hi - s.clock) / (s.act === 1 ? PACE.act1MinPerSec : PACE.act2MinPerSec) : 0
   return (
     <header className="relative z-30 flex h-[58px] shrink-0 items-center gap-2.5 border-b border-sky-400/15 bg-[#060B16]/92 px-3 backdrop-blur-xl">
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-sky-400/50 to-transparent" />
@@ -84,7 +99,6 @@ export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, 
         </div>
         <div className="font-thai mt-0.5 whitespace-nowrap text-[10px]" style={{ color: `${act.hex}cc` }}>
           {clockToDate(Math.round(s.clock))} · {s.act === 1 ? 'ก่อนยอดน้ำ' : s.act === 2 ? 'ยอดน้ำในเมือง' : `เหลือ ${Math.max(0, Math.ceil(MISSION.deadlineDays - day))} วัน (กรอบ 60 วัน)`}
-          {s.act < 3 && <span className="num ml-1 text-slate-500">· องก์นี้เหลือ ~{Math.max(0, Math.ceil(remainSec / 60))} นาที</span>}
         </div>
       </div>
 
@@ -93,14 +107,7 @@ export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, 
       {s.act === 2 && <Meter icon={Fuel} label="น้ำมันเรือ" value={`${fmt(s.fuel.total - s.fuel.used)} L`} sub={`/ ${fmt(s.fuel.total)}`} hex={(s.fuel.total - s.fuel.used) / Math.max(1, s.fuel.total) < 0.2 ? '#FF6B8A' : '#7dd3fc'} />}
       {s.act === 3 && <Meter icon={CalendarClock} label="เส้นตายภารกิจ" value={`วันที่ ${Math.floor(day)}`} sub="/ 60" hex={day > 50 ? '#FF6B8A' : '#7dd3fc'} />}
 
-      {s.act !== 3 && (
-        <button onClick={() => setRunning((r) => !r)} disabled={!mode.pause && running} data-run={running ? 'on' : 'off'}
-          title={mode.pause ? (running ? 'หยุดเวลาชั่วคราว (Space)' : 'เดินเวลาต่อ (Space)') : 'โหมด Expert หยุดเวลาไม่ได้'}
-          className={`btn flex items-center gap-1.5 px-2.5 py-1.5 ${running ? 'border-[#FF003C]/50 bg-[#FF003C]/15 text-[#FF9DB2]' : 'border-[#22E36B]/60 bg-[#22E36B]/15 text-[#7CFFA0] animate-[beaconGo_1.6s_ease-in-out_infinite]'} disabled:opacity-60`}>
-          {running ? <Pause size={12} /> : <Play size={12} fill="currentColor" />}
-          <span className="font-thai normal-case tracking-normal text-[11px]">{running ? (mode.pause ? 'หยุดเวลา' : 'เวลากำลังเดิน') : 'เดินเวลา'}</span>
-        </button>
-      )}
+      <PlayTimer eng={eng} />
 
       <div className="flex items-center gap-0.5">
         {mode.tutor && (

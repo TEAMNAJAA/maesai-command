@@ -57,7 +57,7 @@ body {
 /* ── Reusable component classes ─────────────────────────────── */
 @layer components {
   .panel {
-    @apply relative rounded-lg border border-sky-400/15 bg-white/[0.035] backdrop-blur-md;
+    @apply relative rounded-lg border border-sky-400/15 bg-[#0a1322]/80;   /* solid: a glass blur here cost frames on every map animation */
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 28px -18px rgba(0,0,0,0.9);
   }
   .panel-hd {
@@ -93,10 +93,9 @@ body {
   pointer-events: none;
   z-index: 60;
   background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0 1px, transparent 1px 3px),
-    radial-gradient(120% 90% at 50% 45%, transparent 45%, rgba(0,0,0,0.55) 100%);
-  mix-blend-mode: multiply;
-  opacity: .5;
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.08) 0 1px, transparent 1px 3px),
+    radial-gradient(120% 90% at 50% 45%, transparent 45%, rgba(0,0,0,0.28) 100%);
+  /* no blend mode: a full-screen multiply forced a re-blend of the whole page on every animated frame */
 }
 
 .grid-bg {
@@ -125,3 +124,8 @@ input[type='range'].hud-range::-webkit-slider-thumb {
   box-shadow: 0 0 10px rgba(56,189,248,0.9);
   cursor: ew-resize;
 }
+@keyframes scanY { from { top: -10%; } to { top: 100%; } }
+
+/* Performance: a backdrop blur over the animated map re-blurs every frame (21 → 49 fps when removed,
+   measured headless). Panels are already dark and semi-opaque; only the title screen keeps its blur. */
+[class*="backdrop-blur"]:not(.keep-blur) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }

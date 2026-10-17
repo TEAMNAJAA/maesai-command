@@ -5,7 +5,7 @@
    ทุกฟังก์ชันเป็น pure: รับ state เดิม คืน state ใหม่ (log อยู่ใน state.logs)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { THEOS2, MODES, MISSION, BOAT, FUEL_FACTOR, ACT2, DURATIONS, THRESHOLDS } from '../config/missionConfig'
+import { THEOS2, MODES, MISSION, BOAT, FUEL_FACTOR, ACT2, DURATIONS, THRESHOLDS, TIME } from '../config/missionConfig'
 import { CAMP_SITES, HOSPITAL, SHELTER_POOL } from '../config/scenarioData'
 import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
 import { T_START, levelAt } from '../lib/hydro'
@@ -18,6 +18,8 @@ let SEQ = 0
 export const mkLog = (lv, tag, msg, th) => ({ id: ++SEQ, lv, tag, msg, th, stamp: new Date() })
 export function log(n, lv, tag, msg, th) { n.logs = [mkLog(lv, tag, msg, th), ...n.logs].slice(0, 120) }
 export function toast(n, kind, text) { n.toasts = [...(n.toasts || []), { kind, text, id: ++SEQ }] }
+/** Something the commander must react to — "advance to next event" stops here. */
+export function event(n, kind, th) { n.eventSeq = (n.eventSeq || 0) + 1; n.lastEvent = { kind, th, at: n.clock } }
 
 export const campOf = (s) => CAMP_SITES.find((c) => c.id === s.camp) || null
 export const shelterList = (scn) => scn.shelters.map((id) => SHELTER_POOL.find((x) => x.id === id))
@@ -53,6 +55,7 @@ export function makeInitial(modeId, seed) {
     jobs: [],
     logs: [mkLog('info', 'SYSTEM', 'Mae Sai Incident Command Post online — THEOS-2 tasking window open.', 'ศูนย์บัญชาการเหตุการณ์อุทกภัยแม่สายออนไลน์ · หน้าต่างสั่งถ่าย THEOS-2 เปิดแล้ว')],
     toasts: [],
+    eventSeq: 0, lastEvent: null,
     resetSeq: 0,
   }
 }
@@ -141,6 +144,10 @@ export function advanceTo(s, scn, to) {
 
   if (n.act === 1) {
     for (const pass of scn.passes) {
+      if (crossed(pass.t - TIME.prePassWarnMin) && !(n.taskings[pass.id] || []).length) {
+        log(n, 'warn', 'THEOS-2', `${pass.id} overhead in ${TIME.prePassWarnMin} min — no targets selected.`, `THEOS-2 รอบ ${pass.id} จะผ่านใน ${TIME.prePassWarnMin} นาที แต่ยังไม่ได้เลือกเป้าหมาย`)
+        event(n, 'prepass', `THEOS-2 รอบ ${pass.id} กำลังจะผ่าน — เลือกเป้าหมายก่อน (หรือกดเดินเวลาต่อเพื่อข้ามรอบนี้)`)
+      }
       if (!crossed(pass.t)) continue
       const targets = n.taskings[pass.id] || []
       if (!targets.length) { log(n, 'info', 'THEOS-2', `${pass.id} passed with no tasking.`, `ดาวเทียม THEOS-2 รอบ ${pass.id} ผ่านไปโดยไม่ได้สั่งถ่าย`); continue }
@@ -152,7 +159,16 @@ export function advanceTo(s, scn, to) {
           usable ? `THEOS-2 ถ่าย ${tg === 'TOWN' ? 'ตัวเมือง' : `Sector ${tg}`} สำเร็จ (เมฆ ${cloud}%) — ภาพ L3 Ortho พร้อมใน 2 ชม.` : `THEOS-2 ถ่าย ${tg === 'TOWN' ? 'ตัวเมือง' : `Sector ${tg}`} แต่เมฆบัง ${cloud}% มองไม่เห็นพื้นดิน`)
       }
     }
-    for (const img of n.images) if (crossed(img.readyAt) && img.usable) toast(n, 'ok', `ภาพ THEOS-2 ${img.target === 'TOWN' ? 'ตัวเมือง' : `Sector ${img.target}`} พร้อมวิเคราะห์`)
+    const ready = n.images.filter((img) => crossed(img.readyAt))
+    if (ready.length) {
+      const ok = ready.filter((i) => i.usable)
+      for (const img of ok) toast(n, 'ok', `ภาพ THEOS-2 ${img.target === 'TOWN' ? 'ตัวเมือง' : `Sector ${img.target}`} พร้อมวิเคราะห์`)
+      event(n, 'images', `ได้ภาพ THEOS-2 ${ready.length} ภาพ · ใช้ได้ ${ok.length}${ok.length < ready.length ? ` · เมฆบัง ${ready.length - ok.length}` : ''}`)
+    }
+    const prep = THRESHOLDS.prepLevel - (n.channel.measured && scn.channel.widthM < THRESHOLDS.origChannelWidth * THRESHOLDS.narrowChannelRatio ? THRESHOLDS.narrowChannelPrepDrop : 0)
+    const l0 = levelAt(from), l1 = levelAt(Math.min(to, 0))
+    if (l0 < prep && l1 >= prep) event(n, 'prep', `ระดับน้ำถ้ำผาจมถึงเกณฑ์เตรียมพร้อม ${prep.toFixed(2)} ม.`)
+    if (l0 < THRESHOLDS.criticalLevel && l1 >= THRESHOLDS.criticalLevel) event(n, 'crit', `ระดับน้ำถึงเกณฑ์วิกฤต ${THRESHOLDS.criticalLevel.toFixed(2)} ม. — Veto 1`)
   }
 
   // field jobs (crews, pumps, towers, power cuts, drones, boats)
@@ -166,12 +182,14 @@ export function advanceTo(s, scn, to) {
       n.commDown = scn.commDown.filter((id) => !n.towers[id])
       log(n, 'crit', 'STORM', `Storm cell knocked out mobile networks in ${n.commDown.join(', ')}.`, `พายุทำให้สัญญาณสื่อสารล่มในโซน ${n.commDown.join(', ')} — สั่งการทีมเข้าโซนนี้ไม่ได้ ต้องตั้งเสาสื่อสาร`)
       toast(n, 'crit', `พายุตัดสัญญาณ ${n.commDown.length} โซน`)
+      event(n, 'storm', `พายุตัดสัญญาณสื่อสาร ${n.commDown.length} โซน`)
     }
     for (const hz of scn.powerHazards) {
       if (crossed(hz.at)) {
         n.hazardsLive = [...new Set([...n.hazardsLive, hz.id])]
         log(n, 'crit', 'POWER', `Live current reported in ${hz.id} — isolate power before sending teams in.`, `พบไฟฟ้ารั่วในโซน ${hz.id} (${SECTION_BY_ID[hz.id].name}) — ต้องตัดไฟก่อนส่งทีมเข้า`)
         toast(n, 'crit', `ไฟฟ้ารั่ว · โซน ${hz.id}`)
+        event(n, 'power', `พบไฟฟ้ารั่วโซน ${hz.id}`)
       }
     }
     for (let h = ACT2.radarRevisitH * 60; h <= to; h += ACT2.radarRevisitH * 60) {
@@ -189,20 +207,24 @@ export function advanceTo(s, scn, to) {
       log(n, 'good', 'THEOS-2', `${q.id}: ${clear.length}/10 zones clear of cloud — ${found} stranded groups located.`,
         `THEOS-2 รอบ ${q.id} เห็นพื้นดิน ${clear.length}/10 โซน (ที่เหลือเมฆบัง) · พบผู้ติดค้างใหม่ ${found} จุด`)
       toast(n, 'ok', `THEOS-2 พบผู้ติดค้าง ${found} จุด`)
+      event(n, 'theos', `THEOS-2 รอบ ${q.id} เห็นพื้นดิน ${clear.length}/10 โซน · พบผู้ติดค้าง ${found} จุด`)
     }
     for (const p of n.points) {
       if (p.status !== 'waiting') continue
       if (!p.revealed && to >= p.hotlineAt && pointActive(n, p) && !n.commDown.includes(p.section) && reveal(n, p, 'hotline')) {
         log(n, 'warn', '1784', `Hotline: ${p.people} people stranded in ${p.section}.`, `สายด่วน 1784 แจ้ง: ผู้ติดค้าง ${p.people} คน โซน ${p.section}`)
+        event(n, 'hotline', `สายด่วน 1784: ผู้ติดค้าง ${p.people} คน โซน ${p.section}`)
       }
       if (to >= p.deadline) {
         if (p.type === 'hardship') {
           p.type = 'critical'; p.deadline = to + 6 * 60
           log(n, 'crit', 'ESCALATION', `${p.id}: supplies never arrived — now needs evacuation.`, `${p.id}: ไม่ได้รับเสบียง อาการทรุด ต้องอพยพด้วยเรือภายใน 6 ชม.`)
+          event(n, 'escalate', `${p.id} ไม่ได้รับเสบียง — ต้องอพยพด่วน`)
         } else {
           p.lost += p.left; p.left = 0; p.status = 'lost'
           log(n, 'crit', 'CASUALTIES', `${p.id}: water overtook the house before rescue.`, `${p.id}: น้ำท่วมมิดก่อนเรือไปถึง — มีผู้สูญเสีย`)
           toast(n, 'crit', `ไม่ทันเวลา · ${p.id}`)
+          event(n, 'lost', `${p.id} ช่วยไม่ทัน — น้ำท่วมมิดบ้าน`)
         }
       }
     }
@@ -222,22 +244,26 @@ function finishJob(n, scn, j) {
       break
     case 'pump':
       log(n, 'good', 'PUMP', `Pump running in ${j.section}.`, `เครื่องสูบน้ำโซน ${j.section} ทำงานแล้ว — น้ำลด ${ACT2.pumpReliefM} ม. เปิดทางให้เรือ/รถ`)
+      event(n, 'pump', `เครื่องสูบน้ำโซน ${j.section} ทำงานแล้ว`)
       break
     case 'tower':
       n.towers[j.section] = true
       n.commDown = n.commDown.filter((id) => id !== j.section)
       log(n, 'good', 'COMMS', `Mobile cell site up in ${j.section}.`, `ตั้งเสาสื่อสารโซน ${j.section} เสร็จ — สั่งการทีมและรับแจ้งเหตุได้แล้ว`)
       toast(n, 'ok', `สัญญาณกลับมา · โซน ${j.section}`)
+      event(n, 'tower', `เสาสื่อสารโซน ${j.section} ใช้งานได้`)
       break
     case 'power':
       n.powerCut[j.section] = true
       log(n, 'good', 'กฟภ.', `Power isolated in ${j.section}.`, `กฟภ. ตัดไฟโซน ${j.section} แล้ว — ส่งทีมเข้าได้อย่างปลอดภัย`)
+      event(n, 'powercut', `ตัดไฟโซน ${j.section} แล้ว`)
       break
     case 'drone': {
       let found = 0
       for (const p of n.points) if (p.section === j.section && pointActive(n, p) && reveal(n, p, 'drone')) found++
       log(n, 'good', 'UAV', `Drone sortie over ${j.section}: ${found} groups found.`, `โดรนบินสำรวจโซน ${j.section} พบผู้ติดค้าง ${found} จุด`)
       toast(n, found ? 'ok' : 'warn', `โดรนโซน ${j.section}: พบ ${found} จุด`)
+      event(n, 'drone', `โดรนโซน ${j.section} พบผู้ติดค้าง ${found} จุด`)
       break
     }
     case 'boatAtPoint': {

@@ -20,11 +20,11 @@ export const TOWN_TARGET = 'TOWN'          // AOI-A — the town reach of the Sa
 
 /** Synthetic THEOS-2 sector scene: true fresh scars plus look-alikes the player must reject. */
 function sectorScene(r, sec) {
-  const scars = Math.max(1, Math.min(6, Math.round(sec.scars + r.range(-1.4, 1.6))))
+  const scars = Math.max(1, Math.min(3, Math.round(sec.scars / 2 + r.range(-0.8, 0.9))))
   const cands = []
   const place = () => [r.range(0.1, 0.9), r.range(0.14, 0.86)]
   for (let i = 0; i < scars; i++) { const [x, y] = place(); cands.push({ kind: 'scar', x, y, rot: r.range(-35, 35), len: r.range(0.07, 0.13) }) }
-  const fields = r.int(1, 3), shadows = r.int(0, 2), oldScars = r.int(0, 1)
+  const fields = r.int(1, 2), shadows = r.int(0, 1), oldScars = r.int(0, 1)
   for (let i = 0; i < fields; i++) { const [x, y] = place(); cands.push({ kind: 'field', x, y, rot: r.range(-20, 20), len: r.range(0.06, 0.1) }) }
   for (let i = 0; i < shadows; i++) { const [x, y] = place(); cands.push({ kind: 'shadow', x, y, rot: r.range(0, 180), len: r.range(0.07, 0.11) }) }
   for (let i = 0; i < oldScars; i++) { const [x, y] = place(); cands.push({ kind: 'old', x, y, rot: r.range(-30, 30), len: r.range(0.07, 0.11) }) }
@@ -49,11 +49,11 @@ export function makeScenario(seed, modeId = 'beginner') {
   /* ── Act 1 passes: time, reachable targets, cloud forecast vs actual ──── */
   const rp = R('passes')
   const ids = SECTORS.map((s) => s.id)
-  const passes = [-44, -32, -20, -8].slice(0, THEOS2.act1Passes).map((h, i) => {
+  const passes = THEOS2.act1PassHours.slice(0, THEOS2.act1Passes).map((h, i) => {
     const t = Math.round((h + rp.range(-1.5, 1.5)) * H)
     const reach = rp.sample(ids, rp.int(3, 4))
     if (i % 2 === 0 || rp.chance(0.4)) reach.push(TOWN_TARGET)
-    if (!reach.includes('D') && !reach.includes('E') && i === 1) reach.push(rp.pick(['D', 'E']))
+    if (!reach.includes('D') && !reach.includes('E') && i <= 1) reach.push(rp.pick(['D', 'E']))
     const base = cloudAt(t)
     const forecast = {}, actual = {}
     for (const id of reach) {
@@ -84,15 +84,15 @@ export function makeScenario(seed, modeId = 'beginner') {
     && f.geometry.coordinates.some(([x, y]) => x > 99.872 && x < 99.9 && y > 20.43 && y < 20.448))
   const blockedRoads = ra.sample(townRoads, ra.int(2, 4)).map((f) => f.properties.osm)
 
-  /* ── Act 3: twelve real roofs with radar day counts and mud evidence ─── */
+  /* ── Act 3: eight real roofs with radar day counts and mud evidence ──── */
   const rr = R('relief')
-  const plan = rr.shuffle(['both', 'both', 'both', 'both', 'flat', 'flat', 'flat', 'reject', 'reject', 'reject', 'reject', 'mudOnly'])
+  const plan = rr.shuffle(['both', 'both', 'both', 'flat', 'flat', 'reject', 'reject', 'mudOnly'])
   const used = new Set()
   const house = (b) => b.flood && b.areaM2 >= 50 && b.areaM2 <= 400
   const secOf = Object.fromEntries(SECTIONS.flatMap((s) => s.idx.map((i) => [i, s])))
   const pool = BUILDINGS.map((b, i) => ({ b, s: secOf[i] })).filter(({ b, s }) => s && house(b))
   const deep = pool.filter(({ s }) => s.stage <= 4.5), shallow = pool.filter(({ s }) => s.stage > 4.3)
-  const gapIdx = rr.sample([...Array(12).keys()], 2), cloudIdx = rr.sample([...Array(12).keys()].filter((i) => !gapIdx.includes(i)), 2)
+  const gapIdx = rr.sample([...Array(plan.length).keys()], 1), cloudIdx = rr.sample([...Array(plan.length).keys()].filter((i) => !gapIdx.includes(i)), 2)
   const roofs = plan.map((v, i) => {
     const src = (v === 'both' || v === 'flat' ? deep : shallow).filter(({ b }) => !used.has(b.fid))
     const { b, s } = src[rr.int(0, src.length - 1)] || pool[i]

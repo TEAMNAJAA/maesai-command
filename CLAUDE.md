@@ -1,7 +1,7 @@
 # CLAUDE.md — THEOS-2 Mae Sai Command
 
 > ไฟล์นี้บันทึก Context ถาวรของโปรเจกต์ ให้อ่านก่อนเริ่มงานทุกครั้ง
-> ร่างครั้งแรก 3 ต.ค. 2569 · ปรับใหญ่ 4 ต.ค. 2569 (แยกโมดูล, config กลาง, แผนที่จริง, logger) · 10 ต.ค. 2569 เชื่อมอาคารจริง GISTDA + Sphere API key · ต่อมา: ภารกิจองก์ 1 แบบ 3 สเต็ป, แนวตลิ่งบนภาพ Sphere จริง, ด่านปิดองก์ 1
+> ร่างครั้งแรก 3 ต.ค. 2569 · 4 ต.ค. แยกโมดูล/config/แผนที่จริง/logger · 10 ต.ค. อาคารจริง GISTDA + Sphere API · 16 ต.ค. ออกแบบใหม่ (Beginner/Expert, เวลา+งบ, 10 โซน, กู้ภัยองก์ 2, leaderboard) · **17 ต.ค. เวลาเดินเมื่อผู้เล่นสั่งการ + คัตซีน, หน้าเปิดเกม + หน้าวิธีเล่น (ทีมเข้ารอบชิงชนะเลิศแล้ว)**
 > แหล่งความจริงของตรรกะเกม = ใบสมัคร `gistda-request/revenge_ใบสมัคร_แก้ไข_ฉบับสะอาด.docx/.pdf`
 
 ## 1. โปรเจกต์คืออะไร
@@ -17,101 +17,76 @@
 
 ```bash
 npm install              # ครั้งแรก
-npm run dev              # http://localhost:5173  (?demo = ข้าม briefing/pre-test) · .claude/launch.json ชื่อ "maesai-command"
-npm run build            # dist/index.html ไฟล์เดียว (~2.6 MB) inline ทุกอย่าง เปิดจาก file:// ได้ (ภาพ Sphere ต้องออนไลน์)
-node record-demo.mjs     # อัดเดโม 3 องก์จาก dist/?demo → recordings/run-<timestamp>/ (ไม่ลบวิดีโอเดิม · exit 2 ถ้าหน้าเว็บมี error)
-node record-perfect-run.mjs  # Perfect Run เริ่มจาก Briefing + คำบรรยายไทยทุกขั้น → recordings/perfect-run-<timestamp>/demo_gameplay.mp4 (+.webm, คะแนนภารกิจ 100%)
-node scripts/fetch-osm.mjs   # ดึงถนน/แม่น้ำ OSM ใหม่ → src/data/osm_maesai.geojson
-node scripts/build-dem.mjs   # สร้างภาพ DEM (SRTM, AWS Terrain Tiles) ใหม่ → src/data/dem_aoi_*.jpg/.json
+npm run dev              # http://localhost:5173 · .claude/launch.json ชื่อ "maesai-command"
+npm run build            # dist/index.html ไฟล์เดียว (~2.7 MB) inline ทุกอย่าง เปิดจาก file:// ได้ (ภาพ Sphere ต้องออนไลน์)
+npx vitest run           # tests/ — scenario + engine (บอทเล่นเก่ง vs ไม่ทำอะไร)
+node record-demo.mjs     # smoke test 3 องก์จาก dist/?demo&rec → recordings/run-<ts>/ (exit 2 ถ้าหน้าเว็บมี error)
+node record-perfect-run.mjs  # คลิปเล่นสมบูรณ์จากหน้าเปิดเกม + คำบรรยายไทย → recordings/perfect-run-<ts>/demo_gameplay.mp4
+node scripts/fetch-osm.mjs · scripts/fetch-poi.mjs · scripts/build-dem.mjs   # ข้อมูลพื้นหลัง (ถนน/แม่น้ำ, POI, DEM)
 node scripts/extract-buildings.mjs <BD_footprintTH.shp> <BD_footprintTH.dbf> [--clip=boundary.geojson] [--rescan]
-                             # ตัดอาคาร GISTDA ทั้งประเทศ (24.5 ล้านหลัง, 3.5 GB) → src/data/buildings_maesai.json (15,851 หลัง)
+python scripts/build-final-mission-package.py   # สร้าง gistda-request/revenge_Final_Mission_Package.docx
 ```
 
-- **ห้ามดับเบิลคลิก `index.html` ที่ root** — เป็น entry ของ Vite (มีการ์ดแจ้งเตือน ซึ่ง `main.jsx` ลบทิ้งเมื่อ React mount)
-- คีย์ลัด: `1`/`2`/`3` สลับองก์ · `Space` เดิน/หยุดนาฬิกา · `Ctrl+Shift+L` แผงครู
-- **Sphere API key อยู่ใน `missionConfig.js` (SPHERE.apiKey)** ตามที่ผู้ใช้สั่ง — ตั้งทับได้ด้วย `.env.local` → `VITE_SPHERE_API_KEY` · ออฟไลน์/คีย์ใช้ไม่ได้ = fallback ข้อมูลในเครื่องทั้งหมด
-- ไฟล์อาคารดิบทั้งประเทศอยู่ที่ `C:\Users\Computer\Downloads\BD_footprintTH-001.shp` + โฟลเดอร์ `BD_footprintTH-20261009T194218Z-1-002` (dbf/shx/prj) — **ห้ามคัดลอกเข้า repo** (.gitignore กัน *.shp/*.dbf/*.shx ไว้แล้ว)
-- Viewport ที่ทดสอบ: 1280×720 และ 1920×1080 (ไม่ reflow ต่ำกว่า 1280 — จอ kiosk; แผงซ้าย/ขวาพับได้)
-- **เครื่องมือบนเครื่อง (winget 2026-10-03):** Node.js 24.19 LTS + npm 11 · Git 2.55 · VS Code 1.140 (+ Tailwind CSS IntelliSense) · Playwright Chromium + ffmpeg 9.0
+- **URL params:** `?demo` ข้ามหน้าเปิดเกม/pre-test (ไม่นับสถิติ) · `?seed=N` สถานการณ์ตายตัว · `?mode=expert` · `?speed=N` เร่งคัตซีน (ใช้ตอนอัดคลิป) · `?rec` เปิด `window.__maesai` ให้สคริปต์อัดคลิปอ่านเฉลย (ห้ามใช้ตอนเล่นจริง)
+- **ห้ามดับเบิลคลิก `index.html` ที่ root** — เป็น entry ของ Vite
+- คีย์ลัด: `Space` = เดินเวลาไปเหตุการณ์ถัดไป · `Ctrl+Shift+L` แผงครู
+- **Sphere API key อยู่ใน `missionConfig.js` (SPHERE.apiKey)** ตามที่ผู้ใช้สั่ง — ตั้งทับได้ด้วย `.env.local` → `VITE_SPHERE_API_KEY` · ออฟไลน์/คีย์ใช้ไม่ได้ = fallback ข้อมูลในเครื่อง
+- ไฟล์อาคารดิบทั้งประเทศอยู่ที่ `C:\Users\Computer\Downloads\BD_footprintTH-001.shp` + โฟลเดอร์ `BD_footprintTH-20261009T194218Z-1-002` — **ห้ามคัดลอกเข้า repo**
+- Viewport ที่ทดสอบ: 1920×1080 (หลัก) และ 1280×720 · แผงซ้าย/ขวาพับได้
+- **เครื่องมือบนเครื่อง:** Node.js 24 + npm 11 (ใช้ `npm.cmd` ใน PowerShell — execution policy บล็อก npm.ps1) · Git · Playwright Chromium + ffmpeg · Python + python-docx/PyMuPDF
 - **Git:** GitHub repo **private** `TEAMNAJAA/maesai-command` (branch `main`) · `.gitignore` ตัด `node_modules/`, `recordings/`, `*.local`, `.env` · repo มีใบสมัครที่มีเบอร์โทร/อีเมลสมาชิก **ห้ามเปลี่ยนเป็น public**
 
 ## 3. โครงสร้างไฟล์
 
 | Path | หน้าที่ |
 | --- | --- |
-| `src/config/missionConfig.js` | **ค่าตั้งทั้งหมด:** SFVI weights, THRESHOLDS (4.20/4.01), CLOUD_RULE, TRUST, RELIEF, THEOS2, GAME (ราคา AP ฯลฯ), HYDRO (กราฟน้ำจำลอง), EVENT (ยึดวัน ก.ย. 2567), **DATA (ที่อยู่ข้อมูล + ช่องเสียบข้อมูล GISTDA)**, EMBANKMENT (กรอบมุมมองแนวตลิ่ง, 14 จุดฟันหลอ, AP/เวลาอุด, วัด N), QUEST, SPHERE (URL/คีย์), OFFLINE_ROUTING, SCORE, EVAL |
-| `src/config/scenarioData.js` | SRC (ป้าย 4 สี), COMMUNITIES (lon/lat, floodStage, label), SHELTER, SECTORS (lon/lat จริงใน AOI-B), LAYERS, TACTICAL, QUICK_DEPLOY, SHORTAGE, ROOFS, LESSONS, QUIZ |
-| `src/lib/buildings.js` | อาคารจริง GISTDA: decode, โซนน้ำถึงต่อหลังคา, แบ่งหลังคาให้ 4 ชุมชน → `COMMUNITIES_LIVE` (households = หลังคาจริง, P จริง), `ROOFS_LIVE` (กรณีเยียวยาบนหลังคาจริง), `AOI_FLOOD_ROOFS` |
-| `src/lib/embankment.js` | แนวกั้นน้ำบนแม่น้ำสายจริง (OSM) ฝั่งไทย (ฝั่งที่มีหลังคา GISTDA): `EMBANKMENT_GAPS` (14 จุด + หลังคาเสี่ยงด้านหลัง), `EMBANKMENT_WALL`, `CHANNEL_RULER` (ไม้บรรทัดวัด N) |
-| `src/lib/sim.js` | ฟังก์ชันล้วน (ใช้ `COMMUNITIES_LIVE`/`ROOFS_LIVE`): `levelAt/rainAt/cloudAt`, `computeSfvi`, `ARRIVAL`, `exposedHH`, `holdComparison`, `reliefSummary`, `missionScore`, `evaluateRoof` |
-| `src/lib/geo.js` | Web Mercator `makeProjection`, AOI access (`aoiFeature`, `communityGeo`), OSM layers, `isFloodedStreet`, `routeOffline` (Dijkstra), `tilesFor`, `elevationAt` |
-| `src/lib/sphere.js` | `sphereRoute`, `sphereElevation`, `sphereTileTemplate` (timeout + fallback) |
-| `src/lib/evalLogger.js` | `logger` (localStorage `maesai-command.eval.v1`), `summary()`, `sessionsCSV()`, `roundsCSV()` |
-| `src/lib/format.js` | `clamp/fmt/baht/clockLabel/clockHeadline/clockToDate` |
-| `src/engine/useEngine.js` | state machine — ทุก action เขียนผ่าน `commit(fn)` (sRef อัปเดตทันที) |
-| `src/map/GeoMap.jsx` | แผนที่จริง: `catchment` (AOI-B + swaths) · `urban` (AOI-A + 4 ชุมชน + OSM + route) · `corridor` (แนวตลิ่งบนภาพ sphere z17 + หลังคา + แนวกั้นน้ำ + 14 หมุด + ไม้บรรทัด N) |
-| `src/map/MapCanvas.jsx` | สลับมุมมอง (catchment/urban/corridor · sar/urban), zoom/pan, 3D tilt, legend, callouts, แถบสั่งอุด + การ์ดหมุดฟันหลอ |
-| `src/map/terrain.jsx` | ฉากจำลอง (SarScene ในองก์ 2 · OpticalScene ใช้ใน AAR) |
-| `src/ui/atoms.jsx` | Panel, Src, SrcLegend, Btn, ArcGauge, Spark, Modal, Section, Tabs … |
-| `src/panels/assessment.jsx` | แผงซ้าย: SfviScorecard, RiverGauge, TrustGauge, SituationReport |
-| `src/panels/quest.jsx` | กล่องภารกิจองก์ 1 (`QuestBox`) + `questSteps`/`activeStep`/`act1Decided` (ฟังก์ชันล้วนจาก state) |
-| `src/panels/command.jsx` | แผงขวา: QuestBox (องก์ 1), แท็บ ① ภาพต้นน้ำ ② แนวตลิ่ง ③ ตัดสินใจ — LayersList, TaskingPanel, EmbankmentPanel, Resources, DecisionBlock, RoutingTool, PriorityPanel |
-| `src/panels/chrome.jsx` | TopBar, ActStepper, `computeHint` + HintBox, AlertLog, StatusBar, Toast |
-| `src/modals/modals.jsx` | Briefing, Quiz (pre/post), VetoAlert, CloudAlert, HoldCompareModal, Act1SummaryModal, TeacherPanel |
-| `src/aar/AarShell.jsx` | องก์ 3: ChangeSlider, RoofCompare, AdjudicationTable, timeline, tabs, CSV report |
-| `src/App.jsx` | root layout + ลำดับ briefing → pretest → play, การ์ดซ้าย/ขวาพับได้ |
-| `src/data/` | `buildings_maesai.json` (GISTDA BD_footprint, AOI-A ∩ อ.แม่สาย, รูปแบบย่อ ~620 KB), `osm_maesai.geojson` (© OSM), `dem_aoi_a/b.jpg + .json` (SRTM) |
-| `record-demo.mjs` · `record-perfect-run.mjs` · `scripts/demo-kit.mjs` | อัดวิดีโอด้วย Playwright (kit = เคอร์เซอร์, คลิกแบบเลื่อน, คำบรรยาย, cut sheet, webm→mp4 ด้วย ffmpeg) |
-| `gistda-request/` | เอกสารยื่น GISTDA — `MaeSai_AOI_ALL.geojson` ถูก import เข้าแอปจริง (ดูหัวข้อ 7) |
+| `src/config/missionConfig.js` | **ค่าตั้งทั้งหมด:** SFVI, THRESHOLDS, CLOUD_RULE, TRUST, RELIEF, THEOS2 (3 รอบองก์ 1 ที่ T−42/−26/−11), **TIME + CMD_MIN** (เวลาสั่งการ/คัตซีน), MISSION (60 วัน), MODES (beginner/expert), COSTS (บาท), DURATIONS, BOAT, FUEL_FACTOR 1.4, ACT2, RESCUE (≤ 9 จุดผู้ติดค้าง), HYDRO, EVENT, DATA, EMBANKMENT, SPHERE, SCORE, EVAL |
+| `src/config/scenarioData.js` | SRC 4 สี, COMMUNITIES, HOSPITAL, SHELTER_POOL (7), CAMP_SITES (3), EQUIPMENT, SECTORS, LAYERS, QUIZ … |
+| `src/lib/scenario.js` | `makeScenario(seed, mode)` — สุ่มต่อเกม: ฉากดินถล่ม 6 sector, ความกว้างลำน้ำ 20–34 ม., รอบโคจร+เมฆพยากรณ์, รอบถ่ายองก์ 2, เมฆลอย, พายุ, ไฟรั่ว, จุดอับ, จุดอพยพ 3 แห่ง, ถนนขาด, หลังคาเยียวยา 8 หลัง |
+| `src/lib/sections.js` | 10 โซนจากหลังคาจริง (k-means) · `sectionDepth` · `GAPS_BY_SECTION` |
+| `src/lib/sim.js` | ฟังก์ชันล้วน: `computeSfvi`, `depthAt`, `arrivalAt`, `zoneOutcome`, `exposureSummary`, `makePoints`, `reliefSummary`, `missionScore` |
+| `src/lib/hydro.js` · `clouds.js` · `routes.js` · `rng.js` · `leaderboard.js` | กราฟน้ำ · เมฆลอย (Boolean model 35–65%) · วางแผนเรือ 3 เส้นทาง + อันตราย · seeded RNG · ตารางอันดับ (localStorage) |
+| `src/lib/buildings.js` · `embankment.js` · `geo.js` · `sphere.js` · `evalLogger.js` | อาคาร GISTDA · แนวตลิ่ง 14 จุด · projection/router ออฟไลน์ · Sphere API · logger CSV |
+| `src/engine/world.js` | state เริ่มต้น, `advanceTo` (เหตุการณ์ตามเวลา + `event()` ที่ทำให้ปุ่ม "เดินเวลา" หยุด), `enterAct2/3`, งานภาคสนาม (jobs), เรือวิ่งรับ-ส่งเอง (shuttle) |
+| `src/engine/actions.js` | ทุกคำสั่งเป็น pure transition และ `spend(CMD_MIN.x)` เดินเวลาตามเวลาสั่งการ |
+| `src/engine/useEngine.js` | `commit()` · **`advance({mode: next / span / until / end})` เดินเวลาแบบแอนิเมชัน + `cut` (คัตซีน)** · `realMs()` เวลาเล่นจริง · hook `?rec` |
+| `src/panels/timebar.jsx` | แถบเวลาใต้แผนที่: เหตุการณ์ถัดไป · +1 ชม. · เดินเวลา/ให้ THEOS-2 ถ่าย · ข้ามไปจบองก์ (`actSettled`) |
+| `src/map/Cutscene.jsx` | คัตซีน THEOS-2 (โคจร→ถ่าย→ดาวน์ลิงก์→L3 Ortho) และแบนเนอร์เดินเวลา · บล็อกการคลิกระหว่างเล่น |
+| `src/modals/intro.jsx` | **หน้าเปิดเกม (TitleScreen) + หน้าวิธีเล่น (HowToPlay)** — ใช้ตอบกรรมการ: เกมคืออะไร, หน้าจอ/เวลา, 3 องก์, Logic Matrix, ข้อมูล GISTDA, คะแนน/วัดผล |
+| `src/panels/datahub.jsx` · `actions.jsx` · `quest.jsx` · `chrome.jsx` | แผงซ้าย (SFVI/ดาวเทียม/โซน/ทรัพยากร) · แผงขวา (แท็บคำสั่ง) · กล่องภารกิจ + TutorBar · TopBar (เวลาเล่นจริง)/AlertLog/StatusBar/Toast |
+| `src/modals/analysis.jsx` · `planner.jsx` · `modals.jsx` · `guide.jsx` | แปลภาพ (คลิกหมุด = ดินถล่ม) + วัดลำน้ำ · วางแผนเรือ · quiz/veto/สรุปองก์/แผงครู · Leaderboard |
+| `src/map/GeoMap.jsx` · `MapCanvas.jsx` | แผนที่ catchment/urban/corridor · สลับมุมมอง |
+| `src/aar/AarShell.jsx` | องก์ 3: ภาพหลังคา Sphere ก่อน/หลัง (โคลนบนพื้น หลังคาสะอาด), ไทม์ซีรีส์เรดาร์, สำรวจภาคพื้น, คะแนน, รายงาน CSV |
+| `scripts/demo-flow.mjs` · `demo-kit.mjs` | ผู้เล่นอัตโนมัติ (คลิก UI จริง ใช้เฉลยจาก `?rec`) · เคอร์เซอร์/คำบรรยาย/ffmpeg |
+| `tests/` | vitest: scenario + engine |
 
-**Stack:** React 18 · Vite 5 (+ vite-plugin-singlefile) · Tailwind 3 · lucide-react · recharts · ไม่มี backend
+**Stack:** React 18 · Vite 5 (+ vite-plugin-singlefile) · Tailwind 3 · lucide-react · recharts · vitest · ไม่มี backend
 
-## 4. ตรรกะหลัก (`src/lib/sim.js` + `useEngine`)
+## 4. ตรรกะหลัก
 
-### โลกจำลอง
-- ระดับน้ำ/ฝน/เมฆเป็นฟังก์ชันของ `clock` เท่านั้น (`HYDRO`): ผ่านเกณฑ์เตรียมพร้อม 4.01 ม. ~T−8.7 ชม., วิกฤต 4.20 ม. ~T−5.9 ชม., ยอด 5.40 ม. ที่ T+2 ชม., เมฆ > 60% ~T−7.3 ชม., 100% ตั้งแต่ T−1 ชม.
-- ทุก action ที่กินเวลา (สั่งถ่าย +95, deploy +30, อพยพ +45, hold +180 นาที) เดินนาฬิกา → น้ำขึ้นจริง · องก์ 1 หมดเวลา → เข้าองก์ 2 อัตโนมัติ
-- **โซนน้ำถึง** (`FLOOD_REACH`): หลังคาห่างแม่น้ำสาย ≤ 150 ม. หรือ (≤ 800 ม. และ DEM ≤ 400 ม.) · มี `DATA.radarFlood` เมื่อไรใช้ polygon เรดาร์แทน · หลังคาเป็นของชุมชนที่ใกล้สุดภายใน 300 ม. · ทั้ง AOI มีหลังคาในโซนน้ำถึง 3,071 หลัง
-- **ครัวเรือน = หลังคาจริง** ของแต่ละชุมชน (ใช้คิดเวลาอพยพและหลังคาเสี่ยง) — ลำดับ SFVI รายชุมชนจึงเปลี่ยนเป็น เหมืองแดง > ไม้ลุงขน > เกาะทราย > สายลมจอย (tie-break แทบไม่ถูกใช้แล้ว)
-- **น้ำถึงชุมชน** = เวลาที่ระดับสถานีถึง `floodStage` (slj 4.10 / ksa 4.20 / mlk 4.45 / mdg 4.70) · **เวลาอพยพ** = households ÷ (exits × 3 ครัวเรือน/นาที) + 30 นาที · ครัวเรือนเสี่ยง = households × P × (1 − สัดส่วนที่อพยพทัน)
+### เวลา (สำคัญ — ตามที่ผู้ใช้กำหนด 17 ต.ค.)
+- **ไม่มีนาฬิกาเดินเอง ไม่มีการนั่งรอ** — เวลาในเกมเดินเมื่อ (1) สั่งการ: ผลเกิดทันทีและกินเวลาสั่งการ `CMD_MIN` (ฐาน 60 · แปลภาพ 20 · วัด N 15/ครั้ง · อพยพ 30 · คำสั่งองก์ 2 ครั้งละ 5–10 นาที) หรือ (2) กดแถบเวลา: `+1 ชม.` · `เดินเวลา → เหตุการณ์ถัดไป` (Space) · `ให้ THEOS-2 ถ่ายรอบ Pn` (ไปจนได้ภาพ) · `ข้ามไปจบองก์` (เมื่อไม่มีงานค้างที่มองเห็น)
+- เหตุการณ์ที่หยุดการเดินเวลา (`event()` ใน world.js): ภาพพร้อม · ดาวเทียมกำลังผ่านแต่ยังไม่เลือกเป้า · น้ำถึงเกณฑ์เตรียมพร้อม/วิกฤต · พายุ · ไฟรั่ว · ผลรอบ THEOS-2 · สายด่วน · โดรนพบ · ทีมงานเสร็จ (เสา/ตัดไฟ/สูบ) · เสบียงไม่ถึง/ช่วยไม่ทัน
+- ระหว่างกระโดดเวลาแสดงคัตซีน 1–3 วินาที (THEOS-2 3.4 วินาที) ทั้งจอคลิกไม่ได้
+- **เป้าหมายความยาว:** ผู้เล่นเก่งจบ 3 องก์ราว 7 นาที (ป้าย ⚡) · ครั้งแรก 12–15 นาที · `realMs()` วัดเวลาจริง ใช้ใน Leaderboard (คะแนนเท่ากันเรียงตามเวลา) และสรุปองก์
 
-### องก์ 1 = ภารกิจ 3 สเต็ป (`panels/quest.jsx`)
-1. **สแกนป่าต้นน้ำ (L)** — สำเร็จเมื่อใช้แถบถ่ายภาพครบ 3 แถบ หรือเมฆปิดหน้าต่างภาพแล้ว (ต้องมีภาพใช้ได้ ≥ 1 แถบ ไม่งั้นขึ้น "พลาด")
-2. **แนวตลิ่งแม่น้ำสาย (N)** — มุมมอง "แนวตลิ่งเมือง" = ภาพ sphere จริง (ซูม 16 · tiles z17) + หลังคา GISTDA + แนวกั้นน้ำ + 14 จุดฟันหลอ · สำเร็จเมื่อวัด N แล้ว และอุดครบ `QUEST.sealTarget` (14) จุด · อุดทีละจุดจากการ์ดหมุด หรืออุดที่เหลือทั้งหมด (150 AP + 5 นาที/จุด)
-3. **ตัดสินใจ** — สำเร็จเมื่อมีคำสั่งใดก็ได้ในองก์ 1 (อพยพ / เตรียมพร้อม / ยังไม่สั่งการ)
-- สเต็ปที่เสร็จติ๊กเขียว (checkpop) · สเต็ปถัดไปกระพริบ + แท็บ/ปุ่มมุมมองที่ต้องใช้กระพริบ (beacon ตามปุ่มหลอดไฟ hint) · Veto 1 ชี้ไปสเต็ป 3 ทันที
-- **ด่านปิดองก์ 1:** ปุ่ม "สรุปผล → องก์ 2", แถบองก์ และคีย์ 2/3 ใช้ไม่ได้จนกว่าจะตัดสินใจ · ประกาศอพยพ/เตรียมพร้อมทุกครั้งเปิด `Act1SummaryModal` (ไปองก์ 2 หรือกลับไปสั่งการต่อ) · เวลาถึง T−0 → `act1Timeout` หยุดที่หน้าสรุปแบบบังคับ (ไม่มีปุ่มย้อน) แทนการกระโดดเข้าองก์ 2 เอง
-- HintBox บนแผนที่ในองก์ 1 เหลือเฉพาะ Veto 1 / Cloud Rule (คำแนะนำทีละขั้นย้ายไปอยู่ในกล่องภารกิจ)
+### องก์ 1 (T−48 → T0) — กล่องภารกิจ 6 สเต็ป
+ตั้งฐาน → เลือกเป้าหมาย THEOS-2 (2 เป้า/รอบ ตามเมฆพยากรณ์ > 60% ใช้ไม่ได้) → ถ่าย (คัตซีน) → แปลภาพ (คลิกหมุดรอยดินถล่มใหม่ ระวังนา/เงาเมฆ/รอยเก่า → L) → วัดลำน้ำ (พิกเซล × 0.5 ม. → N) → ส่งทีมบิ๊กแบ็ก (ทีมทำงานระหว่างเวลาเดิน) → สั่งอพยพรายโซน (งบต่อโซน; หลักฐานไม่พอ = เตือนผิด) · Veto 1 ที่ 4.20 ม.
 
-### SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P
-| | โค้ด | ป้าย |
-| --- | --- | --- |
-| W | `level / 4.20` | วัดจริง |
-| R | `rain / 250` | วัดจริง |
-| L | `scarsSeen / 17` (เฉพาะ swath ที่ถ่ายได้ไม่ติดเมฆ) | ภาพ THEOS-2 |
-| N | `1 − channelWidth / 150` (วัดได้ 2 ทาง: Sector D=28 ม. / E=34 ม. หรือไม้บรรทัดที่แนวตลิ่งเมือง = `HYDRO.trueChannelWidth` 28 ม., +15 นาที) | ภาพ THEOS-2 |
-| P | **หลังคาจริงในโซนน้ำถึง ÷ หลังคาทั้งหมดของชุมชน** (GISTDA) — slj 120/228=0.53 · ksa 339/396=0.86 · mlk 295/303=0.97 · mdg 340/340=1.00 | ภาพ + สถานการณ์ (โซนน้ำถึงเป็นแบบจำลองจนกว่าจะมีเรดาร์) |
+### องก์ 2 (T0 → T+36)
+เมฆลอย 35–65% · THEOS-2 3 รอบเห็นคนเฉพาะโซนเมฆเปิด (ไม่เห็นในจุดอับ → โดรน) · สายด่วนแจ้งหลังน้ำถึง 1–7 ชม. (โซนสัญญาณล่มแจ้งไม่ได้) · ผู้ติดค้าง ≤ 9 จุด (อยู่ไม่ได้ → เรืออพยพ, บาดเจ็บ → รพ.; อยู่ได้ → ถุงยังชีพ) · วางแผนเรือเลือกเส้นทางเอง (ริมน้ำ/ลึก ≥ 1.6 ม./ไฟรั่ว = ผิด) · เรือวิ่งรับ-ส่งเองจนจุดหมด · น้ำมัน 140% · เครื่องสูบ −0.5 ม. · ปุ่มข้ามไปน้ำลดขึ้นหลัง T+12 เมื่อจุดที่มองเห็นได้รับการช่วยครบ (จุดที่ยังไม่พบจะสูญเสีย)
 
-- **Veto 1:** ≥ 4.20 ม. → Modal แดงบังคับอพยพ · ปุ่ม HOLD ถูกปิด
-- **Cloud Rule:** เมฆ > 60% หรือภาพเก่า > 48 ชม. → น้ำหนัก L × 0.4 + ความเชื่อมั่นต่ำ · สั่งถ่ายตอนเมฆ > 60% ได้ภาพที่มองไม่เห็นพื้น (เสีย AP/swath) · องก์ 2 เมฆ 100% → ล็อกชั้น optical + Modal ให้สลับ SAR/Sphere Routing
-- **ลำน้ำแคบ < ครึ่ง** → ลดเกณฑ์เตรียมพร้อม 0.20 ม. (4.01 → 3.81)
-- **การอพยพ (องก์ 1):** เลือกชุมชนได้ · AP = 1,500 × (0.4 + 0.6·n/4) · ถือว่ามีหลักฐานถ้า ระดับ ≥ เกณฑ์เตรียมพร้อม หรือทุกชุมชนที่เลือกมี SFVI ≥ 0.62 · ไม่งั้นเตือนผิด −5/−15/−40 · องก์ 2 สั่งครั้งแรก = เตือนช้า −30
-- **HOLD:** +3 ชม. แล้วเปิด Dual Comparison (ครัวเรือนเสี่ยงถ้าสั่งตอนนี้ vs หลังรอ, ความลึกน้ำ/โคลนรายชุมชน)
-- **Routing:** sphere Routing API (`mode=t`) ก่อน — ถ้าเส้นทางผ่านถนนท่วมในสถานการณ์ > 5% จะหาจุดแวะที่แห้งด้วย router ออฟไลน์แล้วเรียก sphere 2 ช่วง · ออฟไลน์/ล้มเหลว → Dijkstra บนถนน OSM ปิดถนน ≤ 200 ม. จากแม่น้ำสาย (ยกเว้น 300 ม. รอบต้นทาง) · หัก 500 AP เมื่อสำเร็จเท่านั้น
-- **แผนที่ฐาน:** มุมมองเขตเมืองใช้ภาพ `thailand_images` ของ sphere (zoom +1, สูงสุด 19) ทับ DEM · มุมมองลุ่มน้ำเมียนมาใช้ DEM (ภาพ sphere นอกไทยหยาบ) · องก์ 3 ภาพหลังคาใช้ z18 (z19 ที่แม่สายเป็นภาพขยาย)
-- **Tie-break:** คะแนนเท่ากัน → ทางออกน้อยกว่าได้ก่อน (สายลมจอย = เกาะทราย จูนให้เสมอโดยตั้งใจ)
-- **คะแนนภารกิจ (AAR):** 0.35 อพยพทัน + 0.25 เยียวยาถูก + 0.15 triage + 0.15 trust + 0.10 ใช้หลักฐาน (`SCORE`)
-- **เยียวยา:** 10 กรณีใน `ROOFS` (วันท่วมขัง/โคลน/ความมั่นใจ/ผลภาคสนาม = สถานการณ์) ถูกผูกกับหลังคาจริงขนาดบ้าน (50–400 ตร.ม.) ในโซนน้ำถึงของชุมชนเดียวกัน → รหัส `BD-<FID>` · สไลเดอร์ก่อน = ภาพ sphere ปัจจุบัน + รูปหลังคาจริง, หลัง = ทับน้ำขัง/โคลนจำลอง · ปุ่มอนุมัติอยู่ทั้งข้างสไลเดอร์และในตาราง · ประมาณการงบ = ค่าเฉลี่ยต่อหลัง × 3,071 หลังคาในโซนน้ำถึงของ AOI-A
+### องก์ 3 (วันที่ 2 → 60)
+หลังคาจริง 8 หลัง · ภาพ Sphere ก่อน/หลัง (ฝั่งหลังจำลองโคลนรอบบ้านตาม mudLevel) · ไทม์ซีรีส์เรดาร์ 14 วัน · ท่วม ≥ 7 วัน = ฿9,000 · + โคลน = +฿10,000 · หลักฐานขาด → สำรวจภาคพื้น (+2 วัน ฿1,500)
+
+### SFVI และคะแนน
+SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ) · คะแนน: THEOS-2 .20 · อพยพ .20 · ผู้ติดค้าง .20 · เยียวยา .20 · โลจิสติกส์ .10 · ความเชื่อมั่น .10
 
 ### ป้ายที่มาข้อมูล 4 สี (ห้ามละเมิด)
 ทุกตัวเลข/ชั้นข้อมูลต้องมี `<Src t=.../>`: `measured` วัดจริง (เขียว `#22E36B`) · `image` ภาพ THEOS-2 (ฟ้า `#38BDF8`) · `radar` เรดาร์ (ส้ม `#FF8A3D`) · `scenario` ค่าสถานการณ์ (เทา `#94A3B8`)
 
 ### Sandbox logger
-- 1 session ต่อ 1 รอบเล่น (บันทึกเมื่อมีข้อมูลจริงเท่านั้น) · `?demo` ติดธง demo และไม่นับในสถิติ
-- rounds CSV มีคอลัมน์ `channel_measured`, `gaps_sealed` ต่อการตัดสินใจ · กล่องภารกิจแสดงเสมอ (เป็นส่วนของเกม) แต่ไฟกระพริบชี้เป้าปิดตามปุ่มหลอดไฟ
-- บันทึก: เวลาอ่าน briefing, pre/post, เวลาแต่ละองก์, ชั้นข้อมูลที่ผู้เล่นเปิดเอง, ทุกการตัดสินใจ (SFVI, ชุมชนที่สั่ง vs ที่ SFVI แนะนำ, วินาทีที่ใช้คิด), triage, relief, ผลสุดท้าย
-- เกณฑ์: เปิด ≥ 3 ชั้นก่อนตัดสินใจครั้งแรก ≥ 70% ของผู้เล่น · post เพิ่ม ≥ 30% · briefing < 10 นาที
-- ⚠️ คำแนะนำ (hint) ชี้นำพฤติกรรม — ตอนวัดผลจริงควรปิด (`EVAL.hintsEnabled` หรือปุ่มหลอดไฟ) ระบบบันทึกว่าเปิด/ปิดไว้ทุก session
+1 session ต่อ 1 รอบเล่น · `?demo` ไม่นับสถิติ · บันทึก pre/post, เวลาแต่ละองก์, ชั้นข้อมูล, ทุกการตัดสินใจ, triage, relief · เกณฑ์: เปิด ≥ 3 ชั้นก่อนตัดสินใจครั้งแรก ≥ 70% · post เพิ่ม ≥ 30%
 
 ## 5. ข้อเท็จจริงอ้างอิง
 
@@ -140,14 +115,11 @@ node scripts/extract-buildings.mjs <BD_footprintTH.shp> <BD_footprintTH.dbf> [--
 
 ## 8. Backlog / ข้อจำกัดที่รู้
 
-- ภาพ THEOS-2/เรดาร์จริงยังไม่มี (รอ GISTDA) — มุมมอง corridor/SAR และสไลเดอร์ยังเป็นภาพจำลอง (ติดป้ายสถานการณ์)
-- Sphere ทดสอบกับคีย์จริงแล้ว (10 ต.ค. 69): Routing ✓ (CORS *) · Tiles z14–19 ✓ · Elevation คืน `null` บางจุด → ยังใช้ SRTM · ภาพ sphere เป็นภาพปัจจุบัน ไม่ใช่ภาพก่อนเหตุการณ์ 2567
-- ป้ายของชั้นอาคารใช้ "ภาพ THEOS-2" (สีฟ้า) — ทีมควรยืนยันกับ GISTDA ว่าชั้น BD_footprint สกัดจากดาวเทียมดวงใด
-- 3D Tilt = เอียงภาพ hillshade จาก SRTM แบบ perspective (ไม่ใช่ mesh 3D)
-- ROOFS 10 หลัง, จำนวนครัวเรือน, floodStage, ภาพหลังคาเป็นค่าสถานการณ์ — รอข้อมูล ปภ./GISTDA
-- Stress test 5 กรณียังเป็นข้อความในแท็บบทเรียน · ปุ่มคำขอทรัพยากรองก์ 2 แค่ log
-- จุดฟันหลอ 14 จุด (ตำแหน่ง/ความยาว) เป็นค่าสถานการณ์บนแม่น้ำจริง · การอุดยังไม่ลดผลน้ำท่วมใน `sim.js` (แค่บันทึก/สรุป) · RESOLUTION PROOF ย้ายไปดูในองก์ 3 เท่านั้น
-- ยังไม่มี unit test — `sim.js` เป็นฟังก์ชันล้วน พร้อมเขียนเทสต์
+- ภาพ THEOS-2/เรดาร์จริงยังไม่มี (รอ GISTDA) — ฉากแปลภาพ, ฝั่ง "หลัง" ของหลังคา, เมฆ, จุดผู้ติดค้าง เป็นค่าสถานการณ์
+- Sphere: Routing ✓ · Tiles ✓ · Elevation คืน `null` บางจุด → ใช้ SRTM · ภาพ Sphere เป็นภาพปัจจุบัน
+- `gistda-request/revenge_Final_Mission_Package.docx` เขียนก่อนเปลี่ยนระบบเวลา — ถ้าจะส่งใหม่ต้องปรับข้อความเรื่องเวลา/โหมด
+- ค่าสถานการณ์ (floodStage โซน, ครัวเรือน, ผู้ติดค้าง, หลังคาเยียวยา) รอข้อมูล ปภ./GISTDA
+- รอบชิงชนะเลิศ (กติกา GISTDA): วิดีโอ ≤ 5 นาที Full HD · ส่ง Mission Package ล่วงหน้า ≥ 10 วัน · นำเสนอ + ตอบคำถาม ≤ 15 นาที
 
 ## 9. แนวทางเขียนโค้ด
 

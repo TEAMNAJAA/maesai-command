@@ -1,19 +1,20 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   GAME ENGINE HOOK — the mission clock runs in real time
-   องก์ 1 (48 ชม.) ≈ 7.5 นาที · องก์ 2 (36 ชม.) ≈ 6 นาที · องก์ 3 นับวันจากการกระทำ
+   GAME ENGINE HOOK — the mission clock moves only when the commander acts
+   ไม่มีการนั่งรอ: คำสั่งมีผลทันทีและกินเวลาสั่งการ · ปุ่ม "เดินเวลา" กระโดดไปเหตุการณ์
+   ถัดไปพร้อมคัตซีนสั้น ๆ (ดาวเทียมสแกน · เรือแล่น · น้ำขึ้น) · วัดเวลาเล่นจริงแยกต่างหาก
    Every action is a pure transition (engine/actions.js); time is engine/world.js.
    All writes go through commit(fn) so no callback ever acts on a stale snapshot.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { PACE, MODES, MISSION, THRESHOLDS } from '../config/missionConfig'
+import { TIME, MODES, MISSION, THRESHOLDS, ACT2 } from '../config/missionConfig'
 import { LAYERS, SHELTER_POOL } from '../config/scenarioData'
 import { makeScenario } from '../lib/scenario'
-import { computeSfvi, exposureSummary, reliefSummary, peakDepth, arrivalAt, evacNeedMin, HARM_M } from '../lib/sim'
+import { computeSfvi, exposureSummary, reliefSummary, peakDepth, arrivalAt, evacNeedMin, depthAt, HARM_M } from '../lib/sim'
 import { planTrip } from '../lib/routes'
 import { routeOffline, metres, isFloodedStreet } from '../lib/geo'
 import { sphereRoute, sphereReady } from '../lib/sphere'
-import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
+import { SECTIONS, SECTION_BY_ID, sectionAt } from '../lib/sections'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
 import { newSeed } from '../lib/rng'
 import { logger } from '../lib/evalLogger'
@@ -21,13 +22,15 @@ import { makeInitial, advanceTo, enterAct2, enterAct3, log, campOf, destOf } fro
 import * as A from './actions'
 
 const URLQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
-const SPEED = Math.max(1, Number(URLQ.get('speed')) || 1)          // test/recording accelerator only
+const SPEED = Math.max(0.2, Number(URLQ.get('speed')) || 1)        // cut-scene speed (recordings use > 1)
 const FIXED_SEED = Number(URLQ.get('seed')) || null
 const REC = URLQ.has('rec')                                         // recorder hook (record-*.mjs) — never on in normal play
 
 export function useEngine() {
   const [s, setS] = useState(() => makeInitial(URLQ.get('mode') === 'expert' ? 'expert' : 'beginner', FIXED_SEED || newSeed()))
-  const [running, setRunningRaw] = useState(false)
+  const [cut, setCut] = useState(null)              // active cut scene (time jump)
+  const busy = useRef(false)
+  const real = useRef({ start: null, actStart: null, acts: {} })
   const [flash, setFlash] = useState(null)
   const sRef = useRef(s)
   const scn = useMemo(() => makeScenario(s.seed, s.modeId), [s.seed, s.modeId])
@@ -58,26 +61,64 @@ export function useEngine() {
   }, [flash])
   const toast = useCallback((kind, text) => commit((p) => ({ ...p, toasts: [...(p.toasts || []), { kind, text, id: Date.now() + Math.random() }] })), [commit])
 
-  /* ── Clock ──────────────────────────────────────────────────────────────── */
+  /* ── Clock: animated jumps ─────────────────────────────────────────────── */
   const atEnd = (p) => (p.act === 1 && p.clock >= 0) || (p.act === 2 && p.clock >= MISSION.act2EndMin) || p.act === 3
-  const setRunning = useCallback((v) => {
-    const next = typeof v === 'function' ? v(running) : v
-    if (!next && !MODES[sRef.current.modeId].pause && !atEnd(sRef.current)) return   // expert: no pausing the flood
-    setRunningRaw(next)
-  }, [running])
-  const forceStop = useCallback(() => setRunningRaw(false), [])
+  /**
+   * Move the mission clock forward with a short cut scene.
+   *   mode 'next' — stop at the next event the commander must react to (or the act's jump cap)
+   *   mode 'span' — exactly `min` minutes
+   *   mode 'until'— to minute `to` (e.g. a THEOS-2 pass + processing), stopping early only for Veto 1
+   *   mode 'end'  — straight to the end of the act
+   */
+  const advance = useCallback(({ mode: how = 'next', min = TIME.stepMin, to = null } = {}) => {
+    const p0 = sRef.current, sc = scnRef.current
+    if (busy.current || atEnd(p0)) return
+    const end = p0.act === 1 ? 0 : MISSION.act2EndMin
+    const target = how === 'end' ? end : how === 'until' ? Math.min(end, to) : Math.min(end, p0.clock + (how === 'span' ? min : TIME.maxJumpMin[p0.act]))
+    if (target <= p0.clock) return
+    let stopAt = target
+    if (how === 'next' || how === 'until') {
+      let probe = p0
+      for (let t2 = p0.clock + 10; ; t2 += 10) {
+        const tt = Math.min(t2, target)
+        const prev = probe.eventSeq
+        probe = advanceTo(probe, sc, tt)
+        const hit = probe.eventSeq !== prev && (how === 'next' || probe.lastEvent?.kind === 'crit')
+        if (hit || tt >= target) { stopAt = tt; break }
+      }
+    }
+    // a THEOS-2 acquisition inside the jump gets the scanning cut scene
+    const pass = p0.act === 1
+      ? sc.passes.find((q) => q.t > p0.clock && q.t <= stopAt && (p0.taskings[q.id] || []).length)
+      : sc.act2Passes.find((q) => q.t > p0.clock && q.t <= stopAt && p0.act2Orders[q.id])
+    const hours = (stopAt - p0.clock) / 60
+    const ms = (pass ? TIME.cutMs.theos : Math.max(TIME.cutMs.min, Math.min(TIME.cutMs.max, TIME.cutMs.min + hours * TIME.cutMs.perHour))) / SPEED
+    const from = p0.clock
+    busy.current = true
+    setCut({ kind: pass ? 'theos' : 'advance', pass: pass ? { id: pass.id, targets: p0.act === 1 ? p0.taskings[pass.id] : ['TOWN'], t: pass.t } : null, from, to: stopAt, p: 0, act: p0.act })
+    const t0 = performance.now()
+    let last = 0
+    const tick = () => {
+      const now = performance.now()
+      const k = Math.min(1, (now - t0) / ms)
+      if (k < 1 && now - last < 70) { requestAnimationFrame(tick); return }   // ~14 map updates/s — the town map is heavy
+      last = now
+      const ease = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2
+      const clock = Math.round(from + (stopAt - from) * ease)
+      commit((q, sc2) => (clock > q.clock ? advanceTo(q, sc2, clock) : q))
+      setCut((c) => c && { ...c, p: k })
+      if (k < 1) { requestAnimationFrame(tick); return }
+      commit((q, sc2) => (stopAt > q.clock ? advanceTo(q, sc2, stopAt) : q))
+      const ev = sRef.current.eventSeq !== p0.eventSeq ? sRef.current.lastEvent : null
+      setCut((c) => c && { ...c, p: 1, done: true, event: ev })
+      setTimeout(() => { busy.current = false; setCut(null) }, (pass ? 1500 : ev ? 1100 : 350) / SPEED)
+    }
+    requestAnimationFrame(tick)
+  }, [commit])
 
-  useEffect(() => {
-    if (!running || s.act === 3) return
-    const id = setInterval(() => {
-      const p = sRef.current
-      if (atEnd(p)) { setRunningRaw(false); return }
-      const pace = p.act === 1 ? PACE.act1MinPerSec : PACE.act2MinPerSec
-      commit((q, sc) => advanceTo(q, sc, q.clock + (pace * SPEED * PACE.tickMs) / 1000))
-      if (atEnd(sRef.current)) setRunningRaw(false)
-    }, PACE.tickMs)
-    return () => clearInterval(id)
-  }, [running, s.act, commit])
+  /* real playing time (for the leaderboard and the learning log) */
+  const realMs = useCallback(() => (real.current.start ? (real.current.end || Date.now()) - real.current.start : 0), [])
+  const markAct = (n) => { const r = real.current; if (r.actStart) r.acts[n] = Date.now() - r.actStart; r.actStart = Date.now() }
 
   /* ── Derived ────────────────────────────────────────────────────────────── */
   const sfvi = useMemo(() => computeSfvi(s, scn), [s, scn])
@@ -93,7 +134,6 @@ export function useEngine() {
   useEffect(() => {
     if (veto1 && s.act === 1 && !vetoAnnounced.current) {
       vetoAnnounced.current = true
-      if (MODES[s.modeId].pause) setRunningRaw(false)
       commit((p) => { const n = { ...p, logs: [...p.logs] }; log(n, 'crit', 'VETO RULE 1', `Ban Tham Pha Chom ${world.level.toFixed(2)} m ≥ ${THRESHOLDS.criticalLevel.toFixed(2)} m.`, 'ระดับน้ำถึงเกณฑ์วิกฤต — สั่งอพยพโซนเสี่ยงทันทีโดยไม่รอภาพยืนยัน'); return n })
     }
   }, [veto1, s.act, s.modeId, world.level, commit])
@@ -168,26 +208,26 @@ export function useEngine() {
 
   /* ── Flow ───────────────────────────────────────────────────────────────── */
   const goAct2 = useCallback(() => {
+    markAct(1)
     commit((p, sc) => enterAct2(p, sc))
-    setRunningRaw(true)
   }, [commit])
   const goAct3 = useCallback(() => {
     const p = sRef.current
     const pts = p.points
     logger.triage({ hits: pts.reduce((a, x) => a + x.rescued, 0), lost: pts.reduce((a, x) => a + x.lost, 0), routeErrors: p.routeErrors })
+    markAct(2)
     commit((q) => enterAct3(q))
-    setRunningRaw(false)
   }, [commit])
-  const start = useCallback(() => setRunningRaw(true), [])
-  const ackVeto = useCallback(() => {          // Beginner pauses on the alert — reading it resumes the clock
-    commit((p) => ({ ...p, vetoAck: true }))
-    if (!atEnd(sRef.current)) setRunningRaw(true)
+  const start = useCallback(() => { if (!real.current.start) { real.current.start = Date.now(); real.current.actStart = Date.now() } }, [])
+  const ackVeto = useCallback(() => commit((p) => ({ ...p, vetoAck: true })), [commit])
+  const finishMission = useCallback(() => {
+    if (!real.current.acts[3]) { markAct(3); real.current.end = Date.now() }
+    commit((p) => ({ ...p, act3Done: true }))
   }, [commit])
-  const finishMission = useCallback(() => commit((p) => ({ ...p, act3Done: true })), [commit])
 
   const newGame = useCallback((modeId = sRef.current.modeId, seed = FIXED_SEED || newSeed()) => {
     vetoAnnounced.current = false
-    setRunningRaw(false)
+    real.current = { start: null, actStart: null, acts: {} }
     commit((p) => ({ ...makeInitial(modeId, seed), resetSeq: (p.resetSeq || 0) + 1 }))
   }, [commit])
   const setMode = useCallback((modeId) => {
@@ -202,18 +242,28 @@ export function useEngine() {
       get s() { return sRef.current },
       get scn() { return scnRef.current },
       planFor,
-      run: (v) => setRunningRaw(v),
+      advance,
+      get busy() { return busy.current },
       gapCount: EMBANKMENT_GAPS.length,
+      /** zones too deep along the least-bad route (what a pump would open) */
+      deepAlong: (pointId, mission, destId) => {
+        const plan = planFor(pointId, mission, destId)
+        if (!plan?.options.length) return []
+        const o = plan.options.reduce((m, x) => (x.hazards.length < m.hazards.length || (x.hazards.length === m.hazards.length && x.distanceM < m.distanceM) ? x : m))
+        const p = sRef.current, out = new Set()
+        for (const c of o.coords) { const sec = sectionAt(c); if (sec && depthAt(p, sec, p.clock) >= ACT2.deepWaterM) out.add(sec.id) }
+        return [...out]
+      },
       wetZones: () => SECTIONS.filter((z) => peakDepth(sRef.current, z) >= HARM_M).map((z) => z.id),
       orderAt: () => {
         const wet = SECTIONS.filter((z) => peakDepth(sRef.current, z) >= HARM_M)
         return wet.length ? Math.min(...wet.map((z) => arrivalAt(sRef.current, z) - evacNeedMin(z))) - 60 : 0
       },
     }
-  }, [planFor])
+  }, [planFor, advance])
 
   return {
-    s, scn, mode, sfvi, world, veto1, situation, exposure, running, setRunning, forceStop, start, flash, toast,
+    s, scn, mode, sfvi, world, veto1, situation, exposure, cut, advance, realMs, realActs: real.current.acts, start, flash, toast,
     act1Over, act2Over,
     setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, orderZones, toggleLayer, routeZone,
     orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat,

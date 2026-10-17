@@ -3,10 +3,12 @@
    Multi-Sensor Geospatial Serious Game & Integrated Disaster Decision Support
    ระบบภารกิจจำลองสถานการณ์และสนับสนุนการตัดสินใจบริหารจัดการอุทกภัยแม่สาย
 
-   Flow:  briefing (mode) → pre-test → act 1 (clock runs, ends at T−0) → summary
-          → act 2 (ends at T+36) → summary → act 3 relief → score · leaderboard → post-test
+   Flow:  title (name · mode · how to play) → pre-test → act 1 → summary → act 2 → summary
+          → act 3 relief → score · leaderboard → post-test
+   Time:  the mission clock moves only when the commander acts (orders take command
+          time; the time bar jumps to the next event with a cut scene) — no waiting.
      left   · DataHub     (SFVI · satellite schedule · zone table · resources)
-     centre · MapCanvas   (catchment · town zones · embankment)
+     centre · MapCanvas   (catchment · town zones · embankment) + TimeBar
      right  · ActionRail  (mission quest + orders)       bottom · TutorBar (Beginner)
    All tunables live in src/config/missionConfig.js
    ══════════════════════════════════════════════════════════════════════════ */
@@ -20,10 +22,13 @@ import { ActionRail } from './panels/actions'
 import { TutorBar, questFor } from './panels/quest'
 import { MapCanvas } from './map/MapCanvas'
 import { AarShell } from './aar/AarShell'
-import { BriefingModal, QuizModal, VetoAlert, WaitCompareModal, Act1SummaryModal, Act2SummaryModal, TeacherPanel } from './modals/modals'
+import { QuizModal, VetoAlert, WaitCompareModal, Act1SummaryModal, Act2SummaryModal, TeacherPanel } from './modals/modals'
 import { ImageAnalysisModal, ChannelModal } from './modals/analysis'
 import { BoatPlannerModal } from './modals/planner'
-import { GuideModal, LeaderboardModal } from './modals/guide'
+import { LeaderboardModal } from './modals/guide'
+import { TitleScreen, HowToPlay } from './modals/intro'
+import { TimeBar } from './panels/timebar'
+import { Cutscene } from './map/Cutscene'
 import { ModeContext } from './ui/label'
 import { logger } from './lib/evalLogger'
 import { leaderboard } from './lib/leaderboard'
@@ -43,8 +48,7 @@ function CollapsedRail({ label, side, onOpen }) {
 export default function App() {
   const eng = useEngine()
   const { s } = eng
-  const [phase, setPhase] = useState(DEMO ? 'play' : 'briefing')     // briefing → pretest → play
-  const [briefingOpen, setBriefingOpen] = useState(false)
+  const [phase, setPhase] = useState(DEMO ? 'play' : 'title')        // title → pretest → play
   const [postOpen, setPostOpen] = useState(false)
   const [postDone, setPostDone] = useState(false)
   const [preScore, setPreScore] = useState(null)
@@ -65,7 +69,6 @@ export default function App() {
   const [plan, setPlan] = useState(null)
   const [wait, setWait] = useState(null)
   const [saved, setSaved] = useState(null)
-  const startedAt = useRef(Date.now())
 
   /* one evaluation session per run */
   const sessionFor = useRef(-1)
@@ -77,9 +80,8 @@ export default function App() {
     logger.start({ hintsEnabled: eng.mode.tutor, demo: DEMO })
     if (DEMO) logger.briefingDone()
     logger.enterAct(1)
-    startedAt.current = Date.now()
     if (s.resetSeq > 0) {
-      setPhase(DEMO ? 'play' : 'briefing'); setPreScore(null); setPostDone(false); setPostOpen(false)
+      setPhase(DEMO ? 'play' : 'title'); setPreScore(null); setPostDone(false); setPostOpen(false)
       setWait(null); setPlan(null); setAnalyze(null); setChannel(false); setSaved(null); setAarTab('relief')
     }
   }, [s.resetSeq]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -94,16 +96,20 @@ export default function App() {
     if (s.act === 3) setAarTab('relief')
   }, [s.act])
 
-  /* keyboard: Space clock (Beginner) · Ctrl+Shift+L teacher log */
+  /* keyboard: Space = advance to the next event · Ctrl+Shift+L teacher log */
+  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen)
   useEffect(() => {
     const h = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
       if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l')) { e.preventDefault(); setTeacher((t) => !t); return }
-      if (phase === 'play' && e.code === 'Space' && s.act !== 3) { e.preventDefault(); eng.setRunning((r) => !r) }
+      if (phase === 'play' && e.code === 'Space' && s.act !== 3) {
+        e.preventDefault()
+        if (!modalOpen && !eng.act1Over && !eng.act2Over && !(eng.veto1 && s.act === 1 && !s.vetoAck)) eng.advance({ mode: 'next' })
+      }
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [eng, phase, s.act])
+  }, [eng, phase, s.act, s.vetoAck, modalOpen])
 
   const go = useCallback((g) => {
     if (!g) return
@@ -114,14 +120,15 @@ export default function App() {
     if (g.analyze) setAnalyze(g.analyze)
     if (g.channel) setChannel(true)
     if (g.plan) setPlan(g.plan)
-  }, [])
+    if (g.advance) eng.advance({ mode: g.advance === 'end' ? 'end' : 'next' })
+  }, [eng])
 
   const finishPost = (score) => {
     setPostOpen(false); setPostDone(true)
     logger.finish({ trust: Math.round(eng.s.trust), score: saved?.score ?? null, exposed: eng.exposure.exposed, post: score })
   }
   const saveScore = (score) => {
-    const entry = { name: player || 'ไม่ระบุชื่อ', mode: s.modeId, score: score.total * 100, sec: (Date.now() - startedAt.current) / 1000, seed: s.seed, parts: score.parts }
+    const entry = { name: player || 'ไม่ระบุชื่อ', mode: s.modeId, score: score.total * 100, sec: eng.realMs() / 1000, seed: s.seed, parts: score.parts }
     const rank = leaderboard.add(entry)
     const top = leaderboard.top(s.modeId, 999)
     setSaved({ rank, at: top[rank - 1]?.at, score: Math.round(score.total * 100) })
@@ -158,6 +165,7 @@ export default function App() {
                 <MapCanvas key={`${s.act}-${s.resetSeq}`} eng={eng} view={view} setView={setView} onPoint={setPlan} onChannel={() => setChannel(true)}
                   beaconView={beaconView} beaconMap={beaconMap} />
               </div>
+              <TimeBar eng={eng} />
               <AlertLog eng={eng} />
             </div>
             {rightOpen ? (
@@ -171,9 +179,10 @@ export default function App() {
         <StatusBar eng={eng} />
         <Toast flash={eng.flash} />
 
-        <BriefingModal open={phase === 'briefing' || briefingOpen} firstRun={phase === 'briefing'} player={player} setPlayer={setPlayer}
-          modeId={s.modeId} setMode={eng.setMode} onGuide={() => setGuide(true)} seed={s.seed}
-          onEnter={() => { logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') }} onClose={() => setBriefingOpen(false)} />
+        <Cutscene eng={eng} />
+        <TitleScreen open={phase === 'title' && !guide} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode}
+          onHowTo={() => setGuide(true)} onBoard={() => setBoard(true)}
+          onStart={() => { logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') }} />
         <QuizModal open={phase === 'pretest'} kind="pre" onDone={(score) => { setPreScore(score); setPhase('play'); eng.start() }} onSkip={() => { setPhase('play'); eng.start() }} />
         <QuizModal open={postOpen} kind="post" preScore={preScore} onDone={finishPost} onSkip={() => setPostOpen(false)} />
         <VetoAlert open={playing && eng.veto1 && s.act === 1 && !s.vetoAck && !eng.act1Over} eng={eng} onAck={eng.ackVeto} onDecide={() => go({ tab: 'zones', view: 'urban', left: 'zones' })} />
@@ -183,7 +192,7 @@ export default function App() {
         {analyze && <ImageAnalysisModal eng={eng} imageId={analyze} onClose={() => setAnalyze(null)} />}
         {channel && <ChannelModal eng={eng} onClose={() => setChannel(false)} />}
         {plan && <BoatPlannerModal eng={eng} pointId={plan} onClose={() => setPlan(null)} />}
-        <GuideModal open={guide} onClose={() => setGuide(false)} />
+        <HowToPlay open={guide} onClose={() => setGuide(false)} onStart={phase === 'title' ? () => { setGuide(false); logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') } : null} />
         <LeaderboardModal open={board} onClose={() => setBoard(false)} highlight={saved} version={saved?.at} />
         <TeacherPanel open={teacher} onClose={() => setTeacher(false)} version={logVersion} />
       </div>

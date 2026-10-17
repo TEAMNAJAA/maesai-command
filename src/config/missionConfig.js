@@ -70,7 +70,8 @@ export const RELIEF = {
 /* ── 6 · THEOS-2 ─────────────────────────────────────────────────────────── */
 export const THEOS2 = {
   swathKm: 10.3, panM: 0.5, msM: 2, revisitDays: 1.9, product: 'Level 3 Ortho (AWAGAD)',
-  act1Passes: 4,              // รอบโคจรผ่านช่วง T−48 → T0 (เวลาแต่ละรอบสุ่มต่อเกม)
+  act1Passes: 3,              // รอบโคจรผ่านช่วง T−48 → T0 (เวลาแต่ละรอบสุ่มต่อเกม)
+  act1PassHours: [-42, -26, -11],
   targetsPerPass: 2,          // สั่งถ่ายได้รอบละไม่เกิน 2 เป้าหมาย (ความคล่องตัวของดาวเทียม)
   processingMin: 120,         // จากเวลาถ่าย → ได้ภาพ L3 Ortho ผ่าน AWAGAD
   act2Passes: 3,              // รอบผ่าน AOI-A ช่วงวิกฤต (ถ่ายเห็นเฉพาะโซนที่เมฆไม่บัง)
@@ -78,11 +79,21 @@ export const THEOS2 = {
 }
 
 /* ── 7 · กติกาเกม — เวลา + งบประมาณ (ไม่มีแต้ม AP) ───────────────────────────── */
-// นาฬิกาเดินตามเวลาจริง: องก์ 1 (48 ชม.) ≈ 7.5 นาที · องก์ 2 (36 ชม.) ≈ 6 นาที · องก์ 3 นับเป็นวัน
-export const PACE = {
-  act1MinPerSec: 6.4,        // นาทีในเกมต่อวินาทีจริง
-  act2MinPerSec: 6,
-  tickMs: 250,
+// เวลาในเกมเดิน "เมื่อผู้เล่นสั่งการ" เท่านั้น — ไม่มีการนั่งรอ:
+//   • ทุกคำสั่งกินเวลาสั่งการ (CMD_MIN) แล้วผลเกิดทันที
+//   • ปุ่ม "เดินเวลา" กระโดดไปเหตุการณ์ถัดไป พร้อมคัตซีน (ดาวเทียมสแกน · เรือแล่น · น้ำขึ้น) 1–3 วินาที
+//   • ผู้เล่นเก่งจบทั้ง 3 องก์ได้ราว 7 นาที ผู้เริ่มต้นราว 12–15 นาที (วัดเวลาจริงเก็บใน Leaderboard/Log)
+export const TIME = {
+  maxJumpMin: { 1: 16 * 60, 2: 6 * 60 },   // "ไปเหตุการณ์ถัดไป" กระโดดได้ไกลสุดต่อครั้ง
+  stepMin: 60,                              // ปุ่ม "+1 ชม."
+  prePassWarnMin: 30,                       // หยุดก่อนดาวเทียมผ่าน ถ้ายังไม่ได้เลือกเป้าหมาย
+  cutMs: { min: 900, max: 2600, perHour: 260, theos: 3400 },   // ความยาวคัตซีน (มิลลิวินาทีจริง)
+  expertTargetSec: 7 * 60,                  // เป้าหมายเวลาเล่นของผู้เล่นเก่ง (ป้าย ⚡)
+}
+// เวลาสั่งการต่อคำสั่ง (นาทีในเกม) — ผลของคำสั่งเกิดทันที แต่เวลาเดินไปตามนี้
+export const CMD_MIN = {
+  camp: 60, analysis: 20, channel: 15, evacuate: 30, seal: 10, layer: 0,
+  pass2: 5, drone: 10, pump: 10, power: 10, tower: 10, boat: 10,
 }
 export const MISSION = {
   deadlineDays: 60,          // ทั้งภารกิจ (เตือนภัย → เยียวยา) ต้องจบใน 2 เดือนในเกม
@@ -92,11 +103,11 @@ export const MISSION = {
 export const MODES = {
   beginner: {
     th: 'ผู้เริ่มต้น', en: 'Beginner', budget: 11_000_000, crews: 3, boats: 6, drones: 3, pumps: 4,
-    pause: true, tutor: true, labels: 'dual', routeHints: true, reliefHints: true,
+    tutor: true, labels: 'dual', routeHints: true, reliefHints: true,
   },
   expert: {
     th: 'ผู้เชี่ยวชาญ', en: 'Expert', budget: 8_500_000, crews: 2, boats: 4, drones: 2, pumps: 3,
-    pause: false, tutor: false, labels: 'tech', routeHints: false, reliefHints: false,
+    tutor: false, labels: 'tech', routeHints: false, reliefHints: false,
   },
 }
 // งบปฏิบัติการ (บาท) — งบเยียวยาตามมติ ครม. แยกบัญชีอยู่ในองก์ 3
@@ -144,7 +155,8 @@ export const RESCUE = {
   refusePerFalseAlarm: 0.04,
   selfEvacuate: 0.35,                   // โซนที่ไม่ได้สั่งอพยพ ประชาชนหนีเองได้ราวนี้
   peoplePerHH: 3.2,
-  maxPointsPerSection: 5,
+  maxPointsPerSection: 2,
+  maxPoints: 9,                         // ทั้งเมือง — พอให้ผู้เล่นเก่งจบองก์ 2 ได้ในราว 2–3 นาที
   maxPeoplePerPoint: 30,
   criticalDepthM: 1.5,                  // ลึกกว่านี้ = อยู่ไม่ได้ ต้องใช้เรืออพยพ
   injuredShare: 0.3,
