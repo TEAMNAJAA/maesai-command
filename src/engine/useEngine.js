@@ -30,6 +30,7 @@ export function useEngine() {
   const [s, setS] = useState(() => makeInitial(URLQ.get('mode') === 'expert' ? 'expert' : 'beginner', FIXED_SEED || newSeed()))
   const [cut, setCut] = useState(null)              // active cut scene (time jump)
   const busy = useRef(false)
+  const skip = useRef(false)
   const real = useRef({ start: null, actStart: null, acts: {} })
   const [flash, setFlash] = useState(null)
   const sRef = useRef(s)
@@ -94,27 +95,46 @@ export function useEngine() {
     const hours = (stopAt - p0.clock) / 60
     const ms = (pass ? TIME.cutMs.theos : Math.max(TIME.cutMs.min, Math.min(TIME.cutMs.max, TIME.cutMs.min + hours * TIME.cutMs.perHour))) / SPEED
     const from = p0.clock
+    // THEOS-2 sequence: the pass happens during the camera shot (k ≈ 0.3), processing fills the rest
+    const passAt = pass ? Math.min(stopAt, Math.max(from, pass.t)) : null
+    const clockAt = (k) => {
+      if (!pass) { const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; return from + (stopAt - from) * e }
+      if (k < 0.3) { const u = k / 0.3; return from + (passAt - from) * (1 - (1 - u) ** 2) }
+      return passAt + (stopAt - passAt) * ((k - 0.3) / 0.7)
+    }
+    skip.current = false
     busy.current = true
     setCut({ kind: pass ? 'theos' : 'advance', pass: pass ? { id: pass.id, targets: p0.act === 1 ? p0.taskings[pass.id] : ['TOWN'], t: pass.t } : null, from, to: stopAt, p: 0, act: p0.act })
-    const t0 = performance.now()
+    let t0 = performance.now()
     let last = 0
     const tick = () => {
       const now = performance.now()
+      if (skip.current) { t0 = now - ms; skip.current = false }
       const k = Math.min(1, (now - t0) / ms)
       if (k < 1 && now - last < 70) { requestAnimationFrame(tick); return }   // ~14 map updates/s — the town map is heavy
       last = now
-      const ease = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2
-      const clock = Math.round(from + (stopAt - from) * ease)
+      const clock = Math.round(clockAt(k))
       commit((q, sc2) => (clock > q.clock ? advanceTo(q, sc2, clock) : q))
       setCut((c) => c && { ...c, p: k })
       if (k < 1) { requestAnimationFrame(tick); return }
       commit((q, sc2) => (stopAt > q.clock ? advanceTo(q, sc2, stopAt) : q))
       const ev = sRef.current.eventSeq !== p0.eventSeq ? sRef.current.lastEvent : null
       setCut((c) => c && { ...c, p: 1, done: true, event: ev })
-      setTimeout(() => { busy.current = false; setCut(null) }, (pass ? 1500 : ev ? 1100 : 350) / SPEED)
+      closeTimer.current = setTimeout(() => { busy.current = false; setCut(null) }, (pass ? 2200 : ev ? 1300 : 350) / SPEED)
     }
     requestAnimationFrame(tick)
   }, [commit])
+
+  /** Click during a cut scene: jump to its end · click on the result: close it. */
+  const closeTimer = useRef(null)
+  const skipCut = useCallback(() => {
+    setCut((c) => {
+      if (!c) return c
+      if (c.done) { clearTimeout(closeTimer.current); busy.current = false; return null }
+      skip.current = true
+      return c
+    })
+  }, [])
 
   /* real playing time (for the leaderboard and the learning log) */
   const realMs = useCallback(() => (real.current.start ? (real.current.end || Date.now()) - real.current.start : 0), [])
@@ -263,7 +283,7 @@ export function useEngine() {
   }, [planFor, advance])
 
   return {
-    s, scn, mode, sfvi, world, veto1, situation, exposure, cut, advance, realMs, realActs: real.current.acts, start, flash, toast,
+    s, scn, mode, sfvi, world, veto1, situation, exposure, cut, advance, skipCut, realMs, realActs: real.current.acts, start, flash, toast,
     act1Over, act2Over,
     setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, orderZones, toggleLayer, routeZone,
     orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat,

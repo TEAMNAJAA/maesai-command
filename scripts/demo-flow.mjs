@@ -100,7 +100,7 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       await say('ค่า N', 'วัดความกว้างลำน้ำจากภาพ Pan 0.5 ม.: ลากเส้นวัดไปที่ขอบน้ำ → พิกเซล × 0.5 = เมตร → N = 1 − เมตร ÷ 150')
       await openTab('bank')
       await click(page, page.locator('[data-panel="bank"] button', { hasText: 'เปิดเครื่องมือวัด' }), { hold: ms(500), after: ms(1000) })
-      const river = await page.locator('[data-modal="channel"] svg rect[fill="#3a3a3a"]').boundingBox()
+      const river = await page.locator('[data-modal="channel"] svg [data-river]').boundingBox()
       for (const [k, x] of [['a', river.x], ['b', river.x + river.width]]) {
         const g = await page.locator(`[data-gauge="${k}"] circle`).boundingBox()
         await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2, { steps: 18 }); await wait(ms(300))

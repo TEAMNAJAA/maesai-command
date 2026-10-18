@@ -12,7 +12,8 @@ import { useMode } from '../ui/label'
 import { BOAT, ACT2, COSTS } from '../config/missionConfig'
 import { HOSPITAL, SHELTER_POOL } from '../config/scenarioData'
 import { SECTIONS } from '../lib/sections'
-import { makeProjection, linePath, saiRiver } from '../lib/geo'
+import { makeProjection, linePath, saiRiver, tilesFor } from '../lib/geo'
+import { sphereReady, sphereTileTemplate } from '../lib/sphere'
 import { depthAt } from '../lib/sim'
 import { HAZARD_TH } from '../lib/routes'
 import { campOf } from '../engine/world'
@@ -38,6 +39,12 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
     const pad = 0.004
     return makeProjection([Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) + pad, Math.max(...ys) + pad], 520, 360, 10)
   }, [p, camp, plan, mission, destPt])
+  // imagery for the whole frame (the fitted view is wider than the data bounds)
+  const tiles = useMemo(() => {
+    if (!view || !sphereReady()) return []
+    const [w, s0, e, n] = view.bbox, dx = (e - w) * 0.45, dy = (n - s0) * 0.3
+    return tilesFor({ ...view, bbox: [w - dx, s0 - dy, e + dx, n + dy] }, sphereTileTemplate(), 48, 0, 17)
+  }, [view])
   if (!p) return null
   const choice = pick !== null && plan?.options[pick] ? pick : null
   const opt = choice !== null ? plan.options[choice] : null
@@ -124,6 +131,9 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
             <svg viewBox="0 0 520 360" className="w-full rounded-lg border border-white/15 bg-[#07101d]" data-planner-map>
               {view && (
                 <>
+                  {/* GISTDA Sphere imagery under a dark veil so routes and hazards read on top */}
+                  {tiles.map((tl) => <image key={tl.key} href={tl.href} x={tl.x} y={tl.y} width={tl.w + 0.5} height={tl.h + 0.5} preserveAspectRatio="none" />)}
+                  {tiles.length > 0 && <rect width="520" height="360" fill="#04101e" opacity="0.5" />}
                   {SECTIONS.map((z) => {
                     const d = depthAt(s, z, s.clock)
                     const power = s.hazardsLive.includes(z.id) && !s.powerCut[z.id]

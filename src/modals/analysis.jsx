@@ -12,7 +12,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ScanSearch, Check, X, ChevronRight, Ruler, Lightbulb, Satellite } from 'lucide-react'
 import { Modal, Btn, Src } from '../ui/atoms'
 import { useMode } from '../ui/label'
-import { THEOS2, THRESHOLDS } from '../config/missionConfig'
+import { THEOS2, THRESHOLDS, DATA } from '../config/missionConfig'
 import { SECTORS } from '../config/scenarioData'
 import { mulberry32 } from '../lib/rng'
 import { TOWN_TARGET } from '../lib/scenario'
@@ -20,84 +20,176 @@ import { clamp, clockLabel } from '../lib/format'
 
 const VW = 760, VH = 440
 
-/* ── Synthetic sector scene ──────────────────────────────────────────────── */
+/* ── Sector scene: real SRTM relief of the sector + season + features ───── */
+
+const DEM_B = DATA.dem.catchment
+const CROP_DEG = 0.075                                        // ≈ 7.8 km across
 
 function useScene(sectorId, seed) {
   return useMemo(() => {
     const r = mulberry32((seed * 31 + sectorId.charCodeAt(0) * 977) >>> 0)
-    const canopy = Array.from({ length: 1700 }, () => ({ x: r() * VW, y: r() * VH, r: 2 + r() * 4.5, t: r() }))
-    const ridges = Array.from({ length: 7 }, (_, i) => {
-      const y0 = 40 + i * 60 + r() * 20
-      let d = `M -20 ${y0}`
-      for (let x = 0; x <= VW + 40; x += 60) d += ` Q ${x + 30} ${y0 + (r() - 0.5) * 70} ${x + 60} ${y0 + (r() - 0.5) * 40}`
-      return d
-    })
+    const sec = SECTORS.find((x) => x.id === sectorId) || SECTORS[0]
+    const [w, s, e, n] = DEM_B.bbox
+    const cx = ((sec.lon - w) / (e - w)) * DEM_B.image.width, cy = ((n - sec.lat) / (n - s)) * DEM_B.image.height
+    const cw = (CROP_DEG / (e - w)) * DEM_B.image.width
+    const k = VW / cw
+    const img = { x: -(cx - cw / 2) * k, y: -(cy - (cw * VH / VW) / 2) * k, w: DEM_B.image.width * k, h: DEM_B.image.height * k }
+    // river along the valley floor, road along the slope, a few hamlets by the road
     const riverY = VH * (0.62 + (r() - 0.5) * 0.2)
     let river = `M -20 ${riverY}`
     for (let x = 0; x <= VW + 40; x += 80) river += ` Q ${x + 40} ${riverY + (r() - 0.5) * 90} ${x + 80} ${riverY + (r() - 0.5) * 50}`
     const roadY = VH * 0.3 + r() * 40
     const road = `M -10 ${roadY} C ${VW * 0.3} ${roadY + 60}, ${VW * 0.6} ${roadY - 50}, ${VW + 10} ${roadY + 20}`
-    return { canopy, ridges, river, road }
+    const huts = Array.from({ length: 3 }, () => {
+      const hx = 60 + r() * (VW - 120)
+      const hy = roadY + (hx / VW - 0.5) * 30 + (r() - 0.5) * 24
+      return Array.from({ length: 4 + Math.floor(r() * 5) }, () => ({ x: hx + (r() - 0.5) * 34, y: hy + (r() - 0.5) * 18, w: 3 + r() * 3, h: 2.5 + r() * 2.5, a: r() * 40 - 20, roof: r() > 0.5 ? '#b8b2a4' : '#9a5b45' }))
+    }).flat()
+    return { img, river, road, huts }
   }, [sectorId, seed])
 }
 
-function Candidate({ c, after }) {
-  const x = c.x * VW, y = c.y * VH, L = c.len * VW
-  if (c.kind === 'scar') {
-    if (!after) return null
-    return (
-      <g transform={`rotate(${c.rot + 90} ${x} ${y})`}>
-        <path d={`M ${x - 5} ${y - L / 2} Q ${x + 7} ${y} ${x - 2} ${y + L / 2} L ${x + 9} ${y + L / 2 + 6} Q ${x + 14} ${y} ${x + 6} ${y - L / 2} Z`} fill="#a4572f" />
-        <path d={`M ${x - 3} ${y - L / 2} L ${x + 5} ${y - L / 2 - 3}`} stroke="#d99a68" strokeWidth="3" strokeLinecap="round" />
-        <ellipse cx={x + 3} cy={y + L / 2 + 5} rx="12" ry="6" fill="#b9733f" opacity="0.85" />
-      </g>
-    )
+/** Landslide outline: narrow head scarp at the top, widening runout fan at the toe, ragged edges. */
+function scarShape(c, x, y, L) {
+  const r = mulberry32([...c.id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) >>> 0)
+  const N = 14, left = [], right = []
+  const bend = (r() - 0.5) * 0.35, lob = 2 + r() * 2
+  for (let i = 0; i <= N; i++) {
+    const u = i / N
+    const toe = Math.exp(-((u - 0.86) ** 2) / 0.012) * 0.22
+    const wid = L * (0.08 + 0.13 * u + 0.12 * Math.sin(u * Math.PI * lob) ** 2 * u + toe) * (0.8 + r() * 0.35)
+    const yy = y - L / 2 + u * L
+    const sway = (Math.sin(u * 3.1) * bend + (r() - 0.5) * 0.03) * L
+    left.push([x + sway - wid / 2 * (0.85 + r() * 0.3), yy]); right.push([x + sway + wid / 2 * (0.85 + r() * 0.3), yy])
   }
-  if (c.kind === 'old') {
+  const pts = [...left, ...right.reverse()]
+  return `M${pts.map((p) => p.map((v) => v.toFixed(1)).join(' ')).join(' L')} Z`
+}
+
+function Candidate({ c, after, uid }) {
+  const x = c.x * VW, y = c.y * VH, L = c.len * VW * 1.15
+  if (c.kind === 'scar' || c.kind === 'old') {
+    if (c.kind === 'scar' && !after) return null
+    const d = scarShape(c, x, y, L)
+    const fresh = c.kind === 'scar'
     return (
-      <g transform={`rotate(${c.rot + 90} ${x} ${y})`} opacity="0.75">
-        <path d={`M ${x - 4} ${y - L / 2} Q ${x + 6} ${y} ${x - 1} ${y + L / 2} L ${x + 8} ${y + L / 2 + 4} Q ${x + 12} ${y} ${x + 5} ${y - L / 2} Z`} fill="#6f6a3a" />
+      <g transform={`rotate(${c.rot} ${x} ${y})`} filter={`url(#${uid}-rough)`}>
+        {fresh && <path d={d} transform="translate(2.5 1.5)" fill="#1d150c" opacity="0.45" />}
+        <path d={d} fill={fresh ? `url(#${uid}-soil)` : `url(#${uid}-old)`} opacity={fresh ? 1 : 0.72} />
+        {fresh && <path d={`M${x - L * 0.06} ${y - L / 2 + 1} q ${L * 0.06} -4 ${L * 0.13} 0`} stroke="#f1c58f" strokeWidth="2.2" fill="none" strokeLinecap="round" />}
+        {fresh && [0.55, 0.68, 0.8, 0.9].map((u, i) => <circle key={i} cx={x + (i % 2 ? 1 : -1) * L * 0.08} cy={y - L / 2 + u * L} r="1.6" fill="#3a2a1a" opacity="0.7" />)}
       </g>
     )
   }
   if (c.kind === 'field') {
-    const w = L * 0.9, h = L * 0.6
+    const w = L * 0.95, h = L * 0.62
+    const tones = after ? ['#7ea343', '#93b552', '#6c9638'] : ['#bfa66e', '#ad955f', '#cdb782']
     return (
       <g transform={`rotate(${c.rot} ${x} ${y})`}>
-        <rect x={x - w / 2} y={y - h / 2} width={w} height={h} fill="#c4a96b" stroke="#8a7748" strokeWidth="1" />
-        {Array.from({ length: 6 }, (_, i) => <line key={i} x1={x - w / 2} y1={y - h / 2 + ((i + 0.5) * h) / 6} x2={x + w / 2} y2={y - h / 2 + ((i + 0.5) * h) / 6} stroke="#a58c55" strokeWidth="1" />)}
+        {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([dx, dy], i) => {
+          const x0 = x + (dx < 0 ? -w / 2 : 1), y0 = y + (dy < 0 ? -h / 2 : 1)
+          return (
+            <g key={i}>
+              <rect x={x0} y={y0} width={w / 2 - 1} height={h / 2 - 1} fill={tones[i % 3]} />
+              {Array.from({ length: 5 }, (_, j) => <line key={j} x1={x0} x2={x0 + w / 2 - 1} y1={y0 + (j + 0.5) * (h / 10)} y2={y0 + (j + 0.5) * (h / 10)} stroke={after ? '#5d8530' : '#9a8350'} strokeWidth="0.7" opacity="0.8" />)}
+            </g>
+          )
+        })}
+        <rect x={x - w / 2} y={y - h / 2} width={w} height={h} fill="none" stroke={after ? '#c9d9a0' : '#e1d3a6'} strokeWidth="0.9" opacity="0.8" />
       </g>
     )
   }
-  if (!after) return null   // cloud shadow — only in this pass
+  if (!after) return null   // cloud + its shadow — only in this pass
   return (
     <g>
-      <ellipse cx={x + 26} cy={y - 30} rx={L * 0.55} ry={L * 0.32} fill="#f1f5f9" opacity="0.9" filter="url(#cl-blur)" />
-      <ellipse cx={x} cy={y} rx={L * 0.5} ry={L * 0.3} fill="#2a3540" opacity="0.72" filter="url(#cl-blur)" />
+      <ellipse cx={x} cy={y} rx={L * 0.5} ry={L * 0.32} fill="#16222a" opacity="0.62" filter={`url(#${uid}-soft)`} />
+      <g filter={`url(#${uid}-cloud)`}>
+        {[[0, 0, 0.42, 0.26], [0.22, -0.08, 0.3, 0.2], [-0.2, 0.04, 0.28, 0.18], [0.05, 0.12, 0.3, 0.16]].map(([dx, dy, rx, ry], i) => (
+          <ellipse key={i} cx={x + 30 + dx * L} cy={y - 34 + dy * L} rx={rx * L} ry={ry * L} fill="#fff" />
+        ))}
+      </g>
     </g>
   )
+}
+
+// Mar 2024 dry season (tan, low saturation) vs Sep 2024 monsoon (deep green, wet, hazy)
+const SEASON = {
+  after: '0.78 0.12 0 0 -0.03  0.05 1.00 0.04 0 0.0  0.02 0.12 0.70 0 -0.02  0 0 0 1 0',
+  before: '0.88 0.12 0 0 0.01  0.08 0.88 0.04 0 0.01  0.04 0.10 0.68 0 0  0 0 0 1 0',
+}
+// light speckle layers over the relief: canopy = dark crowns, clump = sunlit stands
+const CANOPY = {
+  after: '0 0 0 0 0.04  0 0 0 0 0.13  0 0 0 0 0.05  3 0 0 0 -1.25',
+  before: '0 0 0 0 0.16  0 0 0 0 0.16  0 0 0 0 0.08  3 0 0 0 -1.25',
+}
+const CLUMP = {
+  after: '0 0 0 0 0.42  0 0 0 0 0.62  0 0 0 0 0.28  3 0 0 0 -1.6',
+  before: '0 0 0 0 0.66  0 0 0 0 0.60  0 0 0 0 0.38  3 0 0 0 -1.6',
 }
 
 /** Rendered once per image; the before/after slider only moves a clip on the wrapper (no re-render while dragging). */
 const SectorImage = React.memo(function SectorImage({ sceneId, seed, cands, after }) {
   const sc = useScene(sceneId, seed)
+  const uid = `sx${after ? 'a' : 'b'}`
+  const key = after ? 'after' : 'before'
+  const of = (kind) => cands.filter((c) => c.kind === kind).map((c) => <Candidate key={c.id} c={c} after={after} uid={uid} />)
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
       <defs>
-        <filter id="cl-blur"><feGaussianBlur stdDeviation="5" /></filter>
-        <filter id="sat-grain" x="0" y="0" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="n" />
-          <feColorMatrix in="n" type="saturate" values="0" />
+        <filter id={`${uid}-season`} x="0" y="0" width="100%" height="100%">
+          <feColorMatrix type="matrix" values={SEASON[key]} />
+          <feComponentTransfer><feFuncR type="linear" slope="1.2" intercept="-0.06" /><feFuncG type="linear" slope="1.2" intercept="-0.06" /><feFuncB type="linear" slope="1.2" intercept="-0.06" /></feComponentTransfer>
         </filter>
-        <linearGradient id="valley" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#264d2a" /><stop offset="1" stopColor="#1c3b22" /></linearGradient>
+        <filter id={`${uid}-canopy`} x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="3" seed="3" />
+          <feColorMatrix values={CANOPY[key]} />
+        </filter>
+        <filter id={`${uid}-clump`} x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="4" seed="8" />
+          <feColorMatrix values={CLUMP[key]} />
+        </filter>
+        <filter id={`${uid}-rough`} x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.22" numOctaves="2" seed="5" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <filter id={`${uid}-soft`} x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6" /></filter>
+        <filter id={`${uid}-cloud`} x="-60%" y="-60%" width="220%" height="220%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="4" seed="2" result="n" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b" />
+          <feComposite in="n" in2="b" operator="in" result="m" />
+          <feColorMatrix in="m" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 2.4 -0.35" />
+        </filter>
+        <filter id={`${uid}-grain`} x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="2" seed="4" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <linearGradient id={`${uid}-soil`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#dca877" /><stop offset="0.3" stopColor="#a65e36" /><stop offset="0.75" stopColor="#8f5232" /><stop offset="1" stopColor="#bd9466" />
+        </linearGradient>
+        <linearGradient id={`${uid}-old`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8a8550" /><stop offset="1" stopColor="#66703c" /></linearGradient>
+        <radialGradient id={`${uid}-vig`} cx="0.5" cy="0.5" r="0.75"><stop offset="0.6" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#000" stopOpacity="0.35" /></radialGradient>
       </defs>
-      <rect width={VW} height={VH} fill="url(#valley)" />
-      {sc.ridges.map((d, i) => <path key={i} d={d} stroke="#10261a" strokeWidth="14" fill="none" opacity="0.35" />)}
-      {sc.canopy.map((c, i) => <circle key={i} cx={c.x} cy={c.y} r={c.r} fill={c.t > 0.55 ? '#3f7a43' : '#2a5a31'} opacity={0.55 + c.t * 0.4} />)}
-      <path d={sc.road} stroke="#b9ad92" strokeWidth="3" fill="none" opacity="0.7" />
-      <path d={sc.river} stroke={after ? '#7a6a4c' : '#3c6b7d'} strokeWidth={after ? 15 : 10} fill="none" opacity="0.95" />
-      {cands.map((c) => <Candidate key={c.id} c={c} after={after} />)}
-      <rect width={VW} height={VH} filter="url(#sat-grain)" opacity="0.13" style={{ mixBlendMode: 'overlay' }} />
+      <rect width={VW} height={VH} fill="#23402a" />
+      {/* real relief of the sector (SRTM hillshade) in the season's colours */}
+      <image href={DEM_B.href} x={sc.img.x} y={sc.img.y} width={sc.img.w} height={sc.img.h} preserveAspectRatio="none" filter={`url(#${uid}-season)`} />
+      <rect width={VW} height={VH} filter={`url(#${uid}-clump)`} opacity="0.3" />
+      {!after && <rect width={VW} height={VH} fill="#9c8650" opacity="0.08" style={{ mixBlendMode: 'multiply' }} />}
+      {/* tree crowns over the forest */}
+      <rect width={VW} height={VH} filter={`url(#${uid}-canopy)`} opacity={after ? 0.5 : 0.4} />
+      {of('old')}
+      <path d={sc.road} stroke="#2e2a1f" strokeWidth="4.2" fill="none" opacity="0.55" />
+      <path d={sc.road} stroke={after ? '#b7a885' : '#d2c39d'} strokeWidth="2.2" fill="none" />
+      {sc.huts.map((h, i) => <rect key={i} x={h.x} y={h.y} width={h.w} height={h.h} fill={h.roof} transform={`rotate(${h.a} ${h.x} ${h.y})`} opacity="0.95" />)}
+      {/* river: wet margin · water · glint */}
+      <path d={sc.river} stroke={after ? '#9c8a62' : '#b5ab8a'} strokeWidth={after ? 26 : 18} fill="none" opacity="0.55" strokeLinecap="round" />
+      <path d={sc.river} stroke={after ? '#8a6b45' : '#3d6b70'} strokeWidth={after ? 17 : 9} fill="none" strokeLinecap="round" />
+      <path d={sc.river} stroke={after ? '#c09a68' : '#7fb2b0'} strokeWidth="1.4" fill="none" opacity="0.6" strokeDasharray="22 40" />
+      {of('field')}
+      {of('scar')}
+      {of('shadow')}
+      {after && <rect width={VW} height={VH} fill="#dfeaf2" opacity="0.05" />}
+      <rect width={VW} height={VH} filter={`url(#${uid}-grain)`} opacity="0.12" style={{ mixBlendMode: 'overlay' }} />
+      <rect width={VW} height={VH} fill={`url(#${uid}-vig)`} />
     </svg>
   )
 })
@@ -242,10 +334,32 @@ export function ChannelModal({ eng, onClose }) {
     window.addEventListener('pointermove', mm); window.addEventListener('pointerup', mu)
     return () => { window.removeEventListener('pointermove', mm); window.removeEventListener('pointerup', mu) }
   }, [toX])
-  const banks = useMemo(() => {
+  // Pan 0.5 m town reach: flood walls + earth banks, riverside roads, roof blocks with shadows, trees
+  const town = useMemo(() => {
     const r = mulberry32(scn.seed)
-    return Array.from({ length: 70 }, () => ({ x: r() < 0.5 ? r() * (left0 - 20) : left0 + riverPx + 20 + r() * (W - left0 - riverPx - 20), y: r() * H, w: 14 + r() * 28, h: 10 + r() * 20, t: r() }))
-  }, [scn.seed]) // eslint-disable-line react-hooks/exhaustive-deps
+    const L = left0 - 14, R = left0 + riverPx + 14            // outer faces of the flood walls
+    const roadL = L - 46, roadR = R + 34
+    const roofs = []
+    for (const side of [-1, 1]) {
+      const x0 = side < 0 ? 0 : roadR + 18, x1 = side < 0 ? roadL - 16 : W
+      for (let y = -10; y < H + 10;) {
+        const h = 18 + r() * 26
+        for (let x = x0 + r() * 6; x < x1 - 14;) {
+          const w = 16 + r() * 30
+          if (r() > 0.18) roofs.push({ x, y, w: Math.min(w, x1 - x), h, tone: 120 + Math.round(r() * 110), ridge: r() > 0.5 })
+          x += w + 3 + r() * 7
+        }
+        y += h + 5 + r() * 9
+      }
+    }
+    const trees = Array.from({ length: 46 }, () => {
+      const side = r() < 0.5 ? -1 : 1
+      const x = side < 0 ? roadL + 12 + r() * (L - roadL - 18) : R + 6 + r() * (roadR - R - 12)
+      return { x, y: r() * H, rr: 4 + r() * 6 }
+    })
+    const glint = Array.from({ length: 10 }, () => ({ x: left0 + 4 + r() * (riverPx - 8), y: r() * H, w: 3 + r() * 6 }))
+    return { L, R, roadL, roadR, roofs, trees, glint }
+  }, [scn.seed, left0, riverPx])
   if (!img) return null
   const px = Math.round(Math.abs(b - a) / PX)
   const submit = () => {
@@ -265,12 +379,63 @@ export function ChannelModal({ eng, onClose }) {
           </div>
           <span className="ml-auto"><Src t="image" /></span>
         </div>
-        <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full select-none rounded-lg border border-white/15 bg-[#1b1b1b]" style={{ filter: 'grayscale(1) contrast(1.15)' }}>
-          {banks.map((k, i) => <rect key={i} x={k.x} y={k.y} width={k.w} height={k.h} fill={k.t > 0.6 ? '#9a9a9a' : k.t > 0.3 ? '#6e6e6e' : '#4f4f4f'} transform={`rotate(${(k.t - 0.5) * 30} ${k.x} ${k.y})`} />)}
-          <rect x={left0 - 14} y="0" width="14" height={H} fill="#8c8c8c" />
-          <rect x={left0 + riverPx} y="0" width="14" height={H} fill="#8c8c8c" />
-          <rect x={left0} y="0" width={riverPx} height={H} fill="#3a3a3a" />
-          {Array.from({ length: 9 }, (_, i) => <path key={i} d={`M ${left0 + 10} ${20 + i * 40} q ${riverPx / 4} 8 ${riverPx / 2} 0 t ${riverPx / 2 - 20} 0`} stroke="#555" strokeWidth="2" fill="none" />)}
+        <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full select-none rounded-lg border border-white/15 bg-[#1b1b1b]">
+          <defs>
+            <filter id="pan-ground" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="4" seed="6" />
+              <feColorMatrix values="0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 0 0.42  0 0 0 0.55 0" />
+            </filter>
+            <filter id="pan-grain" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="2" />
+              <feColorMatrix type="saturate" values="0" />
+            </filter>
+            <filter id="pan-flow" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.09 0.006" numOctaves="3" seed="12" />
+              <feColorMatrix values="0 0 0 0 0.75  0 0 0 0 0.75  0 0 0 0 0.75  0.9 0 0 0 -0.32" />
+            </filter>
+            <filter id="pan-tree" x="-50%" y="-50%" width="200%" height="200%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="7" result="n" />
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+            <clipPath id="pan-water"><rect x={left0} y="0" width={riverPx} height={H} /></clipPath>
+          </defs>
+          {/* the image itself is panchromatic — the gauge on top keeps its colour */}
+          <g style={{ filter: 'grayscale(1) contrast(1.12)' }}>
+            <rect width={W} height={H} fill="#6d6d66" />
+            <rect width={W} height={H} filter="url(#pan-ground)" />
+            {/* roof blocks: shadow to the lower right, ridge line on pitched roofs */}
+            {town.roofs.map((o, i) => (
+              <g key={i}>
+                <rect x={o.x + 3} y={o.y + 3} width={o.w} height={o.h} fill="#1c1c1a" opacity="0.55" />
+                <rect x={o.x} y={o.y} width={o.w} height={o.h} fill={`rgb(${o.tone},${o.tone},${o.tone - 6})`} />
+                {o.ridge && <line x1={o.x + 1} y1={o.y + o.h / 2} x2={o.x + o.w - 1} y2={o.y + o.h / 2} stroke={`rgb(${o.tone + 30},${o.tone + 30},${o.tone + 24})`} strokeWidth="1.2" />}
+              </g>
+            ))}
+            {/* riverside roads */}
+            {[town.roadL - 13, town.roadR].map((x, i) => (
+              <g key={i}>
+                <rect x={x} y="0" width="13" height={H} fill="#a9a9a2" />
+                <line x1={x + 6.5} y1="0" x2={x + 6.5} y2={H} stroke="#e4e4dc" strokeWidth="0.9" strokeDasharray="8 8" />
+              </g>
+            ))}
+            {/* trees along the bank */}
+            <g filter="url(#pan-tree)">
+              {town.trees.map((tr, i) => <g key={i}><circle cx={tr.x + 2} cy={tr.y + 2} r={tr.rr} fill="#151513" opacity="0.5" /><circle cx={tr.x} cy={tr.y} r={tr.rr} fill="#3d4038" /><circle cx={tr.x - tr.rr * 0.3} cy={tr.y - tr.rr * 0.3} r={tr.rr * 0.45} fill="#5a5e52" /></g>)}
+            </g>
+            {/* concrete flood wall (bright) + earth bank slope down to the water edge */}
+            <rect x={town.L} y="0" width="6" height={H} fill="#d4d4cc" />
+            <rect x={town.L + 6} y="0" width="8" height={H} fill="#8a8678" />
+            <rect x={left0 + riverPx} y="0" width="8" height={H} fill="#8a8678" />
+            <rect x={town.R - 6} y="0" width="6" height={H} fill="#d4d4cc" />
+            {/* water: turbid channel, flow streaks, a few glints */}
+            <rect x={left0} y="0" width={riverPx} height={H} fill="#3a3a3a" data-river />
+            <g clipPath="url(#pan-water)">
+              <rect x={left0} y="0" width={riverPx} height={H} filter="url(#pan-flow)" opacity="0.55" />
+              {town.glint.map((g, i) => <ellipse key={i} cx={g.x} cy={g.y} rx={g.w / 2} ry="0.9" fill="#f2f2ea" opacity="0.55" />)}
+            </g>
+            <rect width={W} height={H} filter="url(#pan-grain)" opacity="0.1" style={{ mixBlendMode: 'overlay' }} />
+          </g>
+          <text x="12" y={H - 12} fontSize="11" fill="#e2e8f0" className="num" style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>THEOS-2 PAN · 1 พิกเซล = {THEOS2.panM} ม.</text>
           {/* the gauge */}
           <line x1={a} y1={H / 2} x2={b} y2={H / 2} stroke="#38BDF8" strokeWidth="2.5" />
           {Array.from({ length: Math.floor(Math.abs(b - a) / (PX * 2)) + 1 }, (_, i) => {
