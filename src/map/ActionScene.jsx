@@ -55,7 +55,9 @@ function useProgress(dur, key) {
     let raf, t0 = performance.now()
     const tick = (t) => { const k = Math.min(1, (t - t0) / dur); setP(k); if (k < 1) raf = requestAnimationFrame(tick) }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
+    // no frames in a page that is not being drawn — the scene still ends on time
+    const done = setTimeout(() => { cancelAnimationFrame(raf); setP(1) }, dur + 400)
+    return () => { cancelAnimationFrame(raf); clearTimeout(done) }
   }, [dur, key])
   return p
 }

@@ -38,6 +38,8 @@ import { sessionMetrics } from './lib/compare'
 import { audio, installUiSounds } from './lib/audio'
 import { ChibiDock, useChibiPose } from './ui/chibiDock'
 import { ChibiCreator } from './modals/chibiCreator'
+import { Floaters, useJuice, useShake } from './ui/juice'
+import { fx } from './lib/fx'
 import { THRESHOLDS } from './config/missionConfig'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
@@ -170,6 +172,14 @@ export default function App() {
   }
 
   const playing = phase === 'play'
+  /* C1 game feel: floats from real state changes, a light shake when things go badly */
+  const shakeRef = useRef(null)
+  useJuice(s)
+  useShake(shakeRef)
+  useEffect(() => { if (playing && s.act === 1 && eng.veto1) fx.emit('shake', { strength: 1.3 }) }, [eng.veto1]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (playing && s.stormHit) fx.emit('shake', { strength: 1 }) }, [s.stormHit]) // eslint-disable-line react-hooks/exhaustive-deps
+  const lostCount = s.points.filter((p) => p.status === 'lost').length
+  useEffect(() => { if (playing && lostCount) fx.emit('shake', { strength: 0.7 }) }, [lostCount]) // eslint-disable-line react-hooks/exhaustive-deps
   const crisis = (s.act === 1 && eng.veto1) || (s.act === 2 && s.points.some((p) => p.revealed && p.status === 'waiting' && p.deadline - s.clock < 120))
   const pose = useChibiPose({ eng, modal: analyze ? 'analysis' : channel ? 'channel' : plan ? 'planner' : null, crisis })
   const dock = <ChibiDock pose={pose} name={player} />
@@ -182,7 +192,7 @@ export default function App() {
 
   return (
     <ModeContext.Provider value={eng.mode}>
-      <div className="crt grid-bg flex h-screen w-screen flex-col overflow-hidden bg-[#050912]">
+      <div ref={shakeRef} className="crt grid-bg flex h-screen w-screen flex-col overflow-hidden bg-[#050912]">
         <div className="pointer-events-none fixed inset-0 z-0 transition-all duration-700" style={{ background: `radial-gradient(120% 70% at 50% 0%, ${act.hex}0F, transparent 62%)` }} />
         <TopBar eng={eng} onGuide={() => setGuide(true)} onBoard={() => setBoard(true)} onTeacher={() => setTeacher(true)} tutorOn={tutorOn} setTutorOn={setTutorOn}
           onReset={() => eng.newGame()} />
@@ -225,6 +235,7 @@ export default function App() {
 
         <Cutscene eng={eng} />
         <ActionScenes />
+        <Floaters />
         <ChibiCreator open={creator} onClose={() => setCreator(false)} player={player} setPlayer={setPlayer} />
         <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
           onHowTo={() => setGuide(true)} onBoard={() => setBoard(true)}

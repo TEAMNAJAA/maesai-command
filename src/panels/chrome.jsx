@@ -12,6 +12,7 @@ import { ACT_WINDOW } from '../lib/sim'
 import { fmt, clockHeadline, clockToDate, clamp, mmss } from '../lib/format'
 import { sphereReady } from '../lib/sphere'
 import { SettingsMenu } from '../ui/settings'
+import { Tween } from '../ui/juice'
 
 export const ACTS = [
   { n: 1, roman: 'I', th: 'เฝ้าระวัง', code: 'T−48', long: 'มองต้นน้ำที่มองไม่เห็น', en: 'SEEING THE UNSEEN UPSTREAM', hex: '#22E36B' },
@@ -37,9 +38,9 @@ function Logo() {
   )
 }
 
-function Meter({ icon: Icon, label, value, sub, hex, title }) {
+function Meter({ icon: Icon, label, value, sub, hex, title, hud }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1" title={title}>
+    <div className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1" title={title} data-hud={hud}>
       <Icon size={14} style={{ color: hex }} />
       <div className="leading-none">
         <div className="font-thai text-[9.5px] text-slate-400">{label}</div>
@@ -109,9 +110,9 @@ export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, 
         </div>
       </div>
 
-      <Meter icon={Wallet} label="งบปฏิบัติการคงเหลือ" value={`฿${fmt(left / 1e6, 2)}M`} sub={`/ ${fmt(s.budget.total / 1e6, 1)}M`}
-        hex={left / s.budget.total < 0.15 ? '#FF6B8A' : '#FFD066'} title={`ใช้ไป ฿${fmt(s.budget.spent)}`} />
-      {s.act === 2 && <Meter icon={Fuel} label="น้ำมันเรือ" value={`${fmt(s.fuel.total - s.fuel.used)} L`} sub={`/ ${fmt(s.fuel.total)}`} hex={(s.fuel.total - s.fuel.used) / Math.max(1, s.fuel.total) < 0.2 ? '#FF6B8A' : '#7dd3fc'} />}
+      <Meter icon={Wallet} label="งบปฏิบัติการคงเหลือ" value={<Tween value={left} format={(v) => `฿${fmt(v / 1e6, 2)}M`} />} sub={`/ ${fmt(s.budget.total / 1e6, 1)}M`}
+        hex={left / s.budget.total < 0.15 ? '#FF6B8A' : '#FFD066'} title={`ใช้ไป ฿${fmt(s.budget.spent)}`} hud="budget" />
+      {s.act === 2 && <Meter icon={Fuel} label="น้ำมันเรือ" hud="fuel" value={<Tween value={s.fuel.total - s.fuel.used} format={(v) => `${fmt(v)} L`} />} sub={`/ ${fmt(s.fuel.total)}`} hex={(s.fuel.total - s.fuel.used) / Math.max(1, s.fuel.total) < 0.2 ? '#FF6B8A' : '#7dd3fc'} />}
       {s.act === 3 && <Meter icon={CalendarClock} label="เส้นตายภารกิจ" value={`วันที่ ${Math.floor(day)}`} sub="/ 60" hex={day > 50 ? '#FF6B8A' : '#7dd3fc'} />}
 
       <PlayTimer eng={eng} />

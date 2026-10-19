@@ -117,7 +117,7 @@ function SfviCard({ eng }) {
       <div className="rounded border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
         <div className="flex items-baseline justify-between">
           <span className="font-thai text-[10.5px] text-slate-400">ความเชื่อมั่นประชาชน</span>
-          <span className="num text-[13px] font-bold" style={{ color: s.trust >= 75 ? '#7CFFA0' : s.trust >= 50 ? '#FFD066' : '#FF6B8A' }}>{Math.round(s.trust)}%</span>
+          <span className="num text-[13px] font-bold" data-hud="trust" style={{ color: s.trust >= 75 ? '#7CFFA0' : s.trust >= 50 ? '#FFD066' : '#FF6B8A' }}>{Math.round(s.trust)}%</span>
         </div>
         <div className="font-thai text-[9.5px] text-slate-500">เตือนผิด {s.falseAlarms} ครั้ง · ยิ่งเตือนผิด คนยิ่งไม่ยอมอพยพ</div>
       </div>

@@ -198,7 +198,7 @@ export function useEngine() {
   const revealHint = useCallback((topic, rung) => {
     const before = sRef.current
     const after = commit((p, sc) => A.revealHint(p, sc, topic, rung))
-    if (after !== before) logger.hint({ topic, rung, act: after.act, clock: after.clock })
+    if (after !== before) { logger.hint({ topic, rung, act: after.act, clock: after.clock }); fx.emit('action', { kind: 'hint' }) }
     return after !== before
   }, [commit])
 
@@ -281,7 +281,7 @@ export function useEngine() {
   const dispatchBoat = useCallback(wrap(A.dispatchBoat, 'boat'), [commit])
 
   /* ── Act 3 actions ──────────────────────────────────────────────────────── */
-  const reviewRoof = useCallback(wrap(A.reviewRoof), [commit])
+  const reviewRoof = useCallback(wrap(A.reviewRoof, 'review'), [commit])
   const survey = useCallback(wrap(A.survey, 'survey'), [commit])
   const lockVerdict = useCallback((roofId) => { const next = commit((p, sc) => A.lockVerdict(p, sc, roofId)); logger.relief(reliefSummary(next, scnRef.current)); fx.emit('action', { kind: 'lock' }) }, [commit])
   const lockAll = useCallback(() => { const next = commit((p, sc) => A.lockAll(p, sc)); logger.relief(reliefSummary(next, scnRef.current)) }, [commit])
@@ -289,6 +289,7 @@ export function useEngine() {
   const adjudicate = useCallback((roofId, verdict) => {
     const next = commit((p, sc) => A.adjudicate(p, sc, roofId, verdict))
     logger.relief(reliefSummary(next, scnRef.current))
+    fx.emit('action', { kind: 'verdict' })
   }, [commit])
 
   /* ── Flow ───────────────────────────────────────────────────────────────── */
