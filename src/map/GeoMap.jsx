@@ -33,6 +33,24 @@ export const EXTENTS = {
 }
 const SWATH_H_KM = 11
 const halo = { paintOrder: 'stroke', stroke: '#000', strokeWidth: 3.5, strokeLinejoin: 'round' }
+const EASE = 'fill-opacity 1.4s ease, fill 1.4s ease, stroke 1.4s ease, opacity 1.4s ease, stroke-width 1.4s ease'
+
+/** A boat on the map: glides between clock steps (CSS transition) and leaves a V wake behind it. */
+function MapBoat({ proj, pos, ahead, hex, label, labelHex }) {
+  const [x, y] = proj.pt(pos)
+  const [ax, ay] = ahead ? proj.pt(ahead) : [x + 1, y]
+  const ang = (Math.atan2(ay - y, ax - x) * 180) / Math.PI
+  return (
+    <g pointerEvents="none" style={{ transform: `translate(${x}px, ${y}px)`, transition: 'transform .5s linear' }} data-map-boat>
+      <g transform={`rotate(${ang.toFixed(1)})`} className="fx-heavy">
+        <path d="M-7 -4 L-26 -12 M-7 4 L-26 12" stroke="#e0f2fe" strokeWidth="1.6" strokeLinecap="round" className="wake" />
+        <circle cx="-14" cy="0" r="2.2" fill="#fff" opacity="0.45" />
+      </g>
+      <circle r="7" fill={hex} stroke="#fff" strokeWidth="1.5" />
+      <text x="9" y="4" fontSize="9.5" className="num" fill={labelHex} style={halo}>{label}</text>
+    </g>
+  )
+}
 
 /** Grow a bbox about its centre (imagery also fills the letterbox around the frame). */
 const grow = ([w, s, e, n], fx, fy) => {
@@ -85,6 +103,11 @@ export function GeoMap({ extent, eng, onHover, onPoint, onSector, onChannel, gap
       <defs>
         <filter id="geo-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
         <filter id="cloud-soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14" /></filter>
+        <pattern id="flood-ripple" width="46" height="20" patternUnits="userSpaceOnUse">
+          <path d="M0 10 Q11.5 4 23 10 T46 10" stroke="#e0f2fe" strokeOpacity="0.55" strokeWidth="1" fill="none" />
+          <path d="M-12 18 Q0 13 11 18 T34 18 T57 18" stroke="#bae6fd" strokeOpacity="0.3" strokeWidth="0.8" fill="none" />
+          <animateTransform attributeName="patternTransform" type="translate" from="0 0" to="46 0" dur="6s" repeatCount="indefinite" />
+        </pattern>
       </defs>
       <rect x="-500" y="-400" width="2000" height="1560" fill="#060b14" />
       {dem && (L.elev || town) && (() => {
@@ -174,9 +197,15 @@ function Urban({ eng, proj, roofs, onPoint }) {
   const lastRadar = s.radarAt[s.radarAt.length - 1] ?? 0
   const score = Object.fromEntries(sfvi.perSection.map((z) => [z.id, z.score]))
   const cells = act2 ? cloudCells(scn, t) : []
+  const cloudPos = cells.flatMap((c, i) => [-1, 0, 1].flatMap((ox) => [-1, 0, 1].map((oy) => {
+    const lon = c.lon + ox * (CLOUD_BOX[2] - CLOUD_BOX[0]), lat = c.lat + oy * (CLOUD_BOX[3] - CLOUD_BOX[1])
+    const [x, y] = proj.pt([lon, lat])
+    return x < -300 || x > 1300 || y < -300 || y > 1060 ? null : { key: `${i}${ox}${oy}`, x, y, r: c.rM / proj.metresPerPx }
+  }))).filter(Boolean)
   const camp = campOf(s)
   const px = (m) => m / proj.metresPerPx
   const boats = act2 ? s.jobs.filter((j) => j.kind === 'boatAtPoint' || j.kind === 'boatAtDest') : []
+  const swell = Math.max(0, Math.min(1, (eng.world.level - 3.6) / 1.8))      // 0 at normal flow → 1 at the peak
   // static geometry projected once per view (re-projecting every road on each order made clicks lag)
   const geo = useMemo(() => ({
     hull: Object.fromEntries(SECTIONS.map((z) => [z.id, linePath([...z.hull, z.hull[0]], proj)])),
@@ -192,9 +221,9 @@ function Urban({ eng, proj, roofs, onPoint }) {
         const hex = act2 ? (d >= ACT2.deepWaterM ? '#3b82f6' : d >= 0.3 ? '#7dd3fc' : '#94a3b8') : sfviHex(score[z.id])
         return (
           <g key={z.id} data-zone={z.id}>
-            <path d={geo.hull[z.id]} fill={hex} fillOpacity={act2 ? Math.min(0.32, d / 5) : 0.05}
+            <path d={geo.hull[z.id]} style={{ fill: hex, fillOpacity: act2 ? Math.min(0.32, d / 5) : 0.05, transition: EASE }}
               stroke={ordered ? '#22E36B' : hex} strokeOpacity={0.75} strokeWidth={ordered ? 2.4 : 1.1} strokeDasharray={ordered ? undefined : '5 4'} />
-            {roofs && <path d={roofs.zone[z.id]} fill={hex} fillOpacity={act2 ? 0.55 : 0.32} stroke={hex} strokeOpacity="0.8" strokeWidth="0.5" pointerEvents="none" />}
+            {roofs && <path d={roofs.zone[z.id]} style={{ fill: hex, fillOpacity: act2 ? 0.55 : 0.32, stroke: hex, transition: EASE }} strokeOpacity="0.8" strokeWidth="0.5" pointerEvents="none" />}
           </g>
         )
       })}
@@ -202,8 +231,26 @@ function Urban({ eng, proj, roofs, onPoint }) {
       {act2 && SECTIONS.map((z) => {
         const d = depthAt(s, z, t)
         if (d < 0.3) return null
-        return <path key={`fl${z.id}`} d={geo.hull[z.id]} fill="none" stroke="#bfdbfe" strokeOpacity={Math.min(0.7, d / 2.5)}
-          strokeWidth="1.6" strokeDasharray="3 9" className="animate-[waterflow_14s_linear_infinite]" pointerEvents="none" />
+        return (
+          <g key={`fl${z.id}`} pointerEvents="none">
+            <path d={geo.hull[z.id]} fill="url(#flood-ripple)" className="fx-heavy" style={{ opacity: Math.min(0.85, 0.2 + d / 2.2), transition: EASE }} />
+            <path d={geo.hull[z.id]} fill="none" stroke="#bfdbfe" strokeOpacity={Math.min(0.7, d / 2.5)}
+              strokeWidth="1.6" strokeDasharray="3 9" className="animate-[waterflow_14s_linear_infinite]" />
+          </g>
+        )
+      })}
+      {/* live current: the zone outline flickers and sparks until the power is cut */}
+      {act2 && s.hazardsLive.filter((id) => !s.powerCut[id]).map((id) => {
+        const z = SECTIONS.find((x) => x.id === id)
+        const [x, y] = proj.pt(z.c)
+        return (
+          <g key={`pw${id}`} pointerEvents="none" data-power-live={id}>
+            <path d={geo.hull[id]} fill="#FDE047" stroke="#FDE047" strokeWidth="2.2" className="power-flick" />
+            {[[-26, 14], [18, 22], [-6, 34]].map(([dx, dy], i) => (
+              <path key={i} d={`M${x + dx} ${y + dy} l4 -7 l-3 0 l4 -7`} stroke="#FEF08A" strokeWidth="1.6" fill="none" strokeLinecap="round" className="spark-flick fx-heavy" style={{ animationDelay: `${i * 0.37}s` }} />
+            ))}
+          </g>
+        )
       })}
       {L.roads && geo.roads.map(({ f, d, w }) => {
         const blocked = act2 && scn.blockedRoads.includes(f.properties.osm)
@@ -214,12 +261,16 @@ function Urban({ eng, proj, roofs, onPoint }) {
           <path d={roofs.dry} fill="none" stroke="#F1F5F9" strokeOpacity="0.35" strokeWidth="0.5" />
         </g>
       )}
-      {geo.rivers.map(({ f, d }) => (
-        <g key={`r${f.properties.osm}`}>
-          <path d={d} fill="none" stroke="#38BDF8" strokeWidth={f.properties.class === 'river' ? 3.4 : 1.4} opacity="0.95" filter="url(#geo-glow)" />
-          {f.properties.class === 'river' && <path d={d} fill="none" stroke="#e0f2fe" strokeWidth="1.4" strokeDasharray="6 10" className="animate-[waterflow_9s_linear_infinite]" opacity="0.8" />}
-        </g>
-      ))}
+      {geo.rivers.map(({ f, d }) => {
+        const main = f.properties.class === 'river'
+        return (
+          <g key={`r${f.properties.osm}`}>
+            <path d={d} fill="none" stroke="#38BDF8" style={{ strokeWidth: main ? 3.4 * (1 + swell * 1.8) : 1.4, transition: EASE }} opacity="0.95" filter="url(#geo-glow)" />
+            {main && <path d={d} fill="none" stroke="#e0f2fe" strokeWidth="1.4" strokeDasharray="6 10" className="animate-[waterflow_9s_linear_infinite]" style={{ animationDuration: `${(9 - 6.5 * swell).toFixed(1)}s` }} opacity="0.8" />}
+            {main && swell > 0.35 && <path d={d} fill="none" stroke="#fff" strokeWidth="0.9" strokeDasharray="2 17" className="fx-heavy animate-[waterflow_9s_linear_infinite]" style={{ animationDuration: `${(5.5 - 3.5 * swell).toFixed(1)}s` }} opacity={0.35 + swell * 0.4} />}
+          </g>
+        )
+      })}
       {/* evacuation routes computed for ordered zones (Sphere / offline) */}
       {Object.entries(s.routes).map(([id, r]) => (
         <path key={`ev${id}`} d={linePath(r.coords, proj)} fill="none" stroke="#22E36B" strokeWidth="2.6" strokeOpacity="0.85"
@@ -281,7 +332,9 @@ function Urban({ eng, proj, roofs, onPoint }) {
         const hex = !open ? (p.status === 'lost' ? '#64748b' : '#22E36B') : p.type === 'critical' ? '#FF3B63' : '#FFB300'
         return (
           <g key={p.id} className={open ? 'cursor-pointer' : ''} onClick={() => open && onPoint?.(p.id)} data-point-marker={p.id}>
-            {urgent && <circle cx={x} cy={y} r="14" fill="none" stroke={hex} strokeWidth="2" className="animate-[pulsering_1.6s_ease-out_infinite]" style={{ transformOrigin: `${x}px ${y}px` }} />}
+            {open && <circle cx={x} cy={y} r="9" fill="none" stroke={hex} strokeWidth="1.6" className="sos-ring" style={{ animationDuration: urgent ? '1.1s' : '2.4s' }} />}
+            {open && <circle cx={x} cy={y} r="9" fill="none" stroke={hex} strokeWidth="1.2" className="sos-ring fx-heavy" style={{ animationDuration: urgent ? '1.1s' : '2.4s', animationDelay: urgent ? '.55s' : '1.2s' }} />}
+            {open && <text x={x} y={y - 12} textAnchor="middle" fontSize="7.5" fontWeight="900" fill={hex} className="animate-[flash_1.2s_steps(2)_infinite]" style={halo}>SOS</text>}
             <circle cx={x} cy={y} r="17" fill="transparent" />
             <circle cx={x} cy={y} r="8" fill={hex} stroke="#000" strokeWidth="1.6" />
             <text x={x} y={y + 3.5} textAnchor="middle" fontSize="9" fontWeight="800" fill="#000" className="num">{open ? p.left : '✓'}</text>
@@ -293,17 +346,18 @@ function Urban({ eng, proj, roofs, onPoint }) {
       {/* boats on the move */}
       {act2 && s.jobs.filter((j) => j.kind === 'boatAtPoint').map((j) => {
         const outLeg = j.coords.slice(0, j.splitAt)
-        const pos = alongRoute(outLeg, (t - j.start) / Math.max(1, j.at - j.start))
+        const k = (t - j.start) / Math.max(1, j.at - j.start)
+        const pos = alongRoute(outLeg, k)
         if (!pos) return null
-        const [x, y] = proj.pt(pos)
-        return <g key={`b${j.boat}${j.start}`} pointerEvents="none"><circle cx={x} cy={y} r="7" fill="#FF7A1A" stroke="#fff" strokeWidth="1.5" /><text x={x + 9} y={y + 4} fontSize="9.5" className="num" fill="#FFE0A3" style={halo}>{j.boat}</text></g>
+        return <MapBoat key={`b${j.boat}${j.start}`} proj={proj} pos={pos} ahead={alongRoute(outLeg, Math.min(1, k + 0.04))} hex="#FF7A1A" label={j.boat} labelHex="#FFE0A3" />
       })}
       {act2 && s.jobs.filter((j) => j.kind === 'boatAtDest').map((j) => {
         const leave = j.pointAt + 15
-        const pos = alongRoute(j.coords.slice(j.splitAt - 1), (t - leave) / Math.max(1, j.at - leave))
+        const leg = j.coords.slice(j.splitAt - 1)
+        const k = (t - leave) / Math.max(1, j.at - leave)
+        const pos = alongRoute(leg, k)
         if (!pos) return null
-        const [x, y] = proj.pt(pos)
-        return <g key={`bd${j.boat}${j.start}`} pointerEvents="none"><circle cx={x} cy={y} r="7" fill="#22E36B" stroke="#fff" strokeWidth="1.5" /><text x={x + 9} y={y + 4} fontSize="9.5" className="num" fill="#BFF5CF" style={halo}>{j.boat} · {j.aboard} คน</text></g>
+        return <MapBoat key={`bd${j.boat}${j.start}`} proj={proj} pos={pos} ahead={alongRoute(leg, Math.min(1, k + 0.04))} hex="#22E36B" label={`${j.boat} · ${j.aboard} คน`} labelHex="#BFF5CF" />
       })}
       {act2 && (s.incidents || []).filter((x) => t >= x.at && t < x.until).map((x) => {
         const pos = alongRoute(x.coords.slice(0, x.splitAt || x.coords.length), BOAT_INCIDENT.hazardAt)
@@ -325,12 +379,8 @@ function Urban({ eng, proj, roofs, onPoint }) {
         return <text key={`d${j.drone}`} x={x + 24} y={y - 14} fontSize="16" pointerEvents="none" className="animate-[flash_1.2s_ease-in-out_infinite]">🛸</text>
       })}
       {/* drifting clouds over town (act 2) */}
-      {act2 && cells.map((c, i) => [-1, 0, 1].flatMap((ox) => [-1, 0, 1].map((oy) => {
-        const lon = c.lon + ox * (CLOUD_BOX[2] - CLOUD_BOX[0]), lat = c.lat + oy * (CLOUD_BOX[3] - CLOUD_BOX[1])
-        const [x, y] = proj.pt([lon, lat])
-        if (x < -300 || x > 1300 || y < -300 || y > 1060) return null
-        return <circle key={`c${i}${ox}${oy}`} cx={x} cy={y} r={px(c.rM)} fill="#f8fafc" opacity="0.5" filter="url(#cloud-soft)" pointerEvents="none" />
-      })))}
+      {act2 && cloudPos.map(({ key, x, y, r }) => <circle key={`sh${key}`} cx={x + 22} cy={y + 30} r={r * 0.95} fill="#020617" opacity="0.28" filter="url(#cloud-soft)" pointerEvents="none" className="fx-heavy" />)}
+      {act2 && cloudPos.map(({ key, x, y, r }) => <circle key={`c${key}`} cx={x} cy={y} r={r} fill="#f8fafc" opacity="0.5" filter="url(#cloud-soft)" pointerEvents="none" />)}
       <text x="500" y="40" textAnchor="middle" fontSize="13" fill="#8FA6C4" className="font-mono" letterSpacing="3" style={halo}>TACHILEIK · MYANMAR</text>
     </g>
   )
@@ -368,7 +418,8 @@ function Corridor({ eng, proj, roofs, gapSel, onGap, onChannel, beacon }) {
       {EMBANKMENT_RIVER.length > 1 && (
         <g pointerEvents="none">
           <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#3b82f6" strokeWidth={px(26)} strokeLinecap="round" opacity={0.25 + surge * 0.3} />
-          <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#dbeafe" strokeWidth="1.6" strokeDasharray="6 12" opacity="0.9" className="animate-[waterflow_5s_linear_infinite]" />
+          <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#dbeafe" strokeWidth="1.6" strokeDasharray="6 12" opacity="0.9" className="animate-[waterflow_5s_linear_infinite]" style={{ animationDuration: `${(5.5 - 3.5 * surge).toFixed(1)}s` }} />
+          <path d={linePath(EMBANKMENT_RIVER, proj)} fill="none" stroke="#fff" strokeWidth="1" strokeDasharray="2 15" opacity={0.25 + surge * 0.45} className="fx-heavy animate-[waterflow_5s_linear_infinite]" style={{ animationDuration: `${(3.6 - 2.4 * surge).toFixed(1)}s` }} transform="translate(0 4)" />
         </g>
       )}
       {/* water through open gaps — jets into town; sealed gaps drain away */}
