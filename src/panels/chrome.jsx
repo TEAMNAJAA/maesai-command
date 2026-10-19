@@ -11,6 +11,7 @@ import { SPHERE, MISSION, TIME, STRESS } from '../config/missionConfig'
 import { ACT_WINDOW } from '../lib/sim'
 import { fmt, clockHeadline, clockToDate, clamp, mmss } from '../lib/format'
 import { sphereReady } from '../lib/sphere'
+import { SettingsMenu } from '../ui/settings'
 
 export const ACTS = [
   { n: 1, roman: 'I', th: 'เฝ้าระวัง', code: 'T−48', long: 'มองต้นน้ำที่มองไม่เห็น', en: 'SEEING THE UNSEEN UPSTREAM', hex: '#22E36B' },
@@ -121,6 +122,7 @@ export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, 
             <Lightbulb size={15} className={tutorOn ? 'text-[#FFD066]' : ''} />
           </button>
         )}
+        <SettingsMenu />
         <button onClick={onGuide} title="คู่มือการเล่น" data-guide className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white"><BookOpen size={15} /></button>
         <button onClick={onBoard} title="Leaderboard" data-board className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white"><Trophy size={15} /></button>
         <button onClick={onReset} title="เริ่มภารกิจใหม่" className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white"><RotateCcw size={15} /></button>

@@ -22,6 +22,7 @@ import { fmt, clockLabel } from '../lib/format'
 import { sfviHex, depthHex } from './datahub'
 import { ImpactCard, ImpactHover, WhyButton, ConfirmImpact } from '../ui/impact'
 import * as I from '../engine/impact'
+import { audio } from '../lib/audio'
 
 const hm = (min) => { const m = Math.max(0, Math.round(min)); return m >= 60 ? `${Math.floor(m / 60)}ชม. ${m % 60}น.` : `${m} นาที` }
 const tgt = (t) => (t === TOWN_TARGET ? 'ตัวเมือง (AOI-A)' : `Sector ${t}`)
@@ -382,7 +383,7 @@ function Sensors({ eng }) {
                 {shot?.lost ? 'ภาพสูญหาย — ประมวลผลล้มเหลว (Stress Test)' : shot ? `เห็นพื้นดิน ${shot.clear.length}/10 โซน: ${shot.clear.join(' ')}` : past ? 'ผ่านไปแล้ว (ไม่ได้สั่ง)' : ordered ? `สั่งแล้ว · อีก ${hm(q.t - t)}` : `อีก ${hm(q.t - t)} — เห็นเฉพาะโซนที่เมฆเปิดตอนนั้น`}
               </span>
             </span>
-            {!past && !ordered && <ImpactHover card={I.previewPass2(s, scn, q.id)}><Btn size="sm" variant="primary" icon={Satellite} onClick={() => eng.orderPass2(q.id)}><span className="font-thai normal-case tracking-normal">สั่งถ่าย</span></Btn></ImpactHover>}
+            {!past && !ordered && <ImpactHover card={I.previewPass2(s, scn, q.id)}><Btn size="sm" variant="primary" icon={Satellite} onClick={() => { audio.play('theos'); eng.orderPass2(q.id) }}><span className="font-thai normal-case tracking-normal">สั่งถ่าย</span></Btn></ImpactHover>}
             {ordered && !past && <Check size={14} className="text-[#22E36B]" />}
           </div>
         )

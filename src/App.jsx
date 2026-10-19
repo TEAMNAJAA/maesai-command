@@ -34,6 +34,8 @@ import { logger } from './lib/evalLogger'
 import { leaderboard } from './lib/leaderboard'
 import { waitComparison } from './lib/sim'
 import { sessionMetrics } from './lib/compare'
+import { audio, installUiSounds } from './lib/audio'
+import { THRESHOLDS } from './config/missionConfig'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
 
@@ -87,6 +89,29 @@ export default function App() {
     }
   }, [s.resetSeq]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => logger.subscribe(() => setLogVersion((v) => v + 1)), [])
+
+  /* sound: hover/click on every button, the THEOS-2 signature, event cues, music that follows the situation (C2) */
+  useEffect(() => { installUiSounds() }, [])
+  const cutKind = eng.cut?.kind || null
+  useEffect(() => {
+    if (cutKind === 'theos') { audio.play('theos'); audio.duck(true) } else audio.duck(false)
+  }, [cutKind])
+  useEffect(() => {
+    if (!eng.flash) return
+    audio.play(eng.flash.kind === 'crit' ? 'alarm' : eng.flash.kind === 'warn' ? 'error' : 'ok')
+  }, [eng.flash?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const halfHour = Math.floor(s.clock / 30)
+  useEffect(() => {
+    let lvl = 0
+    if (phase === 'play' && s.act === 1) {
+      const l = eng.world.level
+      lvl = l >= THRESHOLDS.criticalLevel ? 3 : l >= eng.sfvi.prepLevel ? 2 : l >= eng.sfvi.prepLevel - 0.3 || s.clock > -12 * 60 ? 1 : 0
+    } else if (phase === 'play' && s.act === 2) {
+      const urgent = s.points.some((p) => p.revealed && p.status === 'waiting' && p.deadline - s.clock < 180)
+      lvl = urgent || s.clock < 10 * 60 ? 2 : 1
+    }
+    audio.setIntensity(lvl)
+  }, [phase, s.act, halfHour, s.points]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { logger.meta({ stress: s.stress || [], seed: s.seed, mode: s.modeId, hintsEnabled: eng.mode.tutor }) }, [s.seed, s.modeId, (s.stress || []).join()]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (DEMO) eng.start() }, [s.resetSeq]) // eslint-disable-line react-hooks/exhaustive-deps
 
