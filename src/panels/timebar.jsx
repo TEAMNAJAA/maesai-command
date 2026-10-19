@@ -4,11 +4,13 @@
    แถบเวลา: เวลาในเกมเดินเมื่อคุณสั่งการ · ปุ่มเดินเวลา · เหตุการณ์ที่กำลังจะมาถึง
    ══════════════════════════════════════════════════════════════════════════ */
 
-import React from 'react'
+import React, { useState } from 'react'
 import { FastForward, Satellite, Waves, Flag, Clock, Radio, Ship, Zap, Droplets, Plane, Hourglass, SkipForward } from 'lucide-react'
 import { THRESHOLDS, MISSION, ACT2, TIME, THEOS2 } from '../config/missionConfig'
 import { firstCrossing } from '../lib/hydro'
 import { clockLabel } from '../lib/format'
+import { ConfirmImpact } from '../ui/impact'
+import { previewSkip } from '../engine/impact'
 
 const hm = (min) => { const m = Math.max(0, Math.round(min)); return m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} น.` : ''}` : `${m} น.` }
 const tg = (t) => (t === 'TOWN' ? 'เมือง' : t)
@@ -55,6 +57,7 @@ export function actSettled(eng) {
 
 export function TimeBar({ eng }) {
   const { s, scn, cut } = eng
+  const [confirmEnd, setConfirmEnd] = useState(false)
   if (s.act === 3) return null
   const busy = !!cut
   const list = upcoming(eng).slice(0, 5)
@@ -90,7 +93,7 @@ export function TimeBar({ eng }) {
         <span className="font-thai normal-case tracking-normal text-[11px]">+1 ชม.</span>
       </button>
       {settled && (
-        <button onClick={() => eng.advance({ mode: 'end' })} disabled={busy} data-advance="end" title="ไม่มีงานค้างแล้ว — ข้ามไปจบองก์"
+        <button onClick={() => setConfirmEnd(true)} disabled={busy} data-advance="end" title="ไม่มีงานค้างที่มองเห็น — ข้ามไปจบองก์"
           className="btn flex shrink-0 items-center gap-1 border-[#38BDF8]/50 bg-[#38BDF8]/12 px-2.5 py-1.5 text-sky-100 hover:bg-[#38BDF8]/25 disabled:opacity-40">
           <SkipForward size={12} /><span className="font-thai normal-case tracking-normal text-[11px]">{endTh}</span>
         </button>
@@ -99,6 +102,8 @@ export function TimeBar({ eng }) {
         className="btn flex shrink-0 items-center gap-1.5 border-[#22E36B]/60 bg-[#22E36B]/15 px-3 py-1.5 text-[#BFF5CF] hover:bg-[#22E36B]/25 disabled:opacity-40">
         <label.icon size={13} /><span className="font-thai normal-case tracking-normal text-[12px] font-bold">{label.th}</span>
       </button>
+      <ConfirmImpact open={confirmEnd && settled} card={confirmEnd ? previewSkip(s, scn) : null} whyId="skip" tone="info" confirmTh={endTh}
+        onCancel={() => setConfirmEnd(false)} onConfirm={() => { setConfirmEnd(false); eng.advance({ mode: 'end' }) }} />
     </div>
   )
 }

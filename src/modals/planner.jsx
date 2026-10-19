@@ -13,6 +13,8 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Ship, HeartPulse, Users, Package, Check, Loader2, CheckCircle2, WifiOff, RotateCcw, Clock, Fuel, Navigation, Satellite, Cpu } from 'lucide-react'
 import { Modal, Btn, Src } from '../ui/atoms'
+import { ImpactHover, WhyButton } from '../ui/impact'
+import { previewBoat } from '../engine/impact'
 import { useMode } from '../ui/label'
 import { BOAT, ACT2, COSTS, DURATIONS } from '../config/missionConfig'
 import { HOSPITAL, SHELTER_POOL } from '../config/scenarioData'
@@ -133,7 +135,7 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
           <div className="grid h-10 w-10 place-items-center rounded-lg border border-[#FF7A1A]/50 bg-[#FF7A1A]/12"><Ship size={20} className="text-[#FFB27A]" /></div>
           <div>
             <div className="hud-label">RESCUE BOAT PLANNER · {p.id} · ZONE {p.section} · GISTDA SPHERE ROUTING</div>
-            <h2 className="font-thai text-[18px] font-bold text-white">วางแผนเรือกู้ภัย — เลือกภารกิจ ปลายทาง และเส้นทางเอง</h2>
+            <h2 className="font-thai flex items-center gap-2 text-[18px] font-bold text-white">วางแผนเรือกู้ภัย — เลือกภารกิจ ปลายทาง และเส้นทางเอง <WhyButton id="boat" size={15} /></h2>
           </div>
           <span className="font-thai ml-auto rounded border border-[#FF7A1A]/50 px-2 py-0.5 text-[11.5px] font-bold text-[#FFB27A]">เหลือเวลา {hm(p.deadline - s.clock)}</span>
         </div>
@@ -322,9 +324,11 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
         <div className="mt-3 flex items-center justify-end gap-2">
           <span className="font-thai mr-auto text-[11px] text-slate-500">{opt ? `ใช้น้ำมัน ${opt.fuelL} L · ฿${fmt(COSTS.boatTrip)}${opt.source === 'sphere' ? ' · เส้นทางจาก GISTDA Sphere' : ' · เส้นทางจากตัวคำนวณในเครื่อง'}${mission === 'rescue' && p.left > BOAT.capacity ? ` · เรือจะวนรับ-ส่งต่อเองจนครบ ~${Math.ceil(p.left / BOAT.capacity)} เที่ยว (+${Math.round(((2 * opt.leg2M) / 1000) * BOAT.fuelLPerKm)} L/เที่ยว)` : ''}` : 'เลือกเส้นทางก่อนส่งเรือ'}</span>
           <Btn variant="solid" onClick={onClose}><span className="font-thai normal-case tracking-normal">ยกเลิก</span></Btn>
-          <Btn variant="danger" size="lg" icon={Ship} disabled={!opt || !idle || opt.fuelL > fuelLeft} onClick={go}>
-            <span className="font-thai normal-case tracking-normal text-[13px]">{!idle ? 'ไม่มีเรือว่าง' : opt && opt.fuelL > fuelLeft ? 'น้ำมันไม่พอ' : 'ส่งเรือออก'}</span>
-          </Btn>
+          <ImpactHover width={330} card={opt ? previewBoat(s, scn, { point: p, mission, dest, plan, opt }) : null}>
+            <Btn variant="danger" size="lg" icon={Ship} disabled={!opt || !idle || opt.fuelL > fuelLeft} onClick={go} data-dispatch>
+              <span className="font-thai normal-case tracking-normal text-[13px]">{!idle ? 'ไม่มีเรือว่าง' : opt && opt.fuelL > fuelLeft ? 'น้ำมันไม่พอ' : 'ส่งเรือออก'}</span>
+            </Btn>
+          </ImpactHover>
         </div>
       </div>
     </Modal>

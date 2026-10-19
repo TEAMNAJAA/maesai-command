@@ -1,7 +1,7 @@
 # CLAUDE.md — THEOS-2 Mae Sai Command
 
 > ไฟล์นี้บันทึก Context ถาวรของโปรเจกต์ ให้อ่านก่อนเริ่มงานทุกครั้ง
-> ร่างครั้งแรก 3 ต.ค. 2569 · 4 ต.ค. แยกโมดูล/config/แผนที่จริง/logger · 10 ต.ค. อาคารจริง GISTDA + Sphere API · 16 ต.ค. ออกแบบใหม่ (Beginner/Expert, เวลา+งบ, 10 โซน, กู้ภัยองก์ 2, leaderboard) · **17 ต.ค. เวลาเดินเมื่อผู้เล่นสั่งการ + คัตซีน, หน้าเปิดเกม + หน้าวิธีเล่น (ทีมเข้ารอบชิงชนะเลิศแล้ว)**
+> ร่างครั้งแรก 3 ต.ค. 2569 · 4 ต.ค. แยกโมดูล/config/แผนที่จริง/logger · 10 ต.ค. อาคารจริง GISTDA + Sphere API · 16 ต.ค. ออกแบบใหม่ (Beginner/Expert, เวลา+งบ, 10 โซน, กู้ภัยองก์ 2, leaderboard) · **17 ต.ค. เวลาเดินเมื่อผู้เล่นสั่งการ + คัตซีน, หน้าเปิดเกม + หน้าวิธีเล่น (ทีมเข้ารอบชิงชนะเลิศแล้ว)** · 19 ต.ค. การ์ด "ผลที่จะเกิด" + ปุ่ม ⓘ "ทำไมต้องทำ"
 > แหล่งความจริงของตรรกะเกม = ใบสมัคร `gistda-request/revenge_ใบสมัคร_แก้ไข_ฉบับสะอาด.docx/.pdf`
 
 ## 1. โปรเจกต์คืออะไร
@@ -22,6 +22,7 @@ npm run build            # dist/index.html ไฟล์เดียว (~2.7 MB)
 npx vitest run           # tests/ — scenario + engine (บอทเล่นเก่ง vs ไม่ทำอะไร)
 node record-demo.mjs     # smoke test 3 องก์จาก dist/?demo&rec → recordings/run-<ts>/ (exit 2 ถ้าหน้าเว็บมี error)
 node record-perfect-run.mjs  # คลิปเล่นสมบูรณ์จากหน้าเปิดเกม + คำบรรยายไทย → recordings/perfect-run-<ts>/demo_gameplay.mp4
+node scripts/probe-impact.mjs <outDir>   # ภาพหน้าจอการ์ดผลที่จะเกิด/ⓘ/หน้าต่างยืนยัน ทั้ง 2 โหมด (ต้องเปิด npm run dev ไว้) · exit 2 ถ้ามี error หรือ Space/Esc ผิด
 node scripts/fetch-osm.mjs · scripts/fetch-poi.mjs · scripts/build-dem.mjs   # ข้อมูลพื้นหลัง (ถนน/แม่น้ำ, POI, DEM)
 node scripts/extract-buildings.mjs <BD_footprintTH.shp> <BD_footprintTH.dbf> [--clip=boundary.geojson] [--rescan]
 python scripts/build-final-mission-package.py   # สร้าง gistda-request/revenge_Final_Mission_Package.docx
@@ -41,7 +42,7 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 | Path | หน้าที่ |
 | --- | --- |
 | `src/config/missionConfig.js` | **ค่าตั้งทั้งหมด:** SFVI, THRESHOLDS, CLOUD_RULE, TRUST, RELIEF, THEOS2 (3 รอบองก์ 1 ที่ T−42/−26/−11), **TIME + CMD_MIN** (เวลาสั่งการ/คัตซีน), MISSION (60 วัน), MODES (beginner/expert), COSTS (บาท), DURATIONS, BOAT, FUEL_FACTOR 1.4, ACT2, RESCUE (≤ 9 จุดผู้ติดค้าง), HYDRO, EVENT, DATA, EMBANKMENT, SPHERE, SCORE, EVAL |
-| `src/config/scenarioData.js` | SRC 4 สี, COMMUNITIES, HOSPITAL, SHELTER_POOL (7), CAMP_SITES (3), EQUIPMENT, SECTORS, LAYERS, QUIZ … |
+| `src/config/scenarioData.js` | SRC 4 สี, COMMUNITIES, HOSPITAL, SHELTER_POOL (7), CAMP_SITES (3), EQUIPMENT, SECTORS, LAYERS, QUIZ, **WHY** (เหตุผล/โลกจริง/ทำถูก/ทำพลาด/ข้อมูลที่ใช้ ของแต่ละขั้น — ปุ่ม ⓘ) … |
 | `src/lib/scenario.js` | `makeScenario(seed, mode)` — สุ่มต่อเกม: ฉากดินถล่ม 6 sector, ความกว้างลำน้ำ 20–34 ม., รอบโคจร+เมฆพยากรณ์, รอบถ่ายองก์ 2, เมฆลอย, พายุ, ไฟรั่ว, จุดอับ, จุดอพยพ 3 แห่ง, ถนนขาด, หลังคาเยียวยา 8 หลัง |
 | `src/lib/sections.js` | 10 โซนจากหลังคาจริง (k-means) · `sectionDepth` · `GAPS_BY_SECTION` |
 | `src/lib/sim.js` | ฟังก์ชันล้วน: `computeSfvi`, `depthAt`, `arrivalAt`, `zoneOutcome`, `exposureSummary`, `makePoints`, `reliefSummary`, `missionScore` |
@@ -50,6 +51,8 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 | `src/lib/buildings.js` · `embankment.js` · `geo.js` · `sphere.js` · `evalLogger.js` | อาคาร GISTDA · แนวตลิ่ง 14 จุด · projection/router ออฟไลน์ · Sphere API · logger CSV |
 | `src/engine/world.js` | state เริ่มต้น, `advanceTo` (เหตุการณ์ตามเวลา + `event()` ที่ทำให้ปุ่ม "เดินเวลา" หยุด), `enterAct2/3`, งานภาคสนาม (jobs), เรือวิ่งรับ-ส่งเอง (shuttle) |
 | `src/engine/actions.js` | ทุกคำสั่งเป็น pure transition และ `spend(CMD_MIN.x)` เดินเวลาตามเวลาสั่งการ |
+| `src/engine/impact.js` | **การ์ด "ผลที่จะเกิด"**: `previewEvac/Capture/Seal/Camp/Pass2/Field(pump·power·tower·drone)/Boat/Skip/Verdict/Survey` — รันคำสั่งจริงจาก actions.js บนสำเนา state แล้วอ่านผลต่าง (งบ เวลา ความเชื่อมั่น) + แบบจำลอง → `{title, rows:[{group: use/get/risk, tone, th, judge}], verdict}` · แถว `judge` = ประเมินตามกฎ (เตือนผิด/ทันเวลา/เสียเปล่า) แสดงเฉพาะ Beginner (`MODES.impactJudge`) |
+| `src/ui/impact.jsx` | `ImpactCard` (ใช้/ได้/เสี่ยง + แถบสรุป) · `ImpactHover` (การ์ดลอยเมื่อชี้ปุ่ม, portal) · `ConfirmImpact` (หน้าต่างยืนยันก่อนสั่งอพยพ/ข้ามไปจบองก์ — Enter ยืนยัน, Esc ยกเลิก, **Space ไม่ทำอะไร** กันกดยืนยันโดยติดมือ) · `WhyButton` ⓘ อ่าน `WHY` ใน scenarioData.js |
 | `src/engine/useEngine.js` | `commit()` · **`advance({mode: next / span / until / end})` เดินเวลาแบบแอนิเมชัน + `cut` (คัตซีน)** · `realMs()` เวลาเล่นจริง · hook `?rec` |
 | `src/panels/timebar.jsx` | แถบเวลาใต้แผนที่: เหตุการณ์ถัดไป · +1 ชม. · เดินเวลา/ให้ THEOS-2 ถ่าย · ข้ามไปจบองก์ (`actSettled`) |
 | `src/map/Cutscene.jsx` | คัตซีน THEOS-2 4 ช็อต: วงโคจร (โลก+บรรยากาศ+โมเดลดาวเทียม) → กล้องสแกน push-broom บนภูมิประเทศ SRTM จริง/ภาพ Sphere + หลังคา GISTDA + เมฆจริง → ดาวน์ลิงก์สถานีภาครับ → ประมวลผล L3 Ortho (AWAGAD) · การ์ดเดินเวลา (หน้าปัดนาฬิกา วันที่ ระดับน้ำ/เรือ) · คลิกเพื่อข้าม |
@@ -59,7 +62,7 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 | `src/map/GeoMap.jsx` · `MapCanvas.jsx` | แผนที่ catchment/urban/corridor · สลับมุมมอง |
 | `src/aar/AarShell.jsx` | องก์ 3: ภาพหลังคา Sphere ก่อน/หลัง (โคลนบนพื้น หลังคาสะอาด), ไทม์ซีรีส์เรดาร์, สำรวจภาคพื้น, คะแนน, รายงาน CSV |
 | `scripts/demo-flow.mjs` · `demo-kit.mjs` | ผู้เล่นอัตโนมัติ (คลิก UI จริง ใช้เฉลยจาก `?rec`) · เคอร์เซอร์/คำบรรยาย/ffmpeg |
-| `tests/` | vitest: scenario + engine + sphereRoutes (Sphere ปลอมแบบฉีด ไม่ใช้เน็ต) |
+| `tests/` | vitest: scenario + engine + sphereRoutes (Sphere ปลอมแบบฉีด ไม่ใช้เน็ต) + impact (การ์ดตรงกับผลจริงของคำสั่ง, ไม่แก้ state, Expert ไม่เห็นแถว judge) |
 
 **Stack:** React 18 · Vite 5 (+ vite-plugin-singlefile) · Tailwind 3 · lucide-react · recharts · vitest · ไม่มี backend
 
@@ -79,6 +82,12 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 
 ### องก์ 3 (วันที่ 2 → 60)
 หลังคาจริง 8 หลัง · ภาพ Sphere ก่อน/หลัง (ฝั่งหลังจำลองโคลนรอบบ้านตาม mudLevel) · ไทม์ซีรีส์เรดาร์ 14 วัน · ท่วม ≥ 7 วัน = ฿9,000 · + โคลน = +฿10,000 · หลักฐานขาด → สำรวจภาคพื้น (+2 วัน ฿1,500)
+
+### การ์ด "ผลที่จะเกิด" + ⓘ (ข้อ 10, 19 ต.ค.)
+- คำสั่งใหญ่ (สั่งอพยพ · ข้ามไปจบองก์) เปิด `ConfirmImpact` ก่อนเสมอ · คำสั่งที่เลือกค่าก่อนกด (ถ่าย THEOS-2 · อุดตลิ่ง · อพยพ · โดรน · เครื่องสูบ) มีการ์ดในแผงตลอด · ปุ่มเล็ก (ตั้งฐาน · สั่งถ่ายองก์ 2 · ตัดไฟ · ตั้งเสา · ส่งเรือ · ตัดสินเยียวยา · สำรวจ) มีการ์ดเมื่อชี้
+- **ห้ามให้การ์ดเผยความจริงที่ผู้เล่นยังไม่รู้** (เช่น เมฆจริงในอนาคต, จุดผู้ติดค้างที่ยังไม่พบ, ผลจริงของหลังคา) — ใช้แค่สิ่งที่หน้าจอมีอยู่แล้ว + แบบจำลอง
+- Expert เห็นเฉพาะต้นทุน (`judge: false`) → ผู้เชี่ยวชาญต้องประเมินความเสี่ยงเอง = "ปิดตัวช่วย" ที่ตอบกรรมการได้
+- เพิ่มคำสั่งใหม่ → เพิ่ม `previewX` ใน impact.js + คีย์ใน `WHY` + เทสต์ใน tests/impact.test.js
 
 ### SFVI และคะแนน
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ) · คะแนน: THEOS-2 .20 · อพยพ .20 · ผู้ติดค้าง .20 · เยียวยา .20 · โลจิสติกส์ .10 · ความเชื่อมั่น .10
@@ -127,7 +136,7 @@ SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลัก�
 - ค่าเกณฑ์/อัตรา/ที่อยู่ข้อมูลใหม่ → `missionConfig.js` · ข้อมูลฉาก → `scenarioData.js` · ห้าม hard-code ใน component
 - ตรรกะคำนวณ → `sim.js` (ฟังก์ชันล้วน) · state เปลี่ยนผ่าน `commit()` ใน `useEngine` เท่านั้น
 - ทุกตัวเลขใหม่บนจอต้องมี `<Src/>` · ข้อความ UI ภาษาไทยใช้คลาส `font-thai` · log สองภาษา (`msg` อังกฤษ + `th` ไทย)
-- ใส่ `data-*` (เช่น `data-tab`, `data-layer`, `data-sector`) ให้ปุ่มสำคัญ — `record-demo.mjs` ใช้ selector เหล่านี้
+- ใส่ `data-*` (เช่น `data-tab`, `data-layer`, `data-sector`) ให้ปุ่มสำคัญ — `record-demo.mjs` ใช้ selector เหล่านี้ · ยืนยันคำสั่ง: `data-evac-order` → `[data-modal="confirm"]` → `data-confirm` / `data-cancel` · `data-why=<id>` · `data-impact` · `Btn` ส่ง `data-*` ต่อให้ `<button>` แล้ว
 - Tailwind arbitrary values + keyframes ใน `index.css` · ระวังเขียน regex แบบ `/[-:T]/` ในโค้ด (Tailwind อ่านเป็นคลาส) ใช้ `/\D/` แทน
 - `tailwind.config.js` เปิด opacity ทุกค่า 0–100 (เดิม `/12` `/88` `/97` ฯลฯ ไม่ถูกสร้าง → พื้นหลัง modal โปร่ง/ขอบสว่าง) · ห้ามใช้ `backdrop-blur` ทับแผนที่ (กินเฟรม — index.css ปิดไว้ ยกเว้นคลาส `keep-blur`)
 - หลังแก้: `npm run build` แล้ว `node record-demo.mjs` (RECORD_OUT=โฟลเดอร์ชั่วคราว) เพื่อทดสอบ 3 องก์อัตโนมัติ

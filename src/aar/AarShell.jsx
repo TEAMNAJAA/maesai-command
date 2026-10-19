@@ -13,6 +13,8 @@ import {
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts'
 import { Panel, PanelHead, Src, Btn, ArcGauge, Spark, StatLine, Corners } from '../ui/atoms'
 import { useMode } from '../ui/label'
+import { ImpactHover, WhyButton } from '../ui/impact'
+import { previewVerdict, previewSurvey } from '../engine/impact'
 import { RELIEF, EVENT, SCORE, MODES, MISSION, TIME } from '../config/missionConfig'
 import { LESSONS, RES_PROOF } from '../config/scenarioData'
 import { BUILDINGS } from '../lib/buildings'
@@ -212,7 +214,7 @@ function ReliefTab({ eng }) {
   return (
     <div className="grid min-h-0 flex-1 gap-3" style={{ gridTemplateColumns: '230px minmax(0,1fr)' }}>
       <div className="flex min-h-0 flex-col gap-1 overflow-y-auto pr-1" data-roof-list>
-        <div className="font-thai px-1 text-[11px] text-slate-400">หลังคาที่ต้องพิจารณา ({rel.done}/{rel.total}) · คลิกเพื่อซูมไปที่หลังนั้น</div>
+        <div className="font-thai flex items-start gap-1.5 px-1 text-[11px] text-slate-400"><span className="min-w-0 flex-1">หลังคาที่ต้องพิจารณา ({rel.done}/{rel.total}) · คลิกเพื่อซูมไปที่หลังนั้น</span><WhyButton id="relief" /></div>
         {roofs.map((r) => {
           const v = s.adjudged[r.id]
           return (
@@ -236,16 +238,18 @@ function ReliefTab({ eng }) {
         <div className="grid grid-cols-2 gap-2">
           <RadarSeries roof={roof} hint={mode.reliefHints} />
           <div className="rounded border border-white/[0.08] bg-white/[0.025] px-2.5 py-2">
-            <div className="font-thai text-[11px] font-semibold text-slate-200">หลักฐานโคลนจาก THEOS-2</div>
+            <div className="font-thai flex items-center gap-1.5 text-[11px] font-semibold text-slate-200"><span className="flex-1">หลักฐานโคลนจาก THEOS-2</span><WhyButton id="survey" /></div>
             <div className="font-thai mt-1 text-[10.5px] leading-snug text-slate-400">
               {roof.theosCloud ? 'ภาพหลังมีเมฆบังบริเวณบ้าน — ดูคราบโคลนไม่ได้' : mode.reliefHints ? 'ดูปื้นสีน้ำตาลรอบบ้านในภาพหลัง: เป็นปื้นใหญ่สีน้ำตาลทึบ = โคลนชัด' : 'ตีความคราบโคลนจากภาพเอง'}
             </div>
             {surveyed ? (
               <div className="font-thai mt-1.5 rounded bg-sky-400/10 px-2 py-1 text-[11px] text-sky-100" data-survey-result>ผลภาคสนาม: ท่วมขัง {roof.days} วัน · โคลน{roof.mud ? 'หนา ต้องล้าง' : 'ไม่พบ'}</div>
             ) : (
-              <Btn size="sm" variant="ghost" className="mt-1.5 w-full" icon={Search} onClick={() => eng.survey(roof.id)}>
-                <span className="font-thai normal-case tracking-normal">ส่งสำรวจภาคพื้น · ฿{fmt(RELIEF.surveyCost)} · +2 วัน</span>
-              </Btn>
+              <ImpactHover block className="mt-1.5" card={previewSurvey(s)}>
+                <Btn size="sm" variant="ghost" className="w-full" icon={Search} onClick={() => eng.survey(roof.id)}>
+                  <span className="font-thai normal-case tracking-normal">ส่งสำรวจภาคพื้น · ฿{fmt(RELIEF.surveyCost)} · +2 วัน</span>
+                </Btn>
+              </ImpactHover>
             )}
           </div>
         </div>
@@ -253,9 +257,11 @@ function ReliefTab({ eng }) {
           {verdicts.map(([k, label, hex]) => {
             const on = s.adjudged[roof.id] === k
             return (
-              <button key={k} onClick={() => eng.adjudicate(roof.id, k)} data-verdict={`${roof.id}-${k}`}
-                className="btn px-3 py-2 font-thai text-[12px] normal-case tracking-normal"
-                style={on ? { borderColor: `${hex}`, background: `${hex}33`, color: '#fff' } : { borderColor: `${hex}66`, color: hex }}>{label}</button>
+              <ImpactHover key={k} card={previewVerdict(k)}>
+                <button onClick={() => eng.adjudicate(roof.id, k)} data-verdict={`${roof.id}-${k}`}
+                  className="btn px-3 py-2 font-thai text-[12px] normal-case tracking-normal"
+                  style={on ? { borderColor: `${hex}`, background: `${hex}33`, color: '#fff' } : { borderColor: `${hex}66`, color: hex }}>{label}</button>
+              </ImpactHover>
             )
           })}
           {s.adjudged[roof.id] && s.act3Done && <span className="font-thai ml-2 text-[11.5px] font-bold" style={{ color: evaluateRoof(roof, s.adjudged[roof.id]) === 'correct' ? '#7CFFA0' : '#FF9DB2' }}>{outTh[evaluateRoof(roof, s.adjudged[roof.id])]}</span>}

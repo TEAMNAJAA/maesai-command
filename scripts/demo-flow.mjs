@@ -24,7 +24,17 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
     const b = page.locator(sel).first()
     if (!(await b.count()) || !(await b.isEnabled())) return false
     await click(page, b, { hold: ms(450), after: 200 })
+    await wait(250)
+    await confirm()                      // "ข้ามไปจบองก์" asks first, with what is still open
     await wait(300); await idle(); await wait(ms(500))
+    return true
+  }
+  /** Big orders open a consequence card first ("ผลที่จะเกิด") — read it, then confirm. */
+  const confirm = async (text) => {
+    if (!(await has('[data-modal="confirm"]'))) return false
+    if (text) await say('ตรวจผลก่อนสั่ง', text)
+    await point(page, page.locator('[data-modal="confirm"] [data-impact]'), { hold: ms(1400) })
+    await click(page, page.locator('[data-confirm]'), { hold: ms(450), after: ms(400) })
     return true
   }
   const st = () => page.evaluate(() => {
@@ -124,7 +134,9 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
         await openTab('zones'); await ensureView('urban')
         await point(page, page.locator('[data-panel="zones"]'), { hold: ms(1600) })
         for (const z of wet) await click(page, page.locator(`[data-pick="${z}"]`), { hold: ms(220), after: ms(250) })
-        await click(page, page.locator('[data-panel="zones-order"] button', { hasText: 'สั่งอพยพ' }), { hold: ms(700), after: ms(1200) })
+        await click(page, page.locator('[data-evac-order]'), { hold: ms(700), after: ms(500) })
+        await confirm('การ์ดผลที่จะเกิด: ใช้งบเท่าไร ได้อะไร เสี่ยงอะไร — หลักฐานพอและทันเวลา จึงยืนยัน')
+        await wait(ms(700))
         continue
       }
       // the next capture would jump past the moment to order: step the clock an hour at a time

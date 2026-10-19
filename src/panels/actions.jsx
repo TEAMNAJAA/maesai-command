@@ -20,6 +20,8 @@ import { TOWN_TARGET } from '../lib/scenario'
 import { peakDepth, arrivalAt, evacNeedMin, depthAt, HARM_M } from '../lib/sim'
 import { fmt, clockLabel } from '../lib/format'
 import { sfviHex, depthHex } from './datahub'
+import { ImpactCard, ImpactHover, WhyButton, ConfirmImpact } from '../ui/impact'
+import * as I from '../engine/impact'
 
 const hm = (min) => { const m = Math.max(0, Math.round(min)); return m >= 60 ? `${Math.floor(m / 60)}ชม. ${m % 60}น.` : `${m} นาที` }
 const tgt = (t) => (t === TOWN_TARGET ? 'ตัวเมือง (AOI-A)' : `Sector ${t}`)
@@ -71,8 +73,9 @@ function TheosPlanner({ eng, onAnalyze }) {
   const upcoming = scn.passes.filter((p) => p.t > s.clock)
   return (
     <div className="space-y-2.5" data-panel="theos">
-      <div className="font-thai rounded border border-sky-400/20 bg-sky-400/[0.05] px-2.5 py-1.5 text-[10.5px] leading-snug text-slate-300">
-        THEOS-2 ผ่านพื้นที่เป็นรอบ ๆ (ดูเวลาในแท็บ <b>ดาวเทียม</b> ทางซ้าย) · เลือกได้รอบละ {THEOS2.targetsPerPass} เป้าหมาย · เมฆเกิน {THEOS2.cloudUsablePct}% = ภาพใช้ไม่ได้ · ภาพพร้อมหลังถ่าย {THEOS2.processingMin / 60} ชม.
+      <div className="font-thai flex gap-2 rounded border border-sky-400/20 bg-sky-400/[0.05] px-2.5 py-1.5 text-[10.5px] leading-snug text-slate-300">
+        <span className="min-w-0 flex-1">THEOS-2 ผ่านพื้นที่เป็นรอบ ๆ (ดูเวลาในแท็บ <b>ดาวเทียม</b> ทางซ้าย) · เลือกได้รอบละ {THEOS2.targetsPerPass} เป้าหมาย · เมฆเกิน {THEOS2.cloudUsablePct}% = ภาพใช้ไม่ได้ · ภาพพร้อมหลังถ่าย {THEOS2.processingMin / 60} ชม.</span>
+        <WhyButton id="theos" className="self-start" />
       </div>
       {upcoming.length === 0 && <div className="font-thai text-[11px] text-slate-500">หมดรอบโคจรในองก์นี้แล้ว</div>}
       {upcoming.map((p, i) => {
@@ -107,10 +110,11 @@ function TheosPlanner({ eng, onAnalyze }) {
                 <Satellite size={12} /><span className="font-thai normal-case tracking-normal text-[11.5px] font-bold">ให้ THEOS-2 ถ่ายรอบ {p.id} → ได้ภาพ</span>
               </button>
             )}
+            {i === 0 && chosen.length > 0 && !eng.cut && <ImpactCard card={I.previewCapture(s, scn, p.id)} compact className="mt-1.5" />}
           </div>
         )
       })}
-      <Divider label="ภาพที่ได้ · IMAGE QUEUE" />
+      <Divider label="ภาพที่ได้ · IMAGE QUEUE" right={<WhyButton id="analysis" />} />
       {s.images.length === 0 && <div className="font-thai text-[11px] text-slate-500">ยังไม่มีภาพ — ภาพมาหลังรอบโคจรที่สั่งถ่ายไว้</div>}
       <div className="space-y-1">
         {[...s.images].reverse().map((img) => {
@@ -146,11 +150,13 @@ function BankTab({ eng, onChannel }) {
   const { s, scn } = eng
   const queued = s.jobs.filter((j) => j.kind === 'seal')
   const open = EMBANKMENT_GAPS.filter((g) => !s.sealed.includes(g.id) && !queued.some((j) => j.gap === g.id))
+  const openKey = open.map((g) => g.id).join()
+  const sealCard = useMemo(() => (open.length ? I.previewSeal(s, scn, open.map((g) => g.id)) : null), [s.clock, s.budget.spent, s.crews, openKey, scn])
   const cost = open.reduce((a, g) => a + g.len * EMBANKMENT.bagsPerMetre * COSTS.bigbag, 0)
   const riverImg = s.images.find((i) => i.usable && i.readyAt <= s.clock && ['D', 'E', TOWN_TARGET].includes(i.target))
   return (
     <div className="space-y-2.5" data-panel="bank">
-      <Divider label="ค่า N · ความกว้างลำน้ำ" />
+      <Divider label="ค่า N · ความกว้างลำน้ำ" right={<WhyButton id="channel" />} />
       <div className="rounded border border-white/[0.08] bg-white/[0.025] px-2.5 py-2">
         <div className="flex items-center gap-2">
           <Ruler size={14} className="text-sky-300" />
@@ -166,7 +172,7 @@ function BankTab({ eng, onChannel }) {
         {s.channel.attempts > 0 && !s.channel.measured && <div className="font-thai mt-1 text-[10px] text-[#FF9DB2]">ส่งคำตอบแล้ว {s.channel.attempts} ครั้ง (ยิ่งผิดบ่อยคะแนน THEOS-2 ยิ่งลด)</div>}
       </div>
 
-      <Divider label="จุดฟันหลอ · ทีมบิ๊กแบ็ก" />
+      <Divider label="จุดฟันหลอ · ทีมบิ๊กแบ็ก" right={<WhyButton id="seal" />} />
       <div className="grid grid-cols-3 gap-1">
         {s.crews.map((c) => {
           const busy = c.busyUntil > s.clock
@@ -186,6 +192,7 @@ function BankTab({ eng, onChannel }) {
         <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
           <div className="h-full rounded-full bg-[#22E36B]" style={{ width: `${(s.sealed.length / EMBANKMENT_GAPS.length) * 100}%` }} />
         </div>
+        {sealCard && <ImpactCard card={sealCard} compact className="mt-2" />}
         {open.length > 0 && (
           <Btn variant="go" className="mt-2 w-full" icon={ShieldCheck} onClick={() => eng.sealGaps(open.map((g) => g.id))}>
             <span className="font-thai normal-case tracking-normal">ส่งทีมอุดที่เหลือ {open.length} จุด · ฿{fmt(cost)}</span>
@@ -200,17 +207,20 @@ function BankTab({ eng, onChannel }) {
 /* ── ③ Evacuation orders per zone ─────────────────────────────────────────── */
 
 function ZoneOrders({ eng, onWait }) {
-  const { s, sfvi } = eng
+  const { s, scn, sfvi } = eng
   const [sel, setSel] = useState([])
+  const [confirm, setConfirm] = useState(false)
   const score = Object.fromEntries(sfvi.perSection.map((z) => [z.id, z.score]))
   const pending = SECTIONS.filter((z) => s.orders[z.id] === undefined)
   const chosen = sel.filter((id) => s.orders[id] === undefined)
   const cost = chosen.reduce((a, id) => a + COSTS.evacBase + COSTS.evacPerHH * SECTION_BY_ID[id].floodHH, 0)
-  const weak = sfvi.justified && (sfvi.veto1 || sfvi.world.level >= sfvi.prepLevel) ? [] : chosen.filter((id) => score[id] < SFVI.decisionBand)
+  const chosenKey = chosen.join()
+  const card = useMemo(() => (chosen.length ? I.previewEvac(s, scn, chosen) : null), [s, scn, chosenKey])
   return (
     <div className="space-y-2" data-panel="zones-order">
-      <div className="font-thai rounded border border-white/[0.08] bg-white/[0.025] px-2.5 py-1.5 text-[10.5px] leading-snug text-slate-300">
-        สั่งอพยพ <b>แยกรายโซน</b> — ใช้งบ ฿{fmt(COSTS.evacBase)} + ฿{fmt(COSTS.evacPerHH)}/ครัวเรือน · โซนที่น้ำไม่ถึงคือเงินเสียเปล่า · โซนที่ SFVI &lt; {SFVI.decisionBand} และระดับน้ำยังต่ำ = เตือนผิด
+      <div className="font-thai flex gap-2 rounded border border-white/[0.08] bg-white/[0.025] px-2.5 py-1.5 text-[10.5px] leading-snug text-slate-300">
+        <span className="min-w-0 flex-1">สั่งอพยพ <b>แยกรายโซน</b> — ใช้งบ ฿{fmt(COSTS.evacBase)} + ฿{fmt(COSTS.evacPerHH)}/ครัวเรือน · โซนที่น้ำไม่ถึงคือเงินเสียเปล่า · โซนที่ SFVI &lt; {SFVI.decisionBand} และระดับน้ำยังต่ำ = เตือนผิด</span>
+        <WhyButton id="evac" className="self-start" />
       </div>
       <div className="space-y-1">
         {SECTIONS.map((z) => {
@@ -233,14 +243,12 @@ function ZoneOrders({ eng, onWait }) {
         })}
       </div>
       <div className="flex items-center justify-between font-thai text-[9.5px] text-slate-500"><span>เวลา/ความลึก = แบบจำลอง DEM · บ้าน = GISTDA</span><span className="flex gap-1"><Src t="image" mini /><Src t="scenario" mini /></span></div>
-      <Btn variant="danger" size="lg" className="w-full" icon={Megaphone} disabled={!chosen.length} onClick={() => { eng.orderZones(chosen); setSel([]) }}>
+      {card && <ImpactCard card={card} compact />}
+      <Btn variant="danger" size="lg" className="w-full" icon={Megaphone} disabled={!chosen.length} onClick={() => setConfirm(true)} data-evac-order>
         <span className="font-thai normal-case tracking-normal text-[12px]">สั่งอพยพ {chosen.length} โซน · ฿{fmt(cost)}</span>
       </Btn>
-      {chosen.length > 0 && (
-        <div className="font-thai rounded border px-2 py-1 text-[10.5px]" style={{ borderColor: weak.length ? '#FF6B8A66' : '#22E36B55', color: weak.length ? '#FFB3C2' : '#BFF5CF' }}>
-          {weak.length ? `เสี่ยงเตือนผิด: ${weak.join(', ')} ยังมี SFVI ต่ำกว่าเกณฑ์` : 'มีหลักฐานรองรับ'}
-        </div>
-      )}
+      <ConfirmImpact open={confirm && !!card} card={card} whyId="evac" confirmTh={`ยืนยันสั่งอพยพ ${chosen.length} โซน`}
+        onCancel={() => setConfirm(false)} onConfirm={() => { setConfirm(false); eng.orderZones(chosen); setSel([]) }} />
       <Btn variant="solid" className="w-full" icon={Clock} disabled={!pending.length} onClick={onWait}>
         <span className="font-thai normal-case tracking-normal">ดูผลถ้ารอข้อมูลอีก 3 ชม. (ไม่เสียเวลา)</span>
       </Btn>
@@ -251,15 +259,16 @@ function ZoneOrders({ eng, onWait }) {
 /* ── ④ Base camp + data layers ───────────────────────────────────────────── */
 
 function BaseTab({ eng }) {
-  const { s } = eng
+  const { s, scn } = eng
   return (
     <div className="space-y-2.5" data-panel="base">
-      <Divider label="ฐานบัญชาการ · FORWARD BASE" />
+      <Divider label="ฐานบัญชาการ · FORWARD BASE" right={<WhyButton id="camp" />} />
       <div className="font-thai text-[10.5px] leading-snug text-slate-400">เรือกู้ภัยออกจากฐานนี้ในองก์ 2 · ถ้าฐานอยู่ในโซนที่น้ำท่วม ต้องย้ายฐานและเสียเวลา 3 ชม. · ตั้งฐานใช้งบ ฿{fmt(COSTS.camp)}</div>
       {CAMP_SITES.map((c) => {
         const on = s.camp === c.id
         return (
-          <button key={c.id} onClick={() => eng.setCamp(c.id)} data-camp={c.id}
+          <ImpactHover key={c.id} block card={on ? null : I.previewCamp(s, scn, c.id)}>
+          <button onClick={() => eng.setCamp(c.id)} data-camp={c.id}
             className={`w-full rounded border px-2.5 py-2 text-left transition ${on ? 'border-[#22E36B] bg-[#22E36B]/[0.1]' : 'border-white/[0.08] bg-white/[0.02] hover:border-sky-400/40'}`}>
             <div className="flex items-center gap-2">
               <Building2 size={13} className={on ? 'text-[#22E36B]' : 'text-slate-400'} />
@@ -268,6 +277,7 @@ function BaseTab({ eng }) {
             </div>
             <div className="font-thai mt-0.5 flex items-center justify-between text-[10px] text-slate-400"><span>{c.note}</span><Src t="measured" dot /></div>
           </button>
+          </ImpactHover>
         )
       })}
       <Divider label="ชั้นข้อมูลบนแผนที่ · LAYERS" />
@@ -304,6 +314,7 @@ function Incidents({ eng, onPlan }) {
         <Ship size={14} className="text-sky-300" />
         <span className="font-thai flex-1 text-[11px] text-slate-200">เรือว่าง {idle}/{s.boats.length} · น้ำมัน {fmt(s.fuel.total - s.fuel.used)} L</span>
         <span className="font-thai text-[10px] text-slate-500">พบแล้ว {known.length} จุด</span>
+        <WhyButton id="boat" />
       </div>
       {open.length === 0 && <div className="font-thai rounded border border-dashed border-white/10 px-2.5 py-3 text-center text-[11px] text-slate-500">ยังไม่มีจุดที่รอความช่วยเหลือ — สั่ง THEOS-2 ถ่ายรอบถัดไป / ส่งโดรนส่องจุดอับ / ตั้งเสาสื่อสารให้คนโทรแจ้งได้</div>}
       {open.map((p) => {
@@ -359,7 +370,7 @@ function Sensors({ eng }) {
   const freeDrone = s.drones.filter((d) => d.busyUntil <= t).length
   return (
     <div className="space-y-2.5" data-panel="sensors">
-      <Divider label="THEOS-2 · ถ่ายผ่านช่องเมฆ" />
+      <Divider label="THEOS-2 · ถ่ายผ่านช่องเมฆ" right={<WhyButton id="pass2" />} />
       {scn.act2Passes.map((q) => {
         const past = q.t <= t, ordered = s.act2Orders[q.id], shot = s.act2Shots.find((x) => x.id === q.id)
         return (
@@ -371,7 +382,7 @@ function Sensors({ eng }) {
                 {shot ? `เห็นพื้นดิน ${shot.clear.length}/10 โซน: ${shot.clear.join(' ')}` : past ? 'ผ่านไปแล้ว (ไม่ได้สั่ง)' : ordered ? `สั่งแล้ว · อีก ${hm(q.t - t)}` : `อีก ${hm(q.t - t)} — เห็นเฉพาะโซนที่เมฆเปิดตอนนั้น`}
               </span>
             </span>
-            {!past && !ordered && <Btn size="sm" variant="primary" icon={Satellite} onClick={() => eng.orderPass2(q.id)}><span className="font-thai normal-case tracking-normal">สั่งถ่าย</span></Btn>}
+            {!past && !ordered && <ImpactHover card={I.previewPass2(s, scn, q.id)}><Btn size="sm" variant="primary" icon={Satellite} onClick={() => eng.orderPass2(q.id)}><span className="font-thai normal-case tracking-normal">สั่งถ่าย</span></Btn></ImpactHover>}
             {ordered && !past && <Check size={14} className="text-[#22E36B]" />}
           </div>
         )
@@ -379,7 +390,7 @@ function Sensors({ eng }) {
       <div className="font-thai rounded border border-[#FF8A3D]/30 bg-[#FF8A3D]/[0.06] px-2.5 py-1.5 text-[10.5px] leading-snug text-[#FFC59A]">
         <b>เช็คน้ำ (RADARSAT-2)</b> อัปเดตความลึกทุก {ACT2.radarRevisitH} ชม. อัตโนมัติ — ทะลุเมฆได้แต่ความละเอียดไม่พอเห็นคน (ดูความลึกในตารางโซนทางซ้าย)
       </div>
-      <Divider label="โดรน · ตัวช่วยส่องจุดอับ" />
+      <Divider label="โดรน · ตัวช่วยส่องจุดอับ" right={<WhyButton id="drone" />} />
       <div className="font-thai text-[10.5px] text-slate-400">ใช้กับโซนที่ดาวเทียมมองไม่เห็นคน (จุดอับ: {scn.blindSpots.join(', ')}) หรือเมฆบังนาน · ฿{fmt(COSTS.drone)}/เที่ยว · {DURATIONS.droneSortie} นาที</div>
       <div className="grid grid-cols-5 gap-1">
         {SECTIONS.map((z) => {
@@ -392,6 +403,7 @@ function Sensors({ eng }) {
           )
         })}
       </div>
+      <ImpactCard card={I.previewField(s, scn, 'drone', zone)} compact />
       <Btn variant="primary" className="w-full" icon={Plane} disabled={!freeDrone} onClick={() => eng.droneSortie(zone)}>
         <span className="font-thai normal-case tracking-normal">ส่งโดรนสำรวจโซน {zone} ({freeDrone}/{s.drones.length} ว่าง)</span>
       </Btn>
@@ -402,13 +414,13 @@ function Sensors({ eng }) {
 /* ── Act 2 · ③ field: power, comms, pumps ────────────────────────────────── */
 
 function FieldOps({ eng }) {
-  const { s, mode } = eng
+  const { s, scn, mode } = eng
   const t = s.clock
   const busy = (kind, id) => s.jobs.some((j) => j.kind === kind && j.section === id)
   const [pz, setPz] = useState('Z4')
   return (
     <div className="space-y-2.5" data-panel="field">
-      <Divider label="ไฟฟ้ารั่ว · ประสาน กฟภ." />
+      <Divider label="ไฟฟ้ารั่ว · ประสาน กฟภ." right={<WhyButton id="power" />} />
       {s.hazardsLive.length === 0 && <div className="font-thai text-[10.5px] text-slate-500">ยังไม่มีรายงานไฟฟ้ารั่ว</div>}
       {s.hazardsLive.map((id) => (
         <div key={id} className="flex items-center gap-2 rounded border border-[#FFD066]/40 bg-[#FFD066]/[0.06] px-2.5 py-1.5" data-power={id}>
@@ -416,10 +428,10 @@ function FieldOps({ eng }) {
           <span className="font-thai flex-1 text-[11px] text-slate-100">โซน {id} · {SECTION_BY_ID[id].name}</span>
           {s.powerCut[id] ? <span className="font-thai text-[10.5px] text-[#7CFFA0]">ตัดไฟแล้ว</span>
             : busy('power', id) ? <span className="font-thai flex items-center gap-1 text-[10.5px] text-[#FFD066]"><Loader2 size={11} className="animate-spin" />กำลังตัด</span>
-              : <Btn size="sm" variant="warn" icon={Zap} onClick={() => eng.cutPower(id)}><span className="font-thai normal-case tracking-normal">ตัดไฟ</span></Btn>}
+              : <ImpactHover card={I.previewField(s, scn, 'power', id)}><Btn size="sm" variant="warn" icon={Zap} onClick={() => eng.cutPower(id)}><span className="font-thai normal-case tracking-normal">ตัดไฟ</span></Btn></ImpactHover>}
         </div>
       ))}
-      <Divider label="สัญญาณสื่อสาร · เสาเคลื่อนที่" />
+      <Divider label="สัญญาณสื่อสาร · เสาเคลื่อนที่" right={<WhyButton id="tower" />} />
       {!s.stormHit && <div className="font-thai text-[10.5px] text-slate-500">พายุยังไม่เข้า — เมื่อเข้า บางโซนจะสัญญาณล่ม สั่งทีม/รับแจ้งเหตุไม่ได้</div>}
       {s.stormHit && [...new Set([...s.commDown, ...Object.keys(s.towers)])].map((id) => (
         <div key={id} className="flex items-center gap-2 rounded border border-[#FF6B8A]/35 bg-[#FF003C]/[0.05] px-2.5 py-1.5" data-comm={id}>
@@ -427,10 +439,10 @@ function FieldOps({ eng }) {
           <span className="font-thai flex-1 text-[11px] text-slate-100">โซน {id} · {SECTION_BY_ID[id].name}</span>
           {s.towers[id] ? <span className="font-thai text-[10.5px] text-[#7CFFA0]">สัญญาณกลับมาแล้ว</span>
             : busy('tower', id) ? <span className="font-thai flex items-center gap-1 text-[10.5px] text-[#FFD066]"><Loader2 size={11} className="animate-spin" />กำลังตั้งเสา</span>
-              : <Btn size="sm" variant="danger" icon={RadioTower} onClick={() => eng.buildTower(id)}><span className="font-thai normal-case tracking-normal">ตั้งเสา ฿{fmt(COSTS.tower / 1000)}k</span></Btn>}
+              : <ImpactHover card={I.previewField(s, scn, 'tower', id)}><Btn size="sm" variant="danger" icon={RadioTower} onClick={() => eng.buildTower(id)}><span className="font-thai normal-case tracking-normal">ตั้งเสา ฿{fmt(COSTS.tower / 1000)}k</span></Btn></ImpactHover>}
         </div>
       ))}
-      <Divider label={`เครื่องสูบน้ำ · เหลือ ${mode.pumps - Object.keys(s.pumps).length}/${mode.pumps}`} />
+      <Divider label={`เครื่องสูบน้ำ · เหลือ ${mode.pumps - Object.keys(s.pumps).length}/${mode.pumps}`} right={<WhyButton id="pump" />} />
       <div className="font-thai text-[10.5px] leading-snug text-slate-400">ลดน้ำในโซนลง {ACT2.pumpReliefM} ม. หลังติดตั้ง {DURATIONS.pumpSetup / 60} ชม. — ใช้เปิดเส้นทางที่ผ่านโซนน้ำลึก (≥ {ACT2.deepWaterM} ม.) และยืดเวลาให้ผู้ติดค้าง · ฿{fmt(COSTS.pump)}</div>
       <div className="grid grid-cols-5 gap-1">
         {SECTIONS.map((z) => {
@@ -444,6 +456,7 @@ function FieldOps({ eng }) {
           )
         })}
       </div>
+      {!s.pumps[pz] && Object.keys(s.pumps).length < mode.pumps && <ImpactCard card={I.previewField(s, scn, 'pump', pz)} compact />}
       <Btn variant="primary" className="w-full" icon={Droplets} disabled={!!s.pumps[pz] || Object.keys(s.pumps).length >= mode.pumps} onClick={() => eng.deployPump(pz)}>
         <span className="font-thai normal-case tracking-normal">{s.pumps[pz] ? `โซน ${pz} มีเครื่องสูบแล้ว` : `ติดตั้งเครื่องสูบที่โซน ${pz}`}</span>
       </Btn>

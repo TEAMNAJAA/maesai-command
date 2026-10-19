@@ -104,10 +104,12 @@ export const MODES = {
   beginner: {
     th: 'ผู้เริ่มต้น', en: 'Beginner', budget: 11_000_000, crews: 3, boats: 6, drones: 3, pumps: 4,
     tutor: true, labels: 'dual', routeHints: true, reliefHints: true,
+    impactJudge: true,     // การ์ดผลที่จะเกิด: แสดงการประเมินตามกฎ (เตือนผิด/ทันเวลา/งบเสียเปล่า) — Expert เห็นแค่ต้นทุน
   },
   expert: {
     th: 'ผู้เชี่ยวชาญ', en: 'Expert', budget: 8_500_000, crews: 2, boats: 4, drones: 2, pumps: 3,
     tutor: false, labels: 'tech', routeHints: false, reliefHints: false,
+    impactJudge: false,
   },
 }
 // งบปฏิบัติการ (บาท) — งบเยียวยาตามมติ ครม. แยกบัญชีอยู่ในองก์ 3

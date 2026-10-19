@@ -125,7 +125,7 @@ export function Tabs({ items, value, onChange, tone = '#38BDF8', beacon = null }
   )
 }
 
-export function Btn({ children, onClick, disabled, variant = 'ghost', size = 'md', className = '', icon: Icon, title }) {
+export function Btn({ children, onClick, disabled, variant = 'ghost', size = 'md', className = '', icon: Icon, title, ...rest }) {
   const sizes = { sm: 'px-2 py-1 text-[9px]', md: 'px-3 py-1.5 text-[10px]', lg: 'px-4 py-2.5 text-[11px]' }
   const styles = {
     ghost: 'border-sky-400/25 bg-sky-400/[0.06] text-sky-200/90 hover:border-sky-400/60 hover:bg-sky-400/15 hover:text-sky-100',
@@ -136,7 +136,7 @@ export function Btn({ children, onClick, disabled, variant = 'ghost', size = 'md
     solid: 'border-white/10 bg-white/[0.06] text-slate-300 hover:bg-white/10 hover:text-white',
   }
   return (
-    <button type="button" title={title} onClick={onClick} disabled={disabled}
+    <button type="button" title={title} onClick={onClick} disabled={disabled} {...rest}
       className={`btn ${sizes[size]} ${styles[variant]} ${className}`}>
       <span className="flex items-center justify-center gap-1.5">
         {Icon && <Icon size={size === 'sm' ? 10 : 12} />}
@@ -250,11 +250,12 @@ export function StatLine({ icon: Icon, label, value, src, accent = '#7dd3fc', ar
   )
 }
 
-export function Divider({ label }) {
+export function Divider({ label, right = null }) {
   return (
     <div className="flex items-center gap-2 py-2">
       <span className="hud-label whitespace-nowrap">{label}</span>
       <span className="h-px flex-1 bg-gradient-to-r from-sky-400/25 to-transparent" />
+      {right}
     </div>
   )
 }

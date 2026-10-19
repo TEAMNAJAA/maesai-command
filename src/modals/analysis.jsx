@@ -11,6 +11,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ScanSearch, Check, X, ChevronRight, Ruler, Lightbulb, Satellite } from 'lucide-react'
 import { Modal, Btn, Src } from '../ui/atoms'
+import { WhyButton } from '../ui/impact'
 import { useMode } from '../ui/label'
 import { THEOS2, THRESHOLDS, DATA } from '../config/missionConfig'
 import { SECTORS } from '../config/scenarioData'
@@ -230,7 +231,7 @@ export function ImageAnalysisModal({ eng, imageId, onClose }) {
           <ScanSearch size={20} className="text-sky-300" />
           <div>
             <div className="hud-label">THEOS-2 · L3 ORTHO · PAN-SHARPENED · CHANGE DETECTION</div>
-            <h2 className="font-thai text-[18px] font-bold text-white">แปลภาพ {sec?.label} · {sec?.th} — หารอยดินถล่ม "ใหม่"</h2>
+            <h2 className="font-thai flex items-center gap-2 text-[18px] font-bold text-white">แปลภาพ {sec?.label} · {sec?.th} — หารอยดินถล่ม "ใหม่" <WhyButton id="analysis" size={15} /></h2>
           </div>
           <span className="ml-auto flex items-center gap-2"><span className="num text-[11px] text-slate-400">ถ่าย {clockLabel(img.takenAt)} · เมฆ {img.cloud}%</span><Src t="image" /></span>
         </div>
@@ -375,7 +376,7 @@ export function ChannelModal({ eng, onClose }) {
           <Ruler size={20} className="text-sky-300" />
           <div>
             <div className="hud-label">THEOS-2 · PAN {THEOS2.panM} M · {img.target === TOWN_TARGET ? 'TOWN REACH' : `SECTOR ${img.target}`} · CHANNEL WIDTH</div>
-            <h2 className="font-thai text-[18px] font-bold text-white">วัดความกว้างลำน้ำสาย แล้วคำนวณค่า N เอง</h2>
+            <h2 className="font-thai flex items-center gap-2 text-[18px] font-bold text-white">วัดความกว้างลำน้ำสาย แล้วคำนวณค่า N เอง <WhyButton id="channel" size={15} /></h2>
           </div>
           <span className="ml-auto"><Src t="image" /></span>
         </div>
