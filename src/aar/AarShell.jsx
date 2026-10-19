@@ -8,12 +8,12 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
-  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb, Scale,
+  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb, Scale, Lock, PenLine,
 } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts'
 import { Panel, PanelHead, Src, Btn, ArcGauge, Spark, StatLine, Corners } from '../ui/atoms'
 import { useMode } from '../ui/label'
-import { ImpactHover, WhyButton } from '../ui/impact'
+import { ImpactHover, WhyButton, ConfirmImpact } from '../ui/impact'
 import { HintLadder } from '../ui/hints'
 import { DecisionHeadline, DecisionList, TIER_HEX } from '../ui/decision'
 import { WhatIfPanel } from '../ui/whatif'
@@ -220,18 +220,21 @@ function ReliefTab({ eng }) {
   return (
     <div className="grid min-h-0 flex-1 gap-3" style={{ gridTemplateColumns: '230px minmax(0,1fr)' }}>
       <div className="flex min-h-0 flex-col gap-1 overflow-y-auto pr-1" data-roof-list>
-        <div className="font-thai flex items-start gap-1.5 px-1 text-[11px] text-slate-400"><span className="min-w-0 flex-1">หลังคาที่ต้องพิจารณา ({rel.done}/{rel.total}) · คลิกเพื่อซูมไปที่หลังนั้น</span><WhyButton id="relief" /></div>
+        <div className="font-thai flex items-start gap-1.5 px-1 text-[11px] text-slate-400"><span className="min-w-0 flex-1">หลังคาที่ต้องพิจารณา · ยืนยันแล้ว {rel.done}/{rel.total} · คลิกเพื่อซูมไปที่หลังนั้น</span><WhyButton id="relief" /></div>
         {roofs.map((r) => {
-          const v = s.adjudged[r.id]
+          const v = s.adjudged[r.id], locked = !!s.locked?.[r.id]
+          const out = s.reliefRevealed && v ? evaluateRoof(r, v) : null
           return (
-            <button key={r.id} onClick={() => pick(r.id)} data-roof={r.id}
+            <button key={r.id} onClick={() => pick(r.id)} data-roof={r.id} data-locked={locked ? 1 : 0}
               className={`rounded border px-2 py-1.5 text-left transition ${focus === r.id ? 'border-sky-400 bg-sky-400/[0.12]' : 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05]'}`}>
-              <div className="flex items-center justify-between"><span className="num text-[11px] font-bold text-white">{r.id}</span>{v ? <CheckCircle2 size={12} className="text-[#22E36B]" /> : s.reviewed.includes(r.id) ? <Eye size={12} className="text-slate-500" /> : null}</div>
+              <div className="flex items-center justify-between"><span className="num text-[11px] font-bold text-white">{r.id}</span>
+                {out ? (out === 'correct' ? <CheckCircle2 size={12} className="text-[#22E36B]" /> : <XCircle size={12} className="text-[#FF6B8A]" />) : locked ? <Lock size={11} className="text-[#FFD066]" /> : v ? <PenLine size={11} className="text-sky-300" /> : s.reviewed.includes(r.id) ? <Eye size={12} className="text-slate-500" /> : null}</div>
               <div className="font-thai text-[10px] text-slate-500">โซน {r.section} · {SECTION_BY_ID[r.section]?.name}</div>
-              {v && <div className="font-thai text-[10px] text-sky-200">{verdicts.find((x) => x[0] === v)?.[1]}</div>}
+              {v && <div className="font-thai text-[10px]" style={{ color: locked ? '#FFE0A3' : '#7dd3fc' }}>{locked ? '' : 'ร่าง · '}{verdicts.find((x) => x[0] === v)?.[1]}</div>}
             </button>
           )
         })}
+        <LockAll eng={eng} verdicts={verdicts} />
       </div>
       <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
         <div className="flex items-center gap-2">
@@ -261,19 +264,116 @@ function ReliefTab({ eng }) {
         </div>
         <div className="flex flex-wrap items-center gap-1.5" data-roof-actions={roof.id}>
           {verdicts.map(([k, label, hex]) => {
-            const on = s.adjudged[roof.id] === k
+            const on = s.adjudged[roof.id] === k, locked = !!s.locked?.[roof.id]
             return (
-              <ImpactHover key={k} card={previewVerdict(k)}>
-                <button onClick={() => eng.adjudicate(roof.id, k)} data-verdict={`${roof.id}-${k}`}
-                  className="btn px-3 py-2 font-thai text-[12px] normal-case tracking-normal"
-                  style={on ? { borderColor: `${hex}`, background: `${hex}33`, color: '#fff' } : { borderColor: `${hex}66`, color: hex }}>{label}</button>
+              <ImpactHover key={k} card={locked ? null : previewVerdict(k)}>
+                <button onClick={() => eng.adjudicate(roof.id, k)} data-verdict={`${roof.id}-${k}`} disabled={locked}
+                  className="btn px-3 py-2 font-thai text-[12px] normal-case tracking-normal disabled:cursor-not-allowed disabled:opacity-40"
+                  style={on ? { borderColor: `${hex}`, background: `${hex}33`, color: '#fff', opacity: 1 } : { borderColor: `${hex}66`, color: hex }}>{label}</button>
               </ImpactHover>
             )
           })}
-          {s.adjudged[roof.id] && s.act3Done && <span className="font-thai ml-2 text-[11.5px] font-bold" style={{ color: evaluateRoof(roof, s.adjudged[roof.id]) === 'correct' ? '#7CFFA0' : '#FF9DB2' }}>{outTh[evaluateRoof(roof, s.adjudged[roof.id])]}</span>}
+          {s.adjudged[roof.id] && !s.locked?.[roof.id] && (
+            <button onClick={() => eng.lockVerdict(roof.id)} data-lock={roof.id}
+              className="btn ml-1 flex items-center gap-1.5 border-[#FFD066]/60 bg-[#FFD066]/12 px-3 py-2 text-[#FFE0A3] hover:bg-[#FFD066]/22">
+              <Lock size={13} /><span className="font-thai normal-case tracking-normal text-[12px] font-bold">ยืนยันคำตัดสินหลังนี้</span>
+            </button>
+          )}
+          {s.locked?.[roof.id] && !s.reliefRevealed && <span className="font-thai ml-2 flex items-center gap-1 text-[11.5px] font-semibold text-[#FFE0A3]"><Lock size={12} />ยืนยันแล้ว — แก้ไม่ได้ · ผลถูก/ผิดเปิดหลังยืนยันครบทุกหลัง</span>}
+          {s.reliefRevealed && s.adjudged[roof.id] && <span className="font-thai ml-2 text-[11.5px] font-bold" style={{ color: evaluateRoof(roof, s.adjudged[roof.id]) === 'correct' ? '#7CFFA0' : '#FF9DB2' }}>{outTh[evaluateRoof(roof, s.adjudged[roof.id])]}</span>}
         </div>
         {mode.tutor && <HintLadder eng={eng} topic="a3.relief" ctx={{ roof }} compact />}
         <div className="font-thai text-[10.5px] leading-snug text-slate-500">เกณฑ์: ท่วมขัง ≥ {RELIEF.inundationMinDays} วัน → เหมาจ่าย ฿{fmt(RELIEF.flatGrant)} · มีโคลนชัด (และเข้าเกณฑ์ท่วมขัง) → +ค่าล้างโคลน ฿{fmt(RELIEF.mudGrant)} · หลักฐานไม่พอ → ส่งสำรวจ (แม่นแต่ช้า) / เสี่ยงตัดสิน</div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Lock every verdict, then reveal one roof at a time ───────────────────── */
+
+function LockAll({ eng, verdicts }) {
+  const { s, scn } = eng
+  const [ask, setAsk] = useState(false)
+  const drafted = scn.roofs.filter((r) => s.adjudged[r.id]).length, locked = scn.roofs.filter((r) => s.locked?.[r.id]).length
+  if (locked === scn.roofs.length) return null
+  const ready = drafted === scn.roofs.length
+  const pay = scn.roofs.reduce((a, r) => a + (s.adjudged[r.id] === 'flat' ? RELIEF.flatGrant : s.adjudged[r.id] === 'both' ? RELIEF.flatGrant + RELIEF.mudGrant : 0), 0)
+  const count = (k) => scn.roofs.filter((r) => s.adjudged[r.id] === k).length
+  const card = {
+    title: `ยืนยันคำตัดสินทั้งหมด ${scn.roofs.length} หลัง`,
+    rows: [
+      { group: 'use', tone: 'info', th: `จ่ายเยียวยารวม ${baht(pay)}` },
+      ...verdicts.map(([k, label]) => ({ group: 'get', tone: 'info', th: `${label}: ${count(k)} หลัง` })),
+      { group: 'risk', tone: 'warn', th: 'ยืนยันแล้วแก้ไขไม่ได้ — ระบบจะเปิดผลถูก/ผิดของทุกหลังหลังจากนี้' },
+      ...(scn.roofs.some((r) => (r.theosCloud || r.radarGap) && !s.surveyed.includes(r.id)) ? [{ group: 'risk', tone: 'warn', th: 'ยังมีหลังที่หลักฐานไม่ครบและยังไม่ได้ส่งสำรวจ' }] : []),
+    ],
+  }
+  return (
+    <div className="mt-1.5">
+      <button onClick={() => setAsk(true)} disabled={!ready} data-lock-all
+        className="btn flex w-full items-center justify-center gap-1.5 border-[#FFD066]/60 bg-[#FFD066]/15 py-2 text-[#FFE0A3] hover:bg-[#FFD066]/25 disabled:opacity-40">
+        <Lock size={13} /><span className="font-thai normal-case tracking-normal text-[12px] font-bold">ยืนยันคำตัดสินทั้งหมด ({drafted}/{scn.roofs.length})</span>
+      </button>
+      {!ready && <div className="font-thai mt-1 text-center text-[10px] text-slate-500">เลือกคำตัดสินให้ครบทุกหลังก่อน หรือยืนยันทีละหลัง</div>}
+      <ConfirmImpact open={ask} card={card} whyId="relief" tone="info" confirmTh="ยืนยันและเปิดผล" onCancel={() => setAsk(false)} onConfirm={() => { setAsk(false); eng.lockAll() }} />
+    </div>
+  )
+}
+
+const OUT_TH = { correct: 'ถูกต้อง', overpay: 'จ่ายเกิน', denial: 'ตัดสิทธิ์ผิด', under: 'จ่ายขาด' }
+const PAY = (v) => (v === 'flat' ? RELIEF.flatGrant : v === 'both' ? RELIEF.flatGrant + RELIEF.mudGrant : 0)
+
+/** Every roof locked → stamp them one by one (click to show all), then open the score. */
+export function ReliefReveal({ eng }) {
+  const { s, scn } = eng
+  const allLocked = scn.roofs.every((r) => s.locked?.[r.id])
+  const [shown, setShown] = useState(0)
+  const speed = Math.max(0.2, Number(new URLSearchParams(window.location.search).get('speed')) || 1)
+  const open = allLocked && !s.reliefRevealed
+  useEffect(() => {
+    if (!open || shown >= scn.roofs.length) return undefined
+    const t = setTimeout(() => setShown((n) => n + 1), (shown ? 650 : 900) / speed)
+    return () => clearTimeout(t)
+  }, [open, shown, scn.roofs.length, speed])
+  if (!open) return null
+  const done = shown >= scn.roofs.length
+  const right = scn.roofs.filter((r) => evaluateRoof(r, s.adjudged[r.id]) === 'correct').length
+  return (
+    <div className="fixed inset-0 z-[88] grid place-items-center bg-[#02050c]/85 p-6 animate-[fadeIn_.25s_ease-out]" data-relief-reveal onClick={() => !done && setShown(scn.roofs.length)}>
+      <div className="w-[min(1040px,96vw)]">
+        <div className="text-center">
+          <div className="hud-label text-[#FFD066]">RELIEF VERDICTS · เปิดผลการตัดสินเยียวยา</div>
+          <div className="font-thai mt-1 text-[22px] font-bold text-white">{done ? `ตัดสินถูก ${right} จาก ${scn.roofs.length} หลัง` : 'กำลังตรวจกับข้อเท็จจริงภาคพื้น…'}</div>
+          {!done && <div className="font-thai text-[12px] text-slate-400">คลิกเพื่อเปิดทั้งหมด</div>}
+        </div>
+        <div className="mt-4 grid grid-cols-4 gap-3">
+          {scn.roofs.map((r, i) => {
+            const v = s.adjudged[r.id], out = evaluateRoof(r, v), ok = out === 'correct', on = i < shown
+            const right = r.truth.flat ? (r.truth.mud ? 'both' : 'flat') : 'reject'
+            return (
+              <div key={r.id} className="relative overflow-hidden rounded-xl border px-3 py-2.5" data-reveal-roof={r.id} data-outcome={on ? out : ''}
+                style={{ borderColor: on ? (ok ? '#22E36B88' : '#FF5C7A88') : 'rgba(255,255,255,.12)', background: on ? (ok ? '#22E36B12' : '#FF003C10') : 'rgba(255,255,255,.03)' }}>
+                <div className="num text-[12px] font-bold text-white">{r.id}</div>
+                <div className="font-thai text-[10.5px] text-slate-400">โซน {r.section} · ตัดสิน: {v === 'reject' ? 'ปฏิเสธ' : baht(PAY(v))}</div>
+                {on ? (
+                  <>
+                    <div className="font-thai mt-1 text-[11px] leading-snug text-slate-300">ท่วมขังจริง {r.days} วัน · โคลน{r.mud ? 'ชัด' : 'ไม่มี'}{!ok && ` → ควร${right === 'reject' ? 'ปฏิเสธ' : `จ่าย ${baht(PAY(right))}`}`}</div>
+                    <div className="font-thai absolute right-2 top-2 rotate-[-8deg] rounded border-2 px-1.5 text-[13px] font-black tracking-wide animate-[stampIn_.35s_cubic-bezier(.2,1.6,.4,1)]"
+                      style={{ color: ok ? '#22E36B' : '#FF5C7A', borderColor: ok ? '#22E36B' : '#FF5C7A' }}>{ok ? '✓ ถูกต้อง' : `✗ ${OUT_TH[out]}`}</div>
+                  </>
+                ) : <div className="mt-2 h-[30px] animate-pulse rounded bg-white/[0.05]" />}
+              </div>
+            )
+          })}
+        </div>
+        {done && (
+          <div className="mt-5 flex justify-center">
+            <button onClick={(e) => { e.stopPropagation(); eng.revealRelief() }} data-reveal-done
+              className="btn flex items-center gap-2 border-[#22E36B]/70 bg-[#22E36B]/20 px-6 py-3 text-white hover:bg-[#22E36B]/30">
+              <Trophy size={16} /><span className="font-thai normal-case tracking-normal text-[15px] font-bold">ดูคะแนนภารกิจ</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -287,6 +387,22 @@ function ScoreColumn({ eng, score }) {
   const { s } = eng
   const d = score.decision
   const hex = TIER_HEX[d.tier.id]
+  if (!s.reliefRevealed) {
+    const locked = eng.scn.roofs.filter((r) => s.locked?.[r.id]).length
+    return (
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+        <Panel className="shrink-0" data-panel="mission-score" data-score-hidden>
+          <PanelHead title="MISSION SCORE · คะแนนภารกิจ" icon={Target} right={<Src t="scenario" mini />} />
+          <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-full border-2 border-[#FFD066]/50 bg-[#FFD066]/10"><Lock size={24} className="text-[#FFD066]" /></span>
+            <div className="font-thai text-[13px] font-bold text-white">คะแนนจะเปิดหลังยืนยันคำตัดสินครบ</div>
+            <div className="font-thai text-[11.5px] leading-snug text-slate-400">ยืนยันแล้ว {locked}/{eng.scn.roofs.length} หลัง · ผลถูก/ผิดของแต่ละหลังจะไม่แสดงก่อน เพื่อไม่ให้เดาคำตอบได้</div>
+            <div className="mt-1 h-[5px] w-full overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-[#FFD066] transition-[width] duration-500" style={{ width: `${(locked / eng.scn.roofs.length) * 100}%` }} /></div>
+          </div>
+        </Panel>
+      </div>
+    )
+  }
   return (
     <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
       <Panel className="shrink-0" data-panel="mission-score" data-total-points={score.points} data-score-version={score.version}>
@@ -392,7 +508,7 @@ function WhatIfTabs({ eng, relDone }) {
 function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }) {
   const { s } = eng
   const rel = score.relief
-  const allDone = rel.done >= rel.total
+  const allDone = rel.done >= rel.total && !!s.reliefRevealed
   const top = leaderboard.top(s.modeId, 5)
   return (
     <div className="space-y-3">
@@ -485,7 +601,7 @@ function ReliefBudget({ eng, score }) {
             <span className="font-thai text-[12px] font-bold text-[#7CFFA0]">อนุมัติแล้ว ({rel.done}/{rel.total})</span>
             <span className="num text-[14px] font-bold text-white">{baht(rel.committed)}</span>
           </div>
-          <div className="font-thai mt-2 rounded border border-white/[0.07] bg-white/[0.02] px-2 py-1.5 text-[10.5px] text-slate-400">ประมาณการทั้งเมือง ({fmt(rel.householdsInScope)} ครัวเรือนในโซนน้ำถึง): <span className="num text-sky-200">{rel.done ? baht(Math.round(rel.projected)) : '—'}</span> · ถ้าตัดสินถูกทุกหลัง {baht(Math.round(rel.projectedIdeal))}</div>
+          <div className="font-thai mt-2 rounded border border-white/[0.07] bg-white/[0.02] px-2 py-1.5 text-[10.5px] text-slate-400">ประมาณการทั้งเมือง ({fmt(rel.householdsInScope)} ครัวเรือนในโซนน้ำถึง): <span className="num text-sky-200">{rel.done ? baht(Math.round(rel.projected)) : '—'}</span>{eng.s.reliefRevealed ? ` · ถ้าตัดสินถูกทุกหลัง ${baht(Math.round(rel.projectedIdeal))}` : ''}</div>
         </div>
       </Panel>
       <Panel className="shrink-0">
@@ -542,6 +658,7 @@ export function AarShell({ eng, tab, setTab, onPostTest, postDone, player, onSav
       </div>
       <div className="grid min-h-0 flex-1 gap-3" style={{ gridTemplateColumns: 'minmax(232px,260px) minmax(0,1fr) minmax(260px,300px)' }}>
         <ScoreColumn eng={eng} score={score} />
+        <ReliefReveal eng={eng} />
         <div className="flex min-h-0 flex-col overflow-y-auto">
           {tab === 'relief' && <Panel className="flex min-h-0 flex-1 flex-col p-3"><ReliefTab eng={eng} /></Panel>}
           {tab === 'summary' && <SummaryTab eng={eng} score={score} onPostTest={onPostTest} postDone={postDone} player={player} saved={saved} onSaved={() => onSaveScore(score)} />}

@@ -85,6 +85,8 @@ const sessions = names.flatMap((n, i) => [1, 2].map((round) => ({
   await page.evaluate(() => window.__maesai.advance({ mode: 'end' })); await idle(page)
   await page.locator('[data-act2-next]').click(); await page.waitForTimeout(800)
   for (const r of await page.locator('[data-roof]').all()) { await r.click(); const id = await r.getAttribute('data-roof'); await page.locator(`[data-verdict="${id}-reject"]`).click() }
+  await page.locator('[data-lock-all]').click(); await page.locator('[data-confirm]').click()
+  await page.waitForSelector('[data-reveal-done]', { timeout: 30000 }); await page.locator('[data-reveal-done]').click()
   await page.locator('button:has-text("สรุป · Leaderboard")').first().click()
   await page.waitForSelector('[data-prev-round]')
   await page.waitForTimeout(500)

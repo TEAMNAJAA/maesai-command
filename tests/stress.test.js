@@ -122,6 +122,7 @@ describe('Stress Test', () => {
       for (const r of scn.roofs) {
         if (r.radarGap || r.theosCloud) s = A.survey(s, scn, r.id)
         s = A.adjudicate(s, scn, r.id, r.truth.flat ? (r.truth.mud ? 'both' : 'flat') : 'reject')
+        s = A.lockVerdict(s, scn, r.id)
       }
       const careful = missionScore(s, scn)
       let idle = makeInitial('beginner', seed, all)

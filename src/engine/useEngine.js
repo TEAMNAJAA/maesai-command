@@ -257,6 +257,9 @@ export function useEngine() {
   /* ── Act 3 actions ──────────────────────────────────────────────────────── */
   const reviewRoof = useCallback(wrap(A.reviewRoof), [commit])
   const survey = useCallback(wrap(A.survey), [commit])
+  const lockVerdict = useCallback((roofId) => { const next = commit((p, sc) => A.lockVerdict(p, sc, roofId)); logger.relief(reliefSummary(next, scnRef.current)) }, [commit])
+  const lockAll = useCallback(() => { const next = commit((p, sc) => A.lockAll(p, sc)); logger.relief(reliefSummary(next, scnRef.current)) }, [commit])
+  const revealRelief = useCallback(() => commit((p, sc) => A.revealRelief(p, sc)), [commit])
   const adjudicate = useCallback((roofId, verdict) => {
     const next = commit((p, sc) => A.adjudicate(p, sc, roofId, verdict))
     logger.relief(reliefSummary(next, scnRef.current))
@@ -330,7 +333,7 @@ export function useEngine() {
     act1Over, act2Over,
     setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, orderZones, toggleLayer, routeZone, revealHint,
     orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat, requestBoatRoutes, boatRouteStatus, boatRouteVer,
-    reviewRoof, survey, adjudicate,
+    reviewRoof, survey, adjudicate, lockVerdict, lockAll, revealRelief,
     goAct2, goAct3, ackVeto, finishMission, newGame, setMode, setStress,
   }
 }

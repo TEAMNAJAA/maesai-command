@@ -58,6 +58,8 @@ export function makeInitial(modeId, seed, stress = []) {
     routeLog: [],                     // every boat route chosen vs the best one — for the "what if" debrief
     // act 3
     adjudged: {}, surveyed: [], reviewed: [], act3Done: false,
+    locked: {},                       // roof → verdict confirmed (no more changes) · drafts never count
+    reliefRevealed: false,            // right/wrong is shown only after every roof is locked
     jobs: [],
     logs,
     toasts: [],

@@ -94,6 +94,8 @@ describe('what-if debrief', () => {
     let { s, scn } = start(4242)
     s = A.setCamp(s, scn, 'cmp-amp'); s = step(s, scn, 0); s = enterAct2(s, scn); s = step(s, scn, 36 * 60); s = enterAct3(s)
     for (const r of scn.roofs) s = A.adjudicate(s, scn, r.id, 'flat')
+    expect(whatIf(s, scn, 3).cards.filter((c) => c.id.startsWith('roof-'))).toHaveLength(0)   // drafts are not decisions yet
+    s = A.lockAll(s, scn)
     const w = whatIf(s, scn, 3)
     const wrong = scn.roofs.filter((r) => evaluateRoof(r, 'flat') !== 'correct')
     expect(w.cards.filter((c) => c.id.startsWith('roof-'))).toHaveLength(wrong.length)

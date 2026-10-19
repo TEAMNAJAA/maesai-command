@@ -192,7 +192,8 @@ const truthPayout = (r) => (r.truth.flat ? RELIEF.flatGrant : 0) + (r.truth.mud 
 
 export function reliefSummary(s, scn) {
   const roofs = scn.roofs
-  const done = roofs.filter((r) => s.adjudged[r.id])
+  // only confirmed (locked) verdicts count — drafts are not decisions yet
+  const done = roofs.filter((r) => s.adjudged[r.id] && (!s.locked || s.locked[r.id]))
   const out = { correct: 0, overpay: 0, denial: 0, under: 0 }
   done.forEach((r) => { out[evaluateRoof(r, s.adjudged[r.id])] += 1 })
   const flats = done.filter((r) => ['flat', 'both'].includes(s.adjudged[r.id])).length

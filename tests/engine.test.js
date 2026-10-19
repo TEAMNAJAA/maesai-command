@@ -60,6 +60,7 @@ function perfectRun(seed, modeId = 'beginner') {
   for (const r of scn.roofs) {
     if (r.radarGap || r.theosCloud) s = A.survey(s, scn, r.id)
     s = A.adjudicate(s, scn, r.id, r.truth.flat ? (r.truth.mud ? 'both' : 'flat') : 'reject')
+    s = A.lockVerdict(s, scn, r.id)
   }
   return { s, scn, score: missionScore(s, scn) }
 }

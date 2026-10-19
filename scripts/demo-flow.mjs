@@ -270,8 +270,13 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       if (await sb.count()) await click(page, sb.first(), { hold: ms(400), after: ms(900) })
     }
     await say('เยียวยา', `${r.id}: ${vth[r.v]}`)
-    await click(page, page.locator(`[data-verdict="${r.id}-${r.v}"]`), { hold: ms(400), after: ms(700) })
+    await click(page, page.locator(`[data-verdict="${r.id}-${r.v}"]`), { hold: ms(400), after: ms(500) })
+    await click(page, page.locator(`[data-lock="${r.id}"]`), { hold: ms(300), after: ms(500) })      // a verdict counts once it is locked
   }
+  await say('เปิดผล', 'ยืนยันคำตัดสินครบทุกหลัง — ระบบเปิดผลถูก/ผิดทีละหลัง (ก่อนหน้านี้ไม่แสดง จึงเดาคำตอบไม่ได้)')
+  await page.waitForSelector('[data-reveal-done]', { timeout: 30000 })
+  await wait(ms(1200))
+  await click(page, page.locator('[data-reveal-done]'), { hold: ms(400), after: ms(900) })
   await click(page, page.locator('[data-aar-tab="summary"]'), { hold: ms(400), after: ms(1200) })
   await say('AAR', 'สรุปคะแนนภารกิจ — บันทึกลงตารางอันดับ')
   const save = page.locator('[data-save-score]')

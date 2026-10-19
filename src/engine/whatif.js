@@ -368,7 +368,7 @@ function act3(s, scn) {
   const cards = [], good = []
   let correct = 0
   for (const r of scn.roofs) {
-    const v = s.adjudged[r.id]
+    const v = s.locked && !s.locked[r.id] ? null : s.adjudged[r.id]     // drafts are not decisions
     if (!v) continue
     const out = evaluateRoof(r, v)
     if (out === 'correct') { correct++; continue }

@@ -281,10 +281,34 @@ export function survey(s, scn, roofId) {
   log(n, 'info', 'SURVEY', `Ground survey for ${roofId}.`, `ส่งทีมสำรวจภาคพื้น ${roofId} — แม่นแต่ใช้เวลา ${DURATIONS.surveyDays} วัน`)
   return n
 }
+/** A verdict is a draft until it is locked — the right/wrong answer stays hidden, so it cannot be found by trying. */
 export function adjudicate(s, scn, roofId, verdict) {
+  if (s.locked?.[roofId]) return s
   const n = clone(s)
   n.adjudged[roofId] = verdict
   return n
+}
+/** Confirm one roof's verdict for good. */
+export function lockVerdict(s, scn, roofId) {
+  if (!s.adjudged[roofId] || s.locked?.[roofId]) return s
+  const n = clone(s)
+  n.locked = { ...(n.locked || {}), [roofId]: true }
+  log(n, 'info', 'RELIEF', `${roofId} verdict locked.`, `ยืนยันคำตัดสิน ${roofId} แล้ว — แก้ไขไม่ได้`)
+  return n
+}
+/** Confirm every drafted verdict at once. */
+export function lockAll(s, scn) {
+  const ids = scn.roofs.map((r) => r.id).filter((id) => s.adjudged[id] && !s.locked?.[id])
+  if (!ids.length) return s
+  const n = clone(s)
+  n.locked = { ...(n.locked || {}), ...Object.fromEntries(ids.map((id) => [id, true])) }
+  log(n, 'info', 'RELIEF', `${ids.length} verdicts locked.`, `ยืนยันคำตัดสินทั้งหมด ${ids.length} หลัง — แก้ไขไม่ได้`)
+  return n
+}
+/** After every roof is locked: show which verdicts were right. */
+export function revealRelief(s, scn) {
+  if (s.reliefRevealed || !scn.roofs.every((r) => s.locked?.[r.id])) return s
+  return { ...s, reliefRevealed: true }
 }
 
 export { HOSPITAL }
