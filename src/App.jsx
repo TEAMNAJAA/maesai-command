@@ -130,12 +130,13 @@ export default function App() {
     logger.finish({ trust: Math.round(eng.s.trust), score: saved?.score ?? null, exposed: eng.exposure.exposed, post: score })
   }
   const saveScore = (score) => {
-    const entry = { name: player || 'ไม่ระบุชื่อ', mode: s.modeId, score: score.total * 100, sec: eng.realMs() / 1000, seed: s.seed, parts: score.parts, stress: s.stress || [] }
+    const entry = { name: player || 'ไม่ระบุชื่อ', mode: s.modeId, score: score.points, sec: eng.realMs() / 1000, seed: s.seed, parts: score.partPoints, stress: s.stress || [], v: score.version, tier: score.decision.tier.id }
     const rank = leaderboard.add(entry)
     const top = leaderboard.top(s.modeId, 999)
-    setSaved({ rank, at: top[rank - 1]?.at, score: Math.round(score.total * 100) })
+    setSaved({ rank, at: top[rank - 1]?.at, score: score.points })
     eng.finishMission()
-    logger.finish({ trust: Math.round(s.trust), score: Math.round(score.total * 100), exposed: eng.exposure.exposed, metrics: sessionMetrics(s, eng.scn, eng.realMs() / 1000) })
+    logger.finish({ trust: Math.round(s.trust), score: score.points, scoreVersion: score.version, decisionTier: score.decision.tier.id, decisionRatio: +score.decision.ratio.toFixed(3), points: score.points,
+      exposed: eng.exposure.exposed, metrics: sessionMetrics(s, eng.scn, eng.realMs() / 1000) })
     setBoard(true)
   }
 

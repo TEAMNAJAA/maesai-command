@@ -63,7 +63,7 @@ async function main() {
 
   const { score } = await playMission(page, { say, mark, slow: 0.6 })
   await click(page, page.locator('[data-aar-tab="report"]'), { after: 1200 })
-  await say('Perfect Run', `จบภารกิจ — คะแนนภารกิจ ${score}%`)
+  await say('Perfect Run', `จบภารกิจ — คะแนนภารกิจ ${score}`)
   await wait(4500)
 
   const webm = await finish(session, OUT, `${NAME}.webm`, timer)

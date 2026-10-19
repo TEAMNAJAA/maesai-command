@@ -16,8 +16,10 @@ export function sessionMetrics(s, scn, realSec = null) {
   const missed = [1, 2, 3].reduce((a, act) => a + whatIf(s, scn, act).cards.length, 0)
   const pp = sc.people
   return {
-    score: Math.round(sc.total * 100),
-    parts: Object.fromEntries(Object.entries(sc.parts).map(([k, v]) => [k, Math.round(v * 100)])),
+    version: sc.version,
+    score: sc.points,
+    decisionTier: sc.decision.tier.id, decisionRatio: Math.round(sc.decision.ratio * 100), critical: sc.decision.critical,
+    parts: sc.partPoints,
     falseAlarms: s.falseAlarms,
     exposedHH: sc.exposure.exposed,
     savedPct: pp.need ? Math.round((pp.saved / pp.need) * 100) : 100,
@@ -36,7 +38,9 @@ export function sessionMetrics(s, scn, realSec = null) {
 
 /** Metrics shown in the comparison — `better`: which direction is an improvement. */
 export const METRICS = [
-  { k: 'score', th: 'คะแนนภารกิจ', unit: '%', better: 1 },
+  { k: 'score', th: 'คะแนนภารกิจ (เต็ม 1000)', unit: 'แต้ม', better: 1 },
+  { k: 'decisionRatio', th: 'ตัดสินใจถูก', unit: '%', better: 1 },
+  { k: 'critical', th: 'ผิดร้ายแรง', unit: 'ครั้ง', better: -1 },
   { k: 'falseAlarms', th: 'เตือนผิด', unit: 'ครั้ง', better: -1 },
   { k: 'savedPct', th: 'ช่วยผู้ติดค้างได้', unit: '%', better: 1 },
   { k: 'routeErrors', th: 'เส้นทางเรือผิด', unit: 'ครั้ง', better: -1 },
@@ -62,13 +66,18 @@ export function roundPairs(sessions) {
   for (const list of by.values()) {
     if (list.length < 2) continue
     list.sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)))
-    const [r1, r2] = list
+    // score v2 (points) and v1 (%) are not comparable: pair the first two rounds of the newest version
+    const ver = (x) => x.result.metrics.version || 1
+    const newest = Math.max(...list.map(ver))
+    const same = list.filter((x) => ver(x) === newest)
+    if (same.length < 2) continue
+    const [r1, r2] = same
     const m1 = r1.result.metrics, m2 = r2.result.metrics
     const delta = Object.fromEntries(METRICS.map(({ k }) => [k, m1[k] === null || m2[k] === null || m1[k] === undefined || m2[k] === undefined ? null : m2[k] - m1[k]]))
     pairs.push({
-      player: r1.player, rounds: list.length, r1, r2, m1, m2, delta,
+      player: r1.player, rounds: same.length, r1, r2, m1, m2, delta, version: newest,
       sameSeed: m1.seed !== undefined && m1.seed === m2.seed,
-      trend: list.map((x) => x.result.metrics.score),
+      trend: same.map((x) => x.result.metrics.score),
     })
   }
   return pairs.sort((a, b) => (b.delta.score ?? 0) - (a.delta.score ?? 0))

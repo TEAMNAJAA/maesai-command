@@ -123,10 +123,13 @@ describe('Stress Test', () => {
         if (r.radarGap || r.theosCloud) s = A.survey(s, scn, r.id)
         s = A.adjudicate(s, scn, r.id, r.truth.flat ? (r.truth.mud ? 'both' : 'flat') : 'reject')
       }
-      const careful = missionScore(s, scn).total
+      const careful = missionScore(s, scn)
       let idle = makeInitial('beginner', seed, all)
       idle = step(idle, scn, 0); idle = enterAct2(idle, scn); idle = step(idle, scn, 36 * 60); idle = enterAct3(idle)
-      expect(careful).toBeGreaterThan(missionScore(idle, scn).total + 0.3)
+      const lazy = missionScore(idle, scn)
+      // under stress a scripted player may still lose a group (that is the point of the test) — compare the work, not the tier
+      expect(careful.perf).toBeGreaterThan(lazy.perf + 300)
+      expect(careful.decision.ratio).toBeGreaterThan(lazy.decision.ratio + 0.5)
       expect(s.shelters ?? scn.shelters).toHaveLength(2)
     }
   })

@@ -11,8 +11,8 @@ import { roundPairs, compareSummary, pairsCSV, METRICS } from '../lib/compare'
 import { logger, downloadText } from '../lib/evalLogger'
 import { mmss } from '../lib/format'
 
-export const fmtVal = (k, v) => (v === null || v === undefined ? '—' : k === 'realSec' ? mmss(v) : ['score', 'savedPct', 'reliefPct'].includes(k) ? `${Math.round(v)}%` : Number.isInteger(v) ? `${v}` : v.toFixed(1))
-const fmtDelta = (k, d) => (d === null || d === undefined ? '—' : `${d > 0 ? '+' : d < 0 ? '−' : '±'}${k === 'realSec' ? mmss(Math.abs(d)) : ['score', 'savedPct', 'reliefPct'].includes(k) ? `${Math.abs(Math.round(d))}%` : Math.abs(d) % 1 ? Math.abs(d).toFixed(1) : Math.abs(d)}`)
+export const fmtVal = (k, v) => (v === null || v === undefined ? '—' : k === 'realSec' ? mmss(v) : ['savedPct', 'reliefPct', 'decisionRatio'].includes(k) ? `${Math.round(v)}%` : k === 'score' ? `${Math.round(v)}` : Number.isInteger(v) ? `${v}` : v.toFixed(1))
+const fmtDelta = (k, d) => (d === null || d === undefined ? '—' : `${d > 0 ? '+' : d < 0 ? '−' : '±'}${k === 'realSec' ? mmss(Math.abs(d)) : ['savedPct', 'reliefPct', 'decisionRatio'].includes(k) ? `${Math.abs(Math.round(d))}%` : k === 'score' ? Math.abs(Math.round(d)) : Math.abs(d) % 1 ? Math.abs(d).toFixed(1) : Math.abs(d)}`)
 const GOOD = '#22E36B', BAD = '#FF5C7A', FLAT = '#94A3B8'
 
 export function DeltaChip({ k, d, better }) {
@@ -28,10 +28,11 @@ export function DeltaChip({ k, d, better }) {
 /** Slope chart: one line per player from round 1 to round 2. */
 function Slopes({ pairs, mean }) {
   const W = 430, H = 230, x1 = 70, x2 = 330, top = 18, bot = 200
-  const y = (v) => bot - (Math.max(0, Math.min(100, v)) / 100) * (bot - top)
+  const maxV = pairs.some((p) => (p.version || 1) >= 2) ? 1000 : 100       // v2 = points out of 1000
+  const y = (v) => bot - (Math.max(0, Math.min(maxV, v)) / maxV) * (bot - top)
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" data-compare-slopes>
-      {[0, 25, 50, 75, 100].map((v) => (
+      {[0, 0.25, 0.5, 0.75, 1].map((f) => f * maxV).map((v) => (
         <g key={v}>
           <line x1={x1 - 8} y1={y(v)} x2={x2 + 8} y2={y(v)} stroke="rgba(148,163,184,.12)" />
           <text x={x1 - 14} y={y(v) + 3} textAnchor="end" fontSize="9" fill="#64809f" className="num">{v}</text>
@@ -132,7 +133,7 @@ export function RoundCompare({ version }) {
                 <td className="font-thai px-2 py-1.5 text-[12px] font-semibold text-white">{p.player}</td>
                 <td className="num px-2 py-1.5 text-[11.5px] text-slate-400">{p.rounds}</td>
                 <td className="num px-2 py-1.5 text-[11px] text-slate-400">{p.m1.seed ?? '—'} → {p.m2.seed ?? '—'}</td>
-                <td className="px-2 py-1.5"><span className="num text-[11.5px] text-slate-300">{p.m1.score}% → {p.m2.score}%</span> <DeltaChip k="score" d={p.delta.score} better={1} /></td>
+                <td className="px-2 py-1.5"><span className="num text-[11.5px] text-slate-300">{fmtVal('score', p.m1.score)} → {fmtVal('score', p.m2.score)}</span> <DeltaChip k="score" d={p.delta.score} better={1} /></td>
                 <td className="px-2 py-1.5"><DeltaChip k="falseAlarms" d={p.delta.falseAlarms} better={-1} /></td>
                 <td className="px-2 py-1.5"><DeltaChip k="savedPct" d={p.delta.savedPct} better={1} /></td>
                 <td className="px-2 py-1.5"><DeltaChip k="missed" d={p.delta.missed} better={-1} /></td>

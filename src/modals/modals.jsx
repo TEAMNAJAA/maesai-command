@@ -11,7 +11,8 @@ import { Modal, Btn, Src, SrcLegend } from '../ui/atoms'
 import { QUIZ } from '../config/scenarioData'
 import { SFVI, THRESHOLDS, RELIEF, TRUST, EVAL, MODES } from '../config/missionConfig'
 import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
-import { hintPenalty } from '../lib/sim'
+import { hintPenalty, decisionLedger } from '../lib/sim'
+import { DecisionCounts, VERDICT } from '../ui/decision'
 import { questFor } from '../panels/quest'
 import { WhatIfPanel } from '../ui/whatif'
 import { RoundCompare } from './teacherCompare'
@@ -213,6 +214,33 @@ export function WaitCompareModal({ data, onClose, onEvacuate }) {
   )
 }
 
+/** This act's decisions (score v2): counts + the ones that went wrong, worst first. */
+function ActDecisions({ eng, act }) {
+  const led = useMemo(() => decisionLedger(eng.s, eng.scn), [eng.s, eng.scn])
+  const list = led.items.filter((x) => x.act === act)
+  const c = { good: 0, fair: 0, bad: 0, skip: 0, critical: 0 }
+  list.forEach((x) => c[x.verdict]++)
+  const ratio = list.length ? (c.good + c.fair * 0.5) / list.length : 1
+  const worst = list.filter((x) => x.verdict !== 'good').sort((a, b) => ['critical', 'bad', 'skip', 'fair'].indexOf(a.verdict) - ['critical', 'bad', 'skip', 'fair'].indexOf(b.verdict)).slice(0, 4)
+  return (
+    <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.025] p-3" data-act-decisions={act}>
+      <div className="flex items-center gap-2">
+        <span className="font-thai text-[12px] font-bold text-white">การตัดสินใจในองก์นี้</span>
+        <span className="num text-[12px] font-bold" style={{ color: ratio >= 0.85 ? '#22E36B' : ratio >= 0.65 ? '#FFD066' : '#FF6B8A' }}>{Math.round(ratio * 100)}% ถูก</span>
+        <span className="ml-auto"><DecisionCounts counts={c} /></span>
+      </div>
+      {worst.length > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {worst.map((x) => { const v = VERDICT[x.verdict]; return (
+            <div key={x.id} className="font-thai flex items-start gap-1.5 text-[11px] leading-snug"><v.icon size={12} className="mt-[1px] shrink-0" style={{ color: v.hex }} /><span className="text-slate-200">{x.th}</span><span className="text-slate-500">— {x.why}</span></div>
+          ) })}
+        </div>
+      )}
+      <div className="font-thai mt-1 text-[10px] text-slate-500">ข้ามขั้นตอน = ผิด · คะแนนรวมท้ายเกม = คะแนนผลงาน × ตัวคูณการตัดสินใจ − คำใบ้</div>
+    </div>
+  )
+}
+
 /* ── End of act 1 (T−0) ─────────────────────────────────────────────────── */
 
 export function Act1SummaryModal({ open, eng, onNext }) {
@@ -269,6 +297,7 @@ export function Act1SummaryModal({ open, eng, onNext }) {
           </div>
           <div className="font-thai mt-2 text-[11px] text-slate-400">SFVI ล่าสุด {sfvi.basin.toFixed(2)} · L = {sfvi.scars.labelled}/{scn.totalScars} (ระบุถูก {sfvi.scars.tp} · ผิด {sfvi.scars.fp}) · N = {sfvi.N.toFixed(2)} · ความเชื่อมั่น {Math.round(s.trust)}%</div>
         </div>
+        <ActDecisions eng={eng} act={1} />
         <WhatIfPanel eng={eng} act={1} limit={3} compact className="mt-3" />
         <div className="font-thai mt-3 text-[11.5px] leading-snug text-slate-400">องก์ 2: เมฆเคลื่อนผ่านเมือง 35–65% — ใช้ THEOS-2 ถ่ายช่องเมฆหาผู้ติดค้าง · เรดาร์เช็คน้ำบอกความลึก · เรือกู้ภัยออกจากฐานของคุณ</div>
         <div className="mt-4 flex justify-end">
@@ -320,6 +349,7 @@ export function Act2SummaryModal({ open, eng, onNext }) {
           {stat(Wallet, 'งบคงเหลือ', `฿${fmt((s.budget.total - s.budget.spent) / 1e6, 2)}M`, '#FFD066')}
           {stat(Clock, 'เวลาเล่นจริงสะสม', mmss(eng.realMs() / 1000), '#7dd3fc')}
         </div>
+        <ActDecisions eng={eng} act={2} />
         <WhatIfPanel eng={eng} act={2} limit={3} compact className="mt-3" />
         {eng.mode.tutor && (() => {
           const h = hintPenalty(s)

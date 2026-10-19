@@ -115,8 +115,10 @@ describe('engine', () => {
       console.log(`seed ${seed}: perfect ${(good.score.total * 100).toFixed(0)}%`, Object.fromEntries(Object.entries(good.score.parts).map(([k, v]) => [k, +(v * 100).toFixed(0)])),
         'people', good.score.people, 'fuel', good.s.fuel, 'budget', good.s.budget, 'errors', good.s.routeErrors,
         `| idle ${(idle.score.total * 100).toFixed(0)}%`, idle.score.people)
-      expect(good.score.total).toBeGreaterThan(0.75)
-      expect(idle.score.total).toBeLessThan(0.45)
+      expect(good.score.points).toBeGreaterThan(750)                 // score v2: points out of 1000
+      expect(good.score.decision.critical).toBe(0)
+      expect(idle.score.points).toBeLessThan(50)
+      expect(idle.score.decision.tier.id).toBe('fail')
       expect(good.s.budget.spent).toBeLessThanOrEqual(good.s.budget.total)
       expect(good.s.fuel.used).toBeLessThanOrEqual(good.s.fuel.total)
       expect(sf.L).toBeGreaterThan(0)

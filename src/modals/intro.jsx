@@ -358,7 +358,7 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
               : top.map((r, i) => (
                 <div key={r.at} className="font-thai mt-1.5 flex items-center gap-2 text-[13px] text-slate-200">
                   <span className="num w-4 text-slate-500">{i + 1}</span><span className="min-w-0 flex-1 truncate">{r.name}</span>
-                  <span className="num text-[#7CFFA0]">{Math.round(r.score)}%</span>{r.sec ? <span className="num text-[11px] text-slate-500">{mmss(r.sec)}</span> : null}
+                  <span className="num text-[#7CFFA0]">{Math.round(r.score)}</span><span className="font-thai text-[10.5px] text-slate-500">แต้ม</span>{r.sec ? <span className="num text-[11px] text-slate-500">{mmss(r.sec)}</span> : null}
                 </div>
               ))}
             <div className="font-thai mt-2 flex items-center gap-1 text-[11.5px] text-slate-400">ดูทั้งหมด <ArrowRight size={11} /></div>

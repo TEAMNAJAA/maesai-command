@@ -75,7 +75,7 @@ export function enterAct2(s, scn) {
   const mode = MODES[n.modeId]
   n.act = 2; n.clock = 0; n.act1Done = true; n.toasts = []
   if (!n.camp) {
-    n.camp = CAMP_SITES[0].id
+    n.camp = CAMP_SITES[0].id; n.campAuto = true
     log(n, 'warn', 'CAMP', 'No forward base was chosen — the district office was assigned by default.', 'ไม่ได้ตั้งฐานบัญชาการ — ระบบตั้งที่ที่ว่าการอำเภอให้อัตโนมัติ')
   }
   n.points = makePoints(n, scn)

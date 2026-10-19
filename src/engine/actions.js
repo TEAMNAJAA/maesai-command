@@ -194,6 +194,7 @@ export function droneSortie(s, scn, sectionId) {
   if (!afford(n, COSTS.drone, 'เที่ยวบินโดรน')) return n
   d.busyUntil = n.clock + DURATIONS.droneSortie
   n.jobs.push({ kind: 'drone', section: sectionId, drone: d.id, start: n.clock, at: d.busyUntil })
+  n.sorties = [...(n.sorties || []), { section: sectionId, at: n.clock }]
   log(n, 'info', 'UAV', `Drone ${d.id} to ${sectionId}.`, `ส่งโดรน ${d.id} สำรวจโซน ${sectionId} (${DURATIONS.droneSortie} นาที) — ตัวช่วยสำหรับจุดอับ/ใต้เมฆ`)
   return spend(n, scn, CMD_MIN.drone)
 }

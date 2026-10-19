@@ -148,7 +148,7 @@ export function Btn({ children, onClick, disabled, variant = 'ghost', size = 'md
 
 /** 270° arc gauge (Trust Index / Mission Success). */
 export function ArcGauge({ value, size = 150, thickness = 11, color = '#00FF41', track = 'rgba(148,163,184,.18)',
-  label, sub, delta, deltaDir = 'up', children }) {
+  label, sub, delta, deltaDir = 'up', children, display = null, unit = '%', ticks = ['0%', '100%'] }) {
   const R = (size - thickness) / 2 - 2
   const cx = size / 2, cy = size / 2
   const START = 135, SWEEP = 270
@@ -171,8 +171,8 @@ export function ArcGauge({ value, size = 150, thickness = 11, color = '#00FF41',
             style={{ filter: `drop-shadow(0 0 7px ${color}cc)`, transition: 'all .6s cubic-bezier(.4,0,.2,1)' }} />
         )}
         <text x={cx} y={cy + 4} textAnchor="middle" className="num" fontSize={size * 0.24} fontWeight="700" fill="#fff">
-          {Math.round(value)}
-          <tspan fontSize={size * 0.12} fill={color}>%</tspan>
+          {display ?? Math.round(value)}
+          {unit && <tspan fontSize={size * 0.12} fill={color}>{unit}</tspan>}
         </text>
         {label && (
           <text x={cx} y={cy + size * 0.16} textAnchor="middle" fontSize={size * 0.075} fill={color}
@@ -180,9 +180,9 @@ export function ArcGauge({ value, size = 150, thickness = 11, color = '#00FF41',
         )}
       </svg>
       <div className="-mt-1 flex w-full items-center justify-between px-2">
-        <span className="hud-label">0%</span>
+        <span className="hud-label">{ticks[0]}</span>
         {sub && <span className="hud-label text-slate-400">{sub}</span>}
-        <span className="hud-label">100%</span>
+        <span className="hud-label">{ticks[1]}</span>
       </div>
       {delta && (
         <div className="mt-1.5 flex items-center gap-1 font-mono text-[10px]"

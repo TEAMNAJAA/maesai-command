@@ -8,19 +8,20 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
-  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb,
+  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb, Scale,
 } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts'
 import { Panel, PanelHead, Src, Btn, ArcGauge, Spark, StatLine, Corners } from '../ui/atoms'
 import { useMode } from '../ui/label'
 import { ImpactHover, WhyButton } from '../ui/impact'
 import { HintLadder } from '../ui/hints'
+import { DecisionHeadline, DecisionList, TIER_HEX } from '../ui/decision'
 import { WhatIfPanel } from '../ui/whatif'
 import { DeltaChip, fmtVal } from '../modals/teacherCompare'
 import { sessionMetrics, previousRound, METRICS } from '../lib/compare'
 import { rungOf } from '../engine/hints'
 import { previewVerdict, previewSurvey } from '../engine/impact'
-import { RELIEF, EVENT, SCORE, MODES, MISSION, TIME, STRESS } from '../config/missionConfig'
+import { RELIEF, EVENT, SCORE, MODES, MISSION, TIME, STRESS, DECISION } from '../config/missionConfig'
 import { LESSONS, RES_PROOF } from '../config/scenarioData'
 import { BUILDINGS } from '../lib/buildings'
 import { SECTION_BY_ID } from '../lib/sections'
@@ -284,26 +285,33 @@ const PARTS = [['theos', 'ใช้ THEOS-2'], ['evac', 'อพยพราย�
 
 function ScoreColumn({ eng, score }) {
   const { s } = eng
-  const total = Math.round(score.total * 100)
-  const hex = total >= 75 ? '#22E36B' : total >= 50 ? '#FFB300' : '#FF003C'
+  const d = score.decision
+  const hex = TIER_HEX[d.tier.id]
   return (
     <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
-      <Panel className="shrink-0" data-panel="mission-score">
-        <PanelHead title="MISSION SUCCESS · คะแนนภารกิจ" icon={Target} right={<Src t="scenario" mini />} />
-        <div className="px-3 pb-2 pt-3"><ArcGauge value={total} color={hex} label={total >= 75 ? 'SUCCESSFUL' : total >= 50 ? 'PARTIAL' : 'FAILED'} size={150} /></div>
+      <Panel className="shrink-0" data-panel="mission-score" data-total-points={score.points} data-score-version={score.version}>
+        <PanelHead title="MISSION SCORE · คะแนนภารกิจ" icon={Target} right={<Src t="scenario" mini />} />
+        <div className="px-3 pt-2.5"><DecisionHeadline decision={d} compact /></div>
+        <div className="px-3 pb-1 pt-2"><ArcGauge value={score.points / 10} display={score.points} unit="" ticks={['0', String(DECISION.maxPoints)]} color={hex} label={`/ ${DECISION.maxPoints} แต้ม`} size={150} /></div>
         <div className="space-y-1 px-3 pb-3">
-          {PARTS.map(([k, label]) => (
-            <div key={k}>
-              <div className="flex items-baseline justify-between"><span className="font-thai text-[11px] text-slate-300">{label} <span className="num text-[9.5px] text-slate-500">×{SCORE[k]}</span></span><span className="num text-[11px] font-semibold text-white">{Math.round(score.parts[k] * 100)}%</span></div>
-              <div className="mt-0.5 h-[4px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full" style={{ width: `${score.parts[k] * 100}%`, background: score.parts[k] >= 0.75 ? '#22E36B' : score.parts[k] >= 0.5 ? '#FFB300' : '#FF3B63' }} /></div>
-            </div>
-          ))}
+          {PARTS.map(([k, label]) => {
+            const v = score.partPoints[k], m = score.max[k], r = m ? v / m : 0
+            return (
+              <div key={k} data-part={k}>
+                <div className="flex items-baseline justify-between"><span className="font-thai text-[11px] text-slate-300">{label}</span><span className="num text-[11px] font-semibold text-white">{v} <span className="text-slate-500">/ {m}</span></span></div>
+                <div className="mt-0.5 h-[4px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${r * 100}%`, background: r >= 0.75 ? '#22E36B' : r >= 0.5 ? '#FFB300' : '#FF3B63' }} /></div>
+              </div>
+            )
+          })}
+          <div className="num mt-1.5 rounded bg-black/30 px-2 py-1 text-center text-[10.5px] text-slate-300" data-score-formula>
+            ผลงาน {score.perf} × {d.mult} {score.hintPts ? `− คำใบ้ ${score.hintPts} ` : ''}= <b className="text-white">{score.points}</b>
+          </div>
           {MODES[s.modeId].tutor && (
             <div className="mt-1.5 flex items-center justify-between rounded border px-2 py-1" data-hint-penalty={score.hints.pts}
               style={{ borderColor: score.hints.pts ? '#FF6B8A44' : '#22E36B44', background: score.hints.pts ? '#FF003C0d' : '#22E36B0d' }}>
               <span className="font-thai flex items-center gap-1.5 text-[11px] text-slate-300"><Lightbulb size={11} className="text-[#FFD066]" />คำใบ้แบบบันได
                 <span className="text-[9.5px] text-slate-500">ชี้ข้อมูล {score.hints.pointer} · เฉลย {score.hints.partial}</span></span>
-              <span className="num text-[11.5px] font-bold" style={{ color: score.hints.pts ? '#FF9DB2' : '#7CFFA0' }}>{score.hints.pts ? `−${score.hints.pts}` : 'คิดเองทั้งหมด ✓'}</span>
+              <span className="num text-[11.5px] font-bold" style={{ color: score.hints.pts ? '#FF9DB2' : '#7CFFA0' }}>{score.hints.pts ? `−${score.hintPts}` : 'คิดเองทั้งหมด ✓'}</span>
             </div>
           )}
         </div>
@@ -392,7 +400,7 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
         <div className="flex items-center gap-3">
           <Trophy size={22} className="text-[#FFD066]" />
           <div>
-            <div className="font-thai text-[16px] font-bold text-white">{allDone ? `ภารกิจจบ — คะแนน ${Math.round(score.total * 100)}%` : `ยังตัดสินเยียวยาไม่ครบ (${rel.done}/${rel.total})`}</div>
+            <div className="font-thai text-[16px] font-bold text-white">{allDone ? `ภารกิจจบ — ${score.points} / ${DECISION.maxPoints} แต้ม · การตัดสินใจ${score.decision.tier.th}${score.decision.failed ? ' · ภารกิจล้มเหลว' : ''}` : `ยังตัดสินเยียวยาไม่ครบ (${rel.done}/${rel.total})`}</div>
             <div className="font-thai text-[12px] text-slate-400">{MODES[s.modeId].th} · seed {s.seed} · ผู้เล่น {player || 'ไม่ระบุชื่อ'}{s.stress?.length > 0 && <span className="ml-1 rounded bg-[#FF8A3D]/20 px-1.5 py-[1px] text-[11px] font-bold text-[#FFB27A]">Stress Test: {s.stress.map((k) => STRESS[k].th).join(' · ')}</span>} · เวลาเล่นจริง <b className="num text-white">{mmss(eng.realMs() / 1000)}</b>
               {eng.realMs() > 0 && eng.realMs() / 1000 <= TIME.expertTargetSec && <span className="ml-1.5 rounded bg-[#FFD066]/20 px-1.5 py-[1px] text-[11px] font-bold text-[#FFE0A3]">⚡ ภายใน {TIME.expertTargetSec / 60} นาที</span>}</div>
           </div>
@@ -405,7 +413,7 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
           {top.length === 0 && <div className="font-thai col-span-5 text-[12px] text-slate-500">ยังไม่มีคะแนนในโหมดนี้</div>}
           {top.map((r, i) => (
             <div key={r.at} className="rounded border border-white/10 bg-white/[0.03] px-2 py-1.5" style={saved && saved.at === r.at ? { borderColor: '#FFD066' } : undefined}>
-              <div className="num text-[11px] font-bold" style={{ color: i === 0 ? '#FFD066' : '#cbd5e1' }}>#{i + 1} · {r.score}%</div>
+              <div className="num text-[11px] font-bold" style={{ color: i === 0 ? '#FFD066' : '#cbd5e1' }}>#{i + 1} · {r.score} แต้ม</div>
               <div className="font-thai truncate text-[11px] text-white">{r.name}</div>
               <div className="num text-[9.5px] text-slate-500">{mmss(r.sec)}</div>
             </div>
@@ -413,6 +421,15 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
         </div>
       </Panel>
       {allDone && <PrevRound eng={eng} player={player} />}
+      {allDone && (
+        <Panel data-panel="decisions">
+          <PanelHead title="DECISIONS · รายการตัดสินใจทั้งหมด" icon={Scale} right={<Src t="scenario" mini />} />
+          <div className="grid grid-cols-[300px_1fr] gap-3 p-3">
+            <div className="self-start"><DecisionHeadline decision={score.decision} compact /></div>
+            <DecisionList decision={score.decision} limit={6} />
+          </div>
+        </Panel>
+      )}
       <WhatIfTabs eng={eng} relDone={allDone} />
       <Panel>
         <PanelHead title="DECISION TIMELINE · เส้นเวลาการตัดสินใจ" icon={Clock} right={<Src t="scenario" mini />} />
@@ -493,8 +510,12 @@ export function AarShell({ eng, tab, setTab, onPostTest, postDone, player, onSav
     const { s, scn } = eng
     const rows = [
       ['THEOS-2 MAE SAI COMMAND — AFTER ACTION REPORT'], ['Generated', new Date().toISOString()], ['Session', logger.current?.id ?? ''], ['Mode', s.modeId], ['Seed', s.seed], [],
-      ['RESULT', 'Mission score', `${Math.round(score.total * 100)}%`],
-      ...Object.entries(score.parts).map(([k, v]) => ['RESULT', `score.${k}`, `${Math.round(v * 100)}%`]),
+      ['RESULT', 'Score version', score.version], ['RESULT', 'Mission points', `${score.points} / ${DECISION.maxPoints}`],
+      ['RESULT', 'Decision tier', score.decision.tier.id], ['RESULT', 'Decision ratio', score.decision.ratio.toFixed(3)], ['RESULT', 'Decision multiplier', score.decision.mult],
+      ['RESULT', 'Performance points', score.perf], ['RESULT', 'Hint points', score.hintPts],
+      ...Object.entries(score.partPoints).map(([k, v]) => ['RESULT', `points.${k}`, `${v} / ${score.max[k]}`]), [],
+      ['DECISION', 'ACT', 'VERDICT', 'WHAT', 'WHY'],
+      ...score.decision.items.map((x) => ['DECISION', x.act, x.verdict, x.th, x.why]),
       ['RESULT', 'People saved / needing help', `${score.people.saved} / ${score.people.need}`],
       ['RESULT', 'Route errors', s.routeErrors], ['RESULT', 'Budget spent', s.budget.spent], ['RESULT', 'Fuel used / total', `${s.fuel.used} / ${s.fuel.total}`], [],
       ['ZONE', 'ORDER', 'PEAK DEPTH (m)', 'AT RISK HH', 'LEFT BEHIND HH'],

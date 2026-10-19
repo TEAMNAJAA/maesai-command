@@ -276,8 +276,11 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
   await say('AAR', 'สรุปคะแนนภารกิจ — บันทึกลงตารางอันดับ')
   const save = page.locator('[data-save-score]')
   if (await save.count() && await save.isEnabled()) await click(page, save, { hold: ms(800), after: ms(2500) })
-  const score = await page.evaluate(() => document.querySelector('[data-panel="mission-score"]')?.textContent.match(/(\d+)\s*%/)?.[1] || '?')
+  const score = await page.evaluate(() => {
+    const p = document.querySelector('[data-panel="mission-score"]')
+    return p ? `${p.dataset.totalPoints} / 1000 · ${document.querySelector('[data-decision-tier]')?.dataset.decisionTier || '?'}` : '?'
+  })
   await page.keyboard.press('Escape'); await wait(ms(800))
-  mark(`AAR · mission score ${score}%`)
+  mark(`AAR · mission score ${score}`)
   return { score }
 }

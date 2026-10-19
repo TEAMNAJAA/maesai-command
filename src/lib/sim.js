@@ -5,8 +5,9 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import {
-  SFVI, THRESHOLDS, CLOUD_RULE, HYDRO, RELIEF, SCORE, DURATIONS, RESCUE, ACT2, EVAL, HINTS,
+  SFVI, THRESHOLDS, CLOUD_RULE, HYDRO, RELIEF, SCORE, DURATIONS, RESCUE, ACT2, EVAL, HINTS, DECISION,
 } from '../config/missionConfig'
+import { CAMP_SITES } from '../config/scenarioData'
 import { SECTIONS, SECTION_BY_ID, sectionDepth, GAPS_BY_SECTION } from './sections'
 import { BUILDINGS } from './buildings'
 import { levelAt, rainAt, cloudAt, T_START } from './hydro'
@@ -221,6 +222,141 @@ export function hintPenalty(s) {
 
 /* ── Mission score — computed from what the player actually did ──────────── */
 
+/* ── Decision ledger (score v2) ─────────────────────────────────────────────
+   ทุกการตัดสินใจของภารกิจ → ✅ good · ⚠️ fair · ❌ bad · ⏭️ skip · ☠️ critical พร้อมเหตุผลภาษาไทย
+   องก์ที่ยังไม่จบไม่ถูกนับ (ไม่อย่างนั้นสิ่งที่ยังทำได้จะถูกนับว่า "ข้าม") */
+
+const item = (id, act, th, verdict, why) => ({ id, act, th, verdict, why })
+const tgtTh = (t) => (t === 'TOWN' ? 'ตัวเมือง' : `Sector ${t}`)
+const clockTh = (m) => { const a = Math.abs(Math.round(m)), h = Math.floor(a / 60), mm = a % 60; return `T${m < 0 ? '−' : '+'}${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}` }
+
+/** Does a forward base at this site end up under water? (same rule as enterAct2) */
+export function campFloods(s, site) {
+  if (!site) return false
+  const near = SECTIONS.reduce((m, z) => (Math.hypot(z.c[0] - site.lon, z.c[1] - site.lat) < Math.hypot(m.c[0] - site.lon, m.c[1] - site.lat) ? z : m))
+  const close = Math.hypot((near.c[0] - site.lon) * 104000, (near.c[1] - site.lat) * 110540) < 700
+  return close && peakDepth(s, near) >= HARM_M
+}
+
+export function decisionLedger(s, scn) {
+  const items = []
+  const t0 = s.t0 ?? T_START
+  const done1 = s.act > 1 || s.clock >= 0
+  const done2 = s.act > 2 || (s.act === 2 && s.clock >= 36 * 60)
+
+  /* ═════ Act 1 ═════ */
+  if (done1) {
+    const site = CAMP_SITES.find((c) => c.id === s.camp)
+    if (!site || s.campAuto) items.push(item('camp', 1, 'ตั้งฐานบัญชาการ', 'skip', 'ไม่ได้เลือกที่ตั้งฐาน — ระบบตั้งให้อัตโนมัติ'))
+    else items.push(item('camp', 1, `ตั้งฐานที่${site.th}`, campFloods(s, site) ? 'bad' : 'good', campFloods(s, site) ? 'ที่ตั้งนี้น้ำท่วมถึง ต้องย้ายฐานกลางวิกฤต' : 'ที่ตั้งพ้นน้ำ เรือออกได้ทันที'))
+
+    for (const pass of scn.passes) {
+      if (pass.t < t0 || scn.stress?.lostPass === pass.id) continue          // before the (late) start · lost at downlink
+      const imgs = s.images.filter((i) => i.passId === pass.id), ok = imgs.filter((i) => i.usable).length
+      const th = `THEOS-2 รอบ ${pass.id}`
+      if (!imgs.length) items.push(item(`pass-${pass.id}`, 1, th, 'skip', 'ไม่ได้เลือกเป้าหมาย — เสียรอบโคจร'))
+      else if (ok === imgs.length) items.push(item(`pass-${pass.id}`, 1, th, 'good', `ได้ภาพที่ใช้ได้ ${ok} ภาพ`))
+      else if (ok) items.push(item(`pass-${pass.id}`, 1, th, 'fair', `ใช้ได้ ${ok}/${imgs.length} ภาพ — เป้าหนึ่งเมฆบัง`))
+      else items.push(item(`pass-${pass.id}`, 1, th, 'bad', `เมฆบังทุกเป้า (${imgs.map((i) => `${tgtTh(i.target)} ${i.cloud}%`).join(', ')})`))
+    }
+
+    for (const img of s.images.filter((i) => i.usable && i.target !== 'TOWN')) {
+      const scene = scn.scenes[img.target]
+      const th = `แปลภาพ ${tgtTh(img.target)} (${img.passId})`
+      if (!img.analyzed) { items.push(item(`read-${img.id}`, 1, th, 'skip', 'ได้ภาพแล้วแต่ไม่ได้แปล — ค่า L ไม่ครบ')); continue }
+      let tp = 0, fp = 0
+      for (const c of scene.cands) if (img.labels[c.id] === 'scar') { if (c.kind === 'scar') tp++; else fp++ }
+      const miss = scene.scars - tp
+      items.push(item(`read-${img.id}`, 1, th, !fp && !miss ? 'good' : fp + miss <= 1 ? 'fair' : 'bad',
+        !fp && !miss ? `ระบุรอยดินถล่มใหม่ครบ ${tp} จุด ไม่มีของหลอกตา` : `ถูก ${tp}/${scene.scars}${fp ? ` · ระบุผิด ${fp} (นา/เงาเมฆ/รอยเก่า)` : ''}${miss ? ` · พลาด ${miss}` : ''}`))
+    }
+
+    if (s.channel.measured) items.push(item('channel', 1, 'วัดความกว้างลำน้ำ (ค่า N)', s.channel.attempts <= 1 ? 'good' : 'fair', s.channel.attempts <= 1 ? 'คำนวณถูกตั้งแต่ครั้งแรก' : `คำนวณถูกในครั้งที่ ${s.channel.attempts}`))
+    else items.push(item('channel', 1, 'วัดความกว้างลำน้ำ (ค่า N)', 'skip', 'ไม่ได้วัดค่า N — เกณฑ์เตือนภัยไม่ได้ปรับตามลำน้ำที่แคบลง'))
+
+    const nGaps = Object.keys(GAPS_BY_SECTION).reduce((a, k) => a + GAPS_BY_SECTION[k].length, 0) || 1
+    const sealed = s.sealed.length
+    const sealVerdict = sealed >= nGaps ? 'good' : sealed >= nGaps / 2 ? 'fair' : sealed > 0 ? 'bad' : 'skip'
+    items.push(item('seal', 1, 'อุดจุดฟันหลอแนวตลิ่ง', sealVerdict, sealed ? `อุดเสร็จก่อนน้ำถึง ${sealed}/${nGaps} จุด` : 'ไม่ได้อุดจุดฟันหลอ — น้ำเข้าโซนหลังตลิ่งเร็วขึ้น'))
+
+    for (const r of exposureSummary(s, scn).rows) {
+      const th = `อพยพ ${r.sec.id} ${r.sec.name}`
+      if (r.atRisk > 0) {
+        if (r.order === null) items.push(item(`evac-${r.sec.id}`, 1, th, 'skip', `ไม่ได้สั่งอพยพ — น้ำถึง ${Number.isFinite(r.arrival) ? clockTh(r.arrival) : '—'} ลึกสุด ${r.peak.toFixed(1)} ม.`))
+        else if (r.timely >= 0.95) items.push(item(`evac-${r.sec.id}`, 1, th, 'good', `สั่ง ${clockTh(r.order)} อพยพเสร็จก่อนน้ำถึง`))
+        else items.push(item(`evac-${r.sec.id}`, 1, th, r.timely >= 0.5 ? 'fair' : 'bad', `สั่ง ${clockTh(r.order)} อพยพทันเพียง ${Math.round(r.timely * 100)}%`))
+      } else if (r.order !== null) items.push(item(`evac-${r.sec.id}`, 1, th, 'bad', `น้ำสูงสุดเพียง ${r.peak.toFixed(1)} ม. — งบอพยพเสียเปล่า`))
+    }
+
+    s.decisions.filter((d) => d.outcome === 'false-alarm' && d.act === 1).forEach((d, i) => {
+      items.push(item(`false-${i}`, 1, `ประกาศอพยพ ${d.communities.join(', ')} (${d.clockLabel})`, i === 0 ? 'bad' : 'critical',
+        i === 0 ? `เตือนผิด — SFVI ${Number(d.sfvi).toFixed(2)} ต่ำกว่าเกณฑ์และระดับน้ำยังไม่ถึง` : `เตือนผิดซ้ำครั้งที่ ${i + 1} — ประชาชนเลิกเชื่อคำเตือน`))
+    })
+
+    for (const b of s.bossLog || []) items.push(item(`boss-${b.turn}`, 1, `คืนวิกฤต ตาที่ ${b.turn}: ${b.moveTh}`, b.verdict, b.why))
+  }
+
+  /* ═════ Act 2 ═════ */
+  if (done2) {
+    for (const q of scn.act2Passes) {
+      const ordered = !!s.act2Orders[q.id]
+      items.push(item(`q-${q.id}`, 2, `THEOS-2 รอบ ${q.id} หาผู้ติดค้าง`, ordered ? 'good' : 'skip', ordered ? (scn.stress?.lostQ === q.id ? 'สั่งถ่ายแล้ว (ภาพสูญหายจาก Stress Test)' : 'สั่งถ่ายผ่านช่องเมฆ') : 'ไม่ได้สั่งถ่าย — เสียโอกาสพบผู้ติดค้าง'))
+    }
+    for (const id of s.hazardsLive) items.push(item(`power-${id}`, 2, `ไฟฟ้ารั่วโซน ${id}`, s.powerCut[id] ? 'good' : 'skip', s.powerCut[id] ? 'ประสาน กฟภ. ตัดไฟแล้ว' : 'ไม่ได้ตัดไฟ'))
+    const withPeople = (id) => s.points.some((p) => p.section === id)
+    for (const id of scn.commDown.filter(withPeople)) items.push(item(`tower-${id}`, 2, `สัญญาณล่มโซน ${id}`, s.towers[id] ? 'good' : 'skip', s.towers[id] ? 'ตั้งเสาสื่อสารแล้ว' : 'ไม่ได้ตั้งเสา — คนโทรแจ้งไม่ได้ สั่งเรือเข้าไม่ได้'))
+    for (const id of scn.blindSpots.filter(withPeople)) {
+      const sent = (s.sorties || []).some((x) => x.section === id)
+      items.push(item(`drone-${id}`, 2, `จุดอับโซน ${id}`, sent ? 'good' : 'skip', sent ? 'ส่งโดรนส่องแล้ว' : 'ไม่ได้ส่งโดรน — ดาวเทียมมองไม่เห็นคนในจุดอับ'))
+    }
+    const HZ = { river: 'ริมแม่น้ำกระแสแรง', deep: 'น้ำลึกไหลเชี่ยว', power: 'ไฟรั่ว' }
+    ;(s.routeLog || []).forEach((r, i) => {
+      items.push(item(`route-${i}`, 2, `เส้นทางเรือไป ${r.point} (${clockTh(r.at)})`, r.kind === 'ok' ? 'good' : r.kind === 'long' ? 'fair' : 'critical',
+        r.kind === 'ok' ? 'ปลอดภัยและสั้นที่สุด' : r.kind === 'long' ? `ปลอดภัยแต่อ้อม +${((r.chosenM - (r.bestM || r.chosenM)) / 1000).toFixed(1)} กม.` : `ส่งเรือเข้าเส้นทางอันตราย (${r.hazards.map((h) => HZ[h] || h).join(' / ')})`))
+    })
+    for (const p of s.points) {
+      const lostN = p.lost + (s.act === 2 && p.status === 'waiting' && p.type === 'critical' ? p.left : 0)
+      const th = `ผู้ติดค้าง ${p.id} (${p.people} คน)`
+      if (lostN > 0) {
+        const late = p.firstBoatAt === undefined || p.firstBoatAt - (p.revealedAt ?? 0) > DECISION.lateBoatMin
+        items.push(!p.revealed ? item(`point-${p.id}`, 2, th, 'bad', `ไม่มีใครพบทันเวลา — สูญเสีย ${lostN} คน`)
+          : late ? item(`point-${p.id}`, 2, th, 'critical', `พบตั้งแต่ ${clockTh(p.revealedAt ?? 0)} แต่${p.firstBoatAt === undefined ? 'ไม่ได้ส่งเรือ' : `ส่งเรือ ${clockTh(p.firstBoatAt)} ช้าเกินไป`} — สูญเสีย ${lostN} คน`)
+            : item(`point-${p.id}`, 2, th, 'bad', `ส่งเรือทันทีแต่เรือลำเดียวไม่พอ (จุ 10 คน/เที่ยว) — ควรส่งเพิ่ม · สูญเสีย ${lostN} คน`))
+      } else if (p.status === 'suffered' || (p.status === 'waiting' && p.left > 0)) {
+        items.push(item(`point-${p.id}`, 2, th, 'bad', p.revealed ? 'บ้านยังอยู่ได้แต่ไม่ได้รับเสบียงจนน้ำลด' : 'ไม่มีใครพบ ไม่ได้รับความช่วยเหลือ'))
+      } else items.push(item(`point-${p.id}`, 2, th, p.escalated !== undefined ? 'fair' : 'good', p.escalated !== undefined ? 'ช่วยได้ แต่เสบียงไม่ทันจนต้องอพยพด่วน' : p.status === 'supplied' ? 'ส่งเสบียงถึงก่อนเส้นตาย' : 'อพยพครบทุกคน'))
+    }
+    for (let i = 0; i < s.wrongDest; i++) items.push(item(`dest-${i}`, 2, 'ส่งผู้บาดเจ็บ', 'bad', 'ส่งไปจุดอพยพแทนโรงพยาบาล — ต้องส่งต่อ'))
+  }
+
+  /* ═════ Act 3 ═════ */
+  if (s.act === 3) {
+    const final = (id) => (s.locked ? !!s.locked[id] : !!s.adjudged[id])     // only confirmed verdicts count
+    for (const r of scn.roofs) {
+      const v = final(r.id) ? s.adjudged[r.id] : null
+      const th = `เยียวยา ${r.id} (โซน ${r.section})`
+      if (!v) { items.push(item(`roof-${r.id}`, 3, th, 'skip', 'ยังไม่ได้ยืนยันคำตัดสิน')); continue }
+      const out = evaluateRoof(r, v)
+      items.push(item(`roof-${r.id}`, 3, th, out === 'correct' ? 'good' : 'bad', out === 'correct' ? 'ตัดสินถูกตามหลักฐาน' : { overpay: 'จ่ายเกิน', denial: 'ตัดสิทธิ์ผิด', under: 'จ่ายขาด' }[out]))
+    }
+    for (const id of s.surveyed) {
+      const r = scn.roofs.find((x) => x.id === id)
+      if (r && !r.theosCloud && !r.radarGap) items.push(item(`survey-${id}`, 3, `ส่งสำรวจ ${id}`, 'fair', 'หลักฐานระยะไกลครบอยู่แล้ว — เสียเวลา 2 วัน'))
+    }
+  }
+
+  const counts = { good: 0, fair: 0, bad: 0, skip: 0, critical: 0 }
+  for (const x of items) counts[x.verdict]++
+  const total = items.length
+  const ratio = total ? (counts.good + counts.fair * DECISION.fairWeight) / total : 1
+  const tier = DECISION.tiers.find((t) => ratio >= t.minRatio && counts.critical <= t.maxCritical) || DECISION.tiers[DECISION.tiers.length - 1]
+  return { items, counts, total, ratio, critical: counts.critical, tier, mult: tier.mult, failed: !!tier.failed }
+}
+
+/* ── Mission score (v2): performance points × decision multiplier − hints ──
+   ไม่มีคะแนนฟรี: ส่วนที่ไม่ได้ทำได้ 0 (โซนที่น้ำไม่ถึงไม่นับเป็นคะแนนอพยพ · ไม่ส่งเรือเลยไม่ได้คะแนนโลจิสติกส์ ·
+   ไม่เตือนภัยก่อนน้ำมาไม่ได้คะแนนความเชื่อมั่น) */
+
 export function missionScore(s, scn) {
   const st = scarStats(s, scn)
   const requested = s.images.length
@@ -235,11 +371,9 @@ export function missionScore(s, scn) {
   const theos = 0.35 * tasking + 0.35 * interp + 0.15 * nScore + 0.15 * act2Eyes
 
   const exp = exposureSummary(s, scn)
-  const zoneScore = exp.rows.map((r) => {
-    if (r.atRisk === 0) return r.order === null ? 1 : 0.3           // ordered a zone the water never reached
-    return r.timely
-  })
-  const evac = zoneScore.reduce((a, v) => a + v, 0) / zoneScore.length
+  const wet = exp.rows.filter((r) => r.atRisk > 0)
+  const wasted = exp.rows.filter((r) => r.wasted).length
+  const evac = clamp((wet.length ? wet.reduce((a, r) => a + r.timely, 0) / wet.length : 1) - DECISION.wastedEvacPenalty * wasted)
 
   const needPeople = pts.reduce((a, p) => a + p.people, 0)
   const saved = pts.reduce((a, p) => a + p.rescued + (p.status === 'supplied' ? p.people : 0), 0)
@@ -250,16 +384,28 @@ export function missionScore(s, scn) {
 
   const fuelOver = s.fuel.total ? Math.max(0, s.fuel.used / s.fuel.total - 1 / 1.4) : 0
   const overDeadline = s.clock > 60 * 1440 ? 0.3 : 0
-  const logistics = clamp(1 - 0.1 * s.routeErrors - 0.06 * s.wrongDest - fuelOver * 0.5 - overDeadline - (s.budget.spent > s.budget.total ? 0.3 : 0))
+  const idleBoats = s.act >= 2 && needPeople > 0 && !s.trips            // nobody sent a boat: no logistics to score
+  const logistics = idleBoats ? 0 : clamp(1 - 0.1 * s.routeErrors - 0.06 * s.wrongDest - fuelOver * 0.5 - overDeadline - (s.budget.spent > s.budget.total ? 0.3 : 0))
 
   const rel = reliefSummary(s, scn)
-  const parts = { theos, evac, rescue, logistics, relief: rel.accuracy, trust: s.trust / 100 }
-  const base = Object.entries(SCORE).reduce((a, [k, w]) => a + w * parts[k], 0)
+  const warnedInTime = s.warnedAt !== null && s.warnedAt !== undefined && s.warnedAt < 0
+  const trust = exp.total > 0 && (s.act > 1 || s.clock >= 0) && !warnedInTime ? 0 : s.trust / 100   // never warned before the water: no trust to keep
+
+  const parts = { theos, evac, rescue, logistics, relief: rel.accuracy, trust }
+  const max = Object.fromEntries(Object.entries(SCORE).map(([k, w]) => [k, Math.round(w * DECISION.maxPoints)]))
+  const partPoints = Object.fromEntries(Object.keys(SCORE).map((k) => [k, Math.round(max[k] * parts[k])]))
+  const perf = Object.values(partPoints).reduce((a, v) => a + v, 0)
+  const decision = decisionLedger(s, scn)
   const hints = hintPenalty(s)
-  const total = Math.max(0, base - hints.pts / 100)
+  const hintPts = hints.pts * DECISION.hintPoints
+  const afterMult = Math.round(perf * decision.mult)
+  const points = Math.max(0, afterMult - hintPts)
   const firstOrder = s.decisions.find((d) => d.kind === 'EVACUATE')
   return {
-    total, base, hints, parts, exposure: exp, relief: rel, scars: st,
+    version: DECISION.version,
+    points, perf, afterMult, hintPts, max, partPoints, decision,
+    total: points / DECISION.maxPoints, base: afterMult / DECISION.maxPoints,
+    hints, parts, exposure: exp, relief: rel, scars: st,
     people: { need: needPeople, saved, lost, injured, injuredOk },
     layersAtFirst: firstOrder?.layersOpened ?? s.layersOpened.length, minLayers: EVAL.minLayersBeforeDecision,
   }
