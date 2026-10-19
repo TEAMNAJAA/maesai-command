@@ -29,7 +29,7 @@ export function DataHub({ eng, tab, setTab, onCollapse }) {
     : [['zones', 'โซน·น้ำ', MapIcon], ['res', 'ทรัพยากร', Boxes], ['sfvi', 'SFVI', Gauge]]
   const cur = tabs.some((t) => t[0] === tab) ? tab : tabs[0][0]
   return (
-    <div className="panel flex min-h-0 flex-col" data-rail="data">
+    <div className="panel flex min-h-0 flex-1 flex-col" data-rail="data">
       <div className="flex shrink-0 items-center justify-between px-3 pt-2.5">
         <div className="leading-none">
           <div className="font-thai text-[13px] font-semibold text-white">ข้อมูลประกอบการตัดสินใจ</div>

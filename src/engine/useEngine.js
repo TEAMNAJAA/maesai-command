@@ -21,6 +21,7 @@ import { newSeed } from '../lib/rng'
 import { logger } from '../lib/evalLogger'
 import { makeInitial, advanceTo, enterAct2, enterAct3, log, campOf, destOf } from './world'
 import * as A from './actions'
+import { fx } from '../lib/fx'
 
 const URLQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
 const SPEED = Math.max(0.2, Number(URLQ.get('speed')) || 1)        // cut-scene speed (recordings use > 1)
@@ -162,12 +163,17 @@ export function useEngine() {
   }, [veto1, s.act, s.modeId, world.level, commit])
 
   /* ── Act 1 actions ──────────────────────────────────────────────────────── */
-  const wrap = (fn) => (...args) => commit((p, sc) => fn(p, sc, ...args))
-  const setCamp = useCallback(wrap(A.setCamp), [commit])
-  const setTasking = useCallback(wrap(A.setTasking), [commit])
-  const submitAnalysis = useCallback(wrap(A.submitAnalysis), [commit])
-  const submitChannel = useCallback(wrap(A.submitChannel), [commit])
-  const sealGaps = useCallback(wrap(A.sealGaps), [commit])
+  const wrap = (fn, kind = null) => (...args) => {
+    const before = sRef.current
+    const after = commit((p, sc) => fn(p, sc, ...args))
+    if (kind && after !== before) fx.emit('action', { kind })                 // chibi pose, sounds, effects
+    return after
+  }
+  const setCamp = useCallback(wrap(A.setCamp, 'camp'), [commit])
+  const setTasking = useCallback(wrap(A.setTasking, 'tasking'), [commit])
+  const submitAnalysis = useCallback(wrap(A.submitAnalysis, 'analysis'), [commit])
+  const submitChannel = useCallback(wrap(A.submitChannel, 'channel'), [commit])
+  const sealGaps = useCallback(wrap(A.sealGaps, 'seal'), [commit])
 
   /** Hint ladder: open the next rung of a topic (no game time) and log the request. */
   const revealHint = useCallback((topic, rung) => {
@@ -210,16 +216,17 @@ export function useEngine() {
     const after = commit((p, sc) => A.orderZones(p, sc, ids))
     if (after !== before && after.decisions.length > before.decisions.length) {
       logger.decision(after.decisions[after.decisions.length - 1])
+      fx.emit('action', { kind: 'evacuate' })
       ids.filter((id) => after.orders[id] !== undefined && before.orders[id] === undefined).forEach((id) => routeZone(id))
     }
   }, [commit, routeZone])
 
   /* ── Act 2 actions ──────────────────────────────────────────────────────── */
-  const orderPass2 = useCallback(wrap(A.orderPass2), [commit])
-  const droneSortie = useCallback(wrap(A.droneSortie), [commit])
-  const deployPump = useCallback(wrap(A.deployPump), [commit])
-  const cutPower = useCallback(wrap(A.cutPower), [commit])
-  const buildTower = useCallback(wrap(A.buildTower), [commit])
+  const orderPass2 = useCallback(wrap(A.orderPass2, 'pass2'), [commit])
+  const droneSortie = useCallback(wrap(A.droneSortie, 'drone'), [commit])
+  const deployPump = useCallback(wrap(A.deployPump, 'pump'), [commit])
+  const cutPower = useCallback(wrap(A.cutPower, 'power'), [commit])
+  const buildTower = useCallback(wrap(A.buildTower, 'tower'), [commit])
   /* Boat routes from the GISTDA Sphere Routing API, per trip (base · point · destination).
      status: loading → ok | error (Sphere did not answer) | off (no key / offline) */
   const boatRoutes = useRef(new Map())
@@ -252,12 +259,12 @@ export function useEngine() {
     const legs = boatRoutes.current.get(tripKey(p, pointId, mission, destId))?.legs || null
     return planTrip(p, sc, campOf(p), pt, mission === 'supply' ? null : destOf(destId), p.clock, legs)
   }, [])
-  const dispatchBoat = useCallback(wrap(A.dispatchBoat), [commit])
+  const dispatchBoat = useCallback(wrap(A.dispatchBoat, 'boat'), [commit])
 
   /* ── Act 3 actions ──────────────────────────────────────────────────────── */
   const reviewRoof = useCallback(wrap(A.reviewRoof), [commit])
-  const survey = useCallback(wrap(A.survey), [commit])
-  const lockVerdict = useCallback((roofId) => { const next = commit((p, sc) => A.lockVerdict(p, sc, roofId)); logger.relief(reliefSummary(next, scnRef.current)) }, [commit])
+  const survey = useCallback(wrap(A.survey, 'survey'), [commit])
+  const lockVerdict = useCallback((roofId) => { const next = commit((p, sc) => A.lockVerdict(p, sc, roofId)); logger.relief(reliefSummary(next, scnRef.current)); fx.emit('action', { kind: 'lock' }) }, [commit])
   const lockAll = useCallback(() => { const next = commit((p, sc) => A.lockAll(p, sc)); logger.relief(reliefSummary(next, scnRef.current)) }, [commit])
   const revealRelief = useCallback(() => commit((p, sc) => A.revealRelief(p, sc)), [commit])
   const adjudicate = useCallback((roofId, verdict) => {

@@ -13,6 +13,8 @@ import {
 import { SrcLegend } from '../ui/atoms'
 import { SFVI, THRESHOLDS, THEOS2, RELIEF, ACT2, MODES, SCORE, TIME, HINTS, STRESS, STRESS_KEYS } from '../config/missionConfig'
 import { leaderboard } from '../lib/leaderboard'
+import { Chibi } from '../ui/chibi'
+import { useProfile } from '../lib/profile'
 import { fmt, mmss } from '../lib/format'
 
 const ACTS = [
@@ -298,7 +300,18 @@ export function StressPicker({ stress = [], setStress }) {
   )
 }
 
-export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, setStress, onStart, onHowTo, onBoard }) {
+function TitleChibi({ onChibi }) {
+  const me = useProfile()
+  return (
+    <button onClick={onChibi} data-chibi-edit title="แต่งตัวละคร"
+      className="group relative flex shrink-0 flex-col items-center rounded-lg border border-[#FFD066]/30 bg-[#FFD066]/[0.05] px-1.5 pb-1 pt-0.5 hover:border-[#FFD066]/70 hover:bg-[#FFD066]/[0.1]">
+      <Chibi profile={me} pose="idle" size={54} />
+      <span className="font-thai text-[10.5px] font-semibold text-[#FFE0A3]">แต่งตัวละคร</span>
+    </button>
+  )
+}
+
+export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, setStress, onStart, onHowTo, onBoard, onChibi }) {
   if (!open) return null
   const top = leaderboard.top(modeId, 3)
   return (
@@ -324,7 +337,8 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
 
         <div className="mt-5 grid grid-cols-[1fr_300px] gap-4">
           <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-            <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+            <div className="grid grid-cols-[auto_1fr_auto] items-end gap-3">
+              {onChibi && <TitleChibi onChibi={onChibi} />}
               <label>
                 <span className="font-thai text-[12px] text-slate-400">ชื่อผู้เล่น / ทีม</span>
                 <input value={player} onChange={(e) => setPlayer(e.target.value)} maxLength={24} placeholder="เช่น ม.6/2-05" data-player

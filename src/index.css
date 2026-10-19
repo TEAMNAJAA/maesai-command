@@ -55,6 +55,36 @@ body {
 @keyframes stepdone   { 0% { background-color: rgba(34,227,107,.32) } 100% { background-color: rgba(34,227,107,.06) } }
 @keyframes hintspot   { 0%,100% { outline-color: rgba(255,208,102,.95); box-shadow: 0 0 0 0 rgba(255,208,102,0) } 50% { outline-color: rgba(255,208,102,.3); box-shadow: 0 0 0 5px rgba(255,208,102,.16), 0 0 24px rgba(255,208,102,.45) } }
 @keyframes guidedash  { to { stroke-dashoffset: -24 } }
+/* chibi (B8/B12/B9) */
+@keyframes chibiBob   { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-1.6px) } }
+@keyframes chibiJump  { 0%,100% { transform: translateY(0) } 40% { transform: translateY(-7px) } 60% { transform: translateY(-7px) } }
+@keyframes chibiWrite { from { transform: rotate(-6deg) } to { transform: rotate(10deg) } }
+@keyframes chibiWave  { 0% { opacity: 0; transform: translateX(-3px) } 40% { opacity: 1 } 100% { opacity: 0; transform: translateX(5px) } }
+@keyframes chibiRing  { 0% { r: 6; opacity: .9 } 100% { r: 18; opacity: 0 } }
+@keyframes chibiLift  { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+@keyframes chibiDraw  { from { stroke-dasharray: 0 30 } to { stroke-dasharray: 30 0 } }
+@keyframes chibiHover { 0%,100% { transform: translate(96px,26px) } 50% { transform: translate(96px,22px) } }
+@keyframes chibiProp  { 0%,100% { opacity: 1 } 50% { opacity: .2 } }
+@keyframes chibiBlink { 0%,100% { opacity: 1 } 50% { opacity: .15 } }
+@keyframes chibiFlip  { 0%,30% { transform: rotate(-35deg) } 60%,100% { transform: rotate(35deg) } }
+@keyframes chibiSpin  { to { transform: rotate(360deg) } }
+@keyframes chibiScreen{ 0%,100% { fill-opacity: 1 } 50% { fill-opacity: .75 } }
+@keyframes chibiTwinkle { 0%,100% { opacity: .2; transform: scale(.7) } 50% { opacity: 1; transform: scale(1.1) } }
+@keyframes chibiDrip  { 0% { transform: translateY(-2px); opacity: 0 } 30% { opacity: 1 } 100% { transform: translateY(6px); opacity: 0 } }
+.chibi-bob { animation: chibiBob 2.4s ease-in-out infinite }
+.chibi-jump { animation: chibiJump .8s ease-in-out infinite }
+.chibi-wave { animation: chibiWave 1s ease-out infinite }
+.chibi-ring { animation: chibiRing 1.6s ease-out infinite }
+.chibi-lift { animation: chibiLift 1.1s ease-in-out infinite }
+.chibi-draw { animation: chibiDraw 1.4s ease-in-out infinite alternate }
+.chibi-hover { animation: chibiHover 1.2s ease-in-out infinite }
+.chibi-prop { animation: chibiProp .12s linear infinite }
+.chibi-blink { animation: chibiBlink .8s steps(2) infinite }
+.chibi-flip { animation: chibiFlip 1.4s ease-in-out infinite alternate }
+.chibi-spin { animation: chibiSpin .9s linear infinite }
+.chibi-screen { animation: chibiScreen 1.8s ease-in-out infinite }
+.chibi-twinkle path { animation: chibiTwinkle 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: center }
+.chibi-drip { animation: chibiDrip 1.2s ease-in infinite }
 @keyframes stampIn    { 0% { transform: scale(2.6) rotate(-18deg); opacity: 0 } 60% { opacity: 1 } 100% { transform: scale(1) rotate(-8deg); opacity: 1 } }
 
 /* hint ladder, rung 2 "ชี้ที่ข้อมูล": a ring around the data to read */

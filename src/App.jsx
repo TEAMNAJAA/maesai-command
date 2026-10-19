@@ -35,6 +35,8 @@ import { leaderboard } from './lib/leaderboard'
 import { waitComparison } from './lib/sim'
 import { sessionMetrics } from './lib/compare'
 import { audio, installUiSounds } from './lib/audio'
+import { ChibiDock, useChibiPose } from './ui/chibiDock'
+import { ChibiCreator } from './modals/chibiCreator'
 import { THRESHOLDS } from './config/missionConfig'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
@@ -59,6 +61,7 @@ export default function App() {
   const [tutorOn, setTutorOn] = useState(true)
   const [teacher, setTeacher] = useState(false)
   const [guide, setGuide] = useState(false)
+  const [creator, setCreator] = useState(false)
   const [board, setBoard] = useState(false)
   const [logVersion, setLogVersion] = useState(0)
   const [view, setView] = useState('urban')
@@ -124,7 +127,7 @@ export default function App() {
   }, [s.act])
 
   /* keyboard: Space = advance to the next event · Ctrl+Shift+L teacher log */
-  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen)
+  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen || creator)
   useEffect(() => {
     const h = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
@@ -166,6 +169,9 @@ export default function App() {
   }
 
   const playing = phase === 'play'
+  const crisis = (s.act === 1 && eng.veto1) || (s.act === 2 && s.points.some((p) => p.revealed && p.status === 'waiting' && p.deadline - s.clock < 120))
+  const pose = useChibiPose({ eng, modal: analyze ? 'analysis' : channel ? 'channel' : plan ? 'planner' : null, crisis })
+  const dock = <ChibiDock pose={pose} name={player} />
   const quest = playing && s.act < 3 && eng.mode.tutor && tutorOn ? questFor(eng) : null
   const target = quest?.hint?.go
   const beaconTab = target?.tab && target.tab !== tab ? target.tab : null
@@ -182,12 +188,21 @@ export default function App() {
         <ActStepper eng={eng} />
 
         {s.act === 3 ? (
-          <AarShell eng={eng} tab={aarTab} setTab={setAarTab} onPostTest={() => setPostOpen(true)} postDone={postDone} player={player} onSaveScore={saveScore} saved={saved} />
+          <AarShell eng={eng} tab={aarTab} setTab={setAarTab} onPostTest={() => setPostOpen(true)} postDone={postDone} player={player} onSaveScore={saveScore} saved={saved} dock={dock} />
         ) : (
           <div className="relative z-10 grid min-h-0 flex-1 gap-3 p-3"
             style={{ gridTemplateColumns: `${leftOpen ? 'minmax(272px,300px)' : '34px'} minmax(0,1fr) ${rightOpen ? 'minmax(312px,350px)' : '34px'}` }}>
-            {leftOpen ? <DataHub eng={eng} tab={leftTab} setTab={setLeftTab} onCollapse={() => setLeftOpen(false)} />
-              : <CollapsedRail side="left" label="ข้อมูล" onOpen={() => setLeftOpen(true)} />}
+            {leftOpen ? (
+              <div className="flex min-h-0 flex-col gap-2">
+                <DataHub eng={eng} tab={leftTab} setTab={setLeftTab} onCollapse={() => setLeftOpen(false)} />
+                {dock}
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-col gap-2">
+                <div className="min-h-0 flex-1"><CollapsedRail side="left" label="ข้อมูล" onOpen={() => setLeftOpen(true)} /></div>
+                <ChibiDock pose={pose} name={player} compact />
+              </div>
+            )}
             <div className="flex min-h-0 flex-col gap-2">
               <div className="min-h-[300px] flex-1">
                 <MapCanvas key={`${s.act}-${s.resetSeq}`} eng={eng} view={view} setView={setView} onPoint={setPlan} onChannel={() => setChannel(true)}
@@ -208,7 +223,8 @@ export default function App() {
         <Toast flash={eng.flash} />
 
         <Cutscene eng={eng} />
-        <TitleScreen open={phase === 'title' && !guide} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
+        <ChibiCreator open={creator} onClose={() => setCreator(false)} player={player} setPlayer={setPlayer} />
+        <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
           onHowTo={() => setGuide(true)} onBoard={() => setBoard(true)}
           onStart={() => { logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') }} />
         <QuizModal open={phase === 'pretest'} kind="pre" onDone={(score) => { setPreScore(score); setPhase('play'); eng.start() }} onSkip={() => { setPhase('play'); eng.start() }} />

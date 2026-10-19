@@ -116,6 +116,13 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 - `src/lib/audio.js` สังเคราะห์ทุกเสียงด้วย Web Audio (ไม่มีไฟล์เสียง): เพลง ambient/lo-fi (แพดคอร์ด + เมโลดี้สุ่มใหม่ทุกห้อง + กลองสวิง + echo) 4 ระดับ `audio.setIntensity(0–3)` สงบ → ตึง → วิกฤต → คืนวิกฤต (App ตั้งตามระดับน้ำ/เส้นตายผู้ติดค้าง) · เสียง UI ทุกปุ่ม (`installUiSounds`: hover กันรัว 70 ms + click) · `audio.play('theos')` เสียงประจำตัว THEOS-2 (โน้ต D–A–E–F♯ + กล้องสแกน + ติ๊ดดาวน์ลิงก์) ตอนคัตซีน THEOS-2 และสั่งถ่ายองก์ 2 · เสียงตาม toast (ok/error/alarm) · ชุดเสียงสำหรับข้อถัดไป: megaphone thud boat drone splash zap stamp flip tick thunder boss hit win
 - เริ่มเสียงหลังคลิก/กดคีย์ครั้งแรก · `src/lib/prefs.js` (localStorage `maesai-command.prefs.v1`) เพลง/เอฟเฟกต์ เปิด-ปิด + ระดับเสียงแยก (ค่าเริ่มต้นเบา) · `?mute`/`?rec` ปิดเสียง · เมนู 🔊 บน TopBar (`src/ui/settings.jsx`, `data-settings`, `data-pref`, `data-pref-vol`) · `window.__maesaiAudio` อ่านสถานะ (running/musicOn/level)
 
+### ตัวละคร chibi (B8 + B12, 19 ต.ค.)
+- `src/lib/profile.js` (localStorage `maesai-command.profile.v1`): ทรงผม 5 · สีผม 6 · สีผิว 5 · ชุด 4 (EOC/กู้ภัย/GISTDA/เสื้อกันฝน) · **รูปหน้าเก็บแยกที่ `maesai-command.photo.v1`** ครอปกลาง ย่อ 160 px JPEG — **PDPA: อยู่ในเครื่องนี้เท่านั้น ห้ามใส่ Log/CSV/Leaderboard** (tests/chibi.test.js ตรวจ) · ปุ่ม "ลบรูป" `data-photo-remove`
+- `src/ui/chibi.jsx` `Chibi({profile, pose, size, still})` SVG ล้วน 14 ท่า (`POSES`: idle inspect ruler point megaphone carry clipboard remote switch pump cheer shock serious monitor) · keyframes `chibi-*` ใน index.css · ดูทุกท่าที่ `?chibilab`
+- หน้าสร้างตัวละคร `src/modals/chibiCreator.jsx` (`data-chibi-creator`, `data-hair`, `data-hair-color`, `data-skin`, `data-outfit`, `data-photo-upload`, `data-chibi-done`) เปิดจากหน้าเปิดเกม (`data-chibi-edit`)
+- ทุกคำสั่งใน useEngine ห่อด้วย `wrap(fn, kind)` → `fx.emit('action', {kind})` (`src/lib/fx.js` event bus) → `useChibiPose` เลือกท่า (modal → คัตซีน THEOS → คำสั่งล่าสุด 3.6 วิ → ดีใจ/ตกใจ → วิกฤต → องก์ 3) → `ChibiDock` ใต้แผงซ้าย (`data-chibi-dock`, `data-chibi-say`) · chibi อยู่ในคัตซีน THEOS-2 และการ์ดเดินเวลาด้วย
+- `node scripts/probe-chibi.mjs <outDir>` (ต้องเปิด npm run dev) ภาพทุกท่า + ตรวจว่า chibi ไม่บังปุ่ม/ข้อมูลที่ 1920×1080 และ 1280×720 · exit 2 ถ้าบังหรือมี error
+
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)
 - **คะแนนรวม (เต็ม 1000) = คะแนนผลงาน × ตัวคูณการตัดสินใจ − คำใบ้** (`missionScore` ใน sim.js → `points`, `perf`, `partPoints` เทียบ `max` เช่น "อพยพ 140 / 200", `decision`, `hintPts`) · ผลงาน: THEOS-2 200 · อพยพ 200 · ผู้ติดค้าง 200 · เยียวยา 200 · โลจิสติกส์ 100 · ความเชื่อมั่น 100 · คำใบ้ 10 แต้ม/คะแนนเดิม (≤ 100)

@@ -19,6 +19,8 @@ import { sphereReady, sphereTileTemplate } from '../lib/sphere'
 import { cloudCells } from '../lib/clouds'
 import { levelAt } from '../lib/hydro'
 import { clockLabel, clockToDate, clamp } from '../lib/format'
+import { Chibi } from '../ui/chibi'
+import { useProfile } from '../lib/profile'
 
 const W = 900, SH = 330                       // card width · scene height
 const KX = 111320 * Math.cos((20.44 * Math.PI) / 180)
@@ -385,6 +387,16 @@ function ProcessShot({ k, cut, eng }) {
 
 /* ── The THEOS-2 sequence ───────────────────────────────────────────────── */
 
+function SceneChibi({ pose, say, size = 70, className = '' }) {
+  const me = useProfile()
+  return (
+    <div className={`pointer-events-none flex items-end gap-1 ${className}`} data-scene-chibi={pose}>
+      <Chibi profile={me} pose={pose} size={size} />
+      {say && <div className="font-thai mb-6 rounded-lg rounded-bl-none border border-sky-300/40 bg-[#081a30]/90 px-2 py-1 text-[11.5px] font-semibold text-sky-50">{say}</div>}
+    </div>
+  )
+}
+
 function TheosScene({ cut, eng }) {
   const k = cut.p
   const ph = cut.done ? 3 : phaseOf(k)
@@ -402,6 +414,8 @@ function TheosScene({ cut, eng }) {
           </div>
         </>}
         <div className="absolute inset-0" style={{ opacity: cut.done ? 1 : op(PH.proc[0], 2) }}>{(k >= PH.proc[0] - 0.04 || cut.done) && <ProcessShot k={cut.done ? 1 : k} cut={cut} eng={eng} />}</div>
+        <SceneChibi className="absolute bottom-1 left-2" pose={ph <= 1 ? 'point' : ph === 2 ? 'remote' : 'monitor'}
+          say={ph === 0 ? 'THEOS-2 เข้าพื้นที่แล้ว!' : ph === 1 ? 'กล้องสแกน…' : ph === 2 ? 'รับสัญญาณลงสถานี' : 'ได้ภาพ L3 Ortho'} />
         <div className="font-thai pointer-events-none absolute bottom-2 right-3 flex items-center gap-1 rounded bg-black/50 px-2 py-0.5 text-[11px] text-slate-300"><MousePointerClick size={12} /> คลิกเพื่อข้าม</div>
       </div>
       <div className="flex items-center gap-1 border-t border-white/10 px-4 py-3">
@@ -460,6 +474,7 @@ function JumpCard({ cut, eng }) {
   return (
     <div className="w-[620px] overflow-hidden rounded-xl border bg-[#050b18]/95 shadow-[0_0_50px_-14px_rgba(56,189,248,.9)]" style={{ borderColor: `${hex}88` }} data-cutscene="advance">
       <div className="relative flex items-center gap-4 px-4 py-3" style={{ background: night ? 'linear-gradient(90deg,#060c1e,#0a1530)' : 'linear-gradient(90deg,#0b2036,#0f2c44)' }}>
+        <SceneChibi pose={bad ? 'shock' : cut.act === 2 ? 'clipboard' : 'idle'} size={46} />
         <ClockDial min={clock} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

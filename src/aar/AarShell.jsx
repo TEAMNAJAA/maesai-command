@@ -620,7 +620,7 @@ function ReliefBudget({ eng, score }) {
 
 const TABS = [['relief', 'เยียวยารายหลังคา'], ['summary', 'สรุป · Leaderboard'], ['report', 'รายงาน']]
 
-export function AarShell({ eng, tab, setTab, onPostTest, postDone, player, onSaveScore, saved }) {
+export function AarShell({ eng, tab, setTab, onPostTest, postDone, player, onSaveScore, saved, dock = null }) {
   const score = useMemo(() => missionScore(eng.s, eng.scn), [eng.s, eng.scn])
   const exportCSV = useCallback(() => {
     const { s, scn } = eng
@@ -657,7 +657,10 @@ export function AarShell({ eng, tab, setTab, onPostTest, postDone, player, onSav
         <Btn variant="primary" icon={Download} onClick={exportCSV}><span className="font-thai normal-case tracking-normal text-[12px]">Export รายงาน</span></Btn>
       </div>
       <div className="grid min-h-0 flex-1 gap-3" style={{ gridTemplateColumns: 'minmax(232px,260px) minmax(0,1fr) minmax(260px,300px)' }}>
-        <ScoreColumn eng={eng} score={score} />
+        <div className="flex min-h-0 flex-col gap-2">
+          <div className="min-h-0 flex-1"><ScoreColumn eng={eng} score={score} /></div>
+          {dock}
+        </div>
         <ReliefReveal eng={eng} />
         <div className="flex min-h-0 flex-col overflow-y-auto">
           {tab === 'relief' && <Panel className="flex min-h-0 flex-1 flex-col p-3"><ReliefTab eng={eng} /></Panel>}
