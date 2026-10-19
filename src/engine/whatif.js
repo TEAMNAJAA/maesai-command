@@ -331,10 +331,10 @@ function act2(s, scn) {
       id: 'routes', act: 2, icon: 'route', tone: 'loss',
       title: 'ถ้าเลือกเส้นทางที่ปลอดภัยและสั้นที่สุดทุกเที่ยว',
       you: [unsafe.length ? `เส้นทางผิด ${unsafe.length} ครั้ง${kinds.length ? ` (ผ่าน${kinds.map((k) => HZ[k] || k).join(' / ')})` : ''}` : '', long.length ? `อ้อมเกิน ${long.length} ครั้ง (+${extraKm.toFixed(1)} กม.)` : ''].filter(Boolean).join(' · '),
-      alt: `ทุกเที่ยวใช้เส้นที่ไม่ผ่านอันตรายและสั้นที่สุด — ไม่เสียเวลาถอยกลับ 90 นาที/ครั้ง`,
-      delta: { v: `+${hrs(unsafe.length * 90)}${extraL > 0.05 ? ` · ${extraL.toFixed(1)} L` : ''}`, unit: 'เวลาเรือ · น้ำมันที่ประหยัด' },
+      alt: `ทุกเที่ยวใช้เส้นที่ไม่ผ่านอันตรายและสั้นที่สุด — ไม่มีเรือล่ม/ไฟช็อต เรือไม่ต้องหยุดซ่อม`,
+      delta: { v: `+${hrs((s.incidents || []).reduce((a, x) => a + (x.until - x.at), 0))}${extraL > 0.05 ? ` · ${extraL.toFixed(1)} L` : ''}`, unit: 'เวลาเรือที่เสียไปกับการซ่อม · น้ำมัน' },
       lesson: 'Sphere รู้จักถนนแต่ไม่รู้ว่าน้ำท่วมตรงไหน — ต้องตรวจทุกเส้นทางกับเรดาร์และรายงานไฟรั่ว',
-      weight: 10 * unsafe.length + 3 * long.length, sum: { min: unsafe.length * 90 },
+      weight: 10 * unsafe.length + 3 * long.length, sum: { min: (s.incidents || []).reduce((a, x) => a + (x.until - x.at), 0) },
     }))
   } else if (log.length) good.push(`เลือกเส้นทางเรือถูกทุกเที่ยว (${log.length} เที่ยว)`)
 

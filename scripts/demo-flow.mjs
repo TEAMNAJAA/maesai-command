@@ -12,7 +12,9 @@ import { wait, point, click, sweep } from './demo-kit.mjs'
 
 const RIVER = ['D', 'E', 'TOWN']
 
-export async function playMission(page, { say = async () => {}, mark = () => {}, slow = 1 } = {}) {
+/** opts.mistake = 'shock' | 'capsize' — once in act 2, send a boat down a hazardous route on purpose (shows the B7 accident scene). */
+export async function playMission(page, { say = async () => {}, mark = () => {}, slow = 1, mistake = null } = {}) {
+  let mistakeLeft = mistake
   const has = async (sel) => (await page.locator(sel).count()) > 0
   const tab = (id) => page.locator(`[data-rail="command"] [data-tab="${id}"]`)
   const ms = (n) => Math.round(n * slow)
@@ -47,6 +49,24 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       measured: s.channel.measured, ordered: Object.keys(s.orders), orderAt: window.__maesai.orderAt(),
     }
   })
+  /** B7: a boat or drone order plays a short scene (and a knowledge card after an accident) — watch it, then carry on. */
+  const scenes = async () => {
+    for (let i = 0; i < 8; i++) {
+      if (await has('[data-action-scene="knowledge"]')) {
+        await say('การ์ดความรู้', 'เส้นทางผ่านอันตราย — อ่านการ์ดความรู้แล้วแก้ไข (ตัดไฟ/สูบน้ำ/เลือกเส้นทางใหม่)')
+        await point(page, page.locator('[data-knowledge]'), { hold: ms(2200) })
+        await click(page, page.locator('[data-knowledge-ok]'), { hold: ms(400), after: ms(500) })
+        continue
+      }
+      if (await has('[data-action-scene]')) {
+        await page.waitForFunction(() => !document.querySelector('[data-action-scene]:not([data-action-scene="knowledge"])'), null, { timeout: 20000 }).catch(() => {})
+        if (await has('[data-action-scene]:not([data-action-scene="knowledge"])')) await page.locator('[data-action-scene]').first().click()
+        await wait(ms(300))
+        continue
+      }
+      break
+    }
+  }
   const openTab = async (id, after = 500) => { if (await has(`[data-rail="command"] [data-tab="${id}"]`)) await click(page, tab(id), { hold: ms(250), after: ms(after) }) }
   const ensureView = async (id) => { const v = page.locator(`[data-view="${id}"]`); if (await v.count()) await click(page, v, { hold: ms(200), after: ms(700) }) }
 
@@ -166,6 +186,7 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
   const skip = new Set()                 // points with no safe route right now — retried after the next event
   for (let guard = 0; guard < 4000; guard++) {
     if (await has('[data-modal="act2-summary"]')) break
+    await scenes()
     await page.evaluate((ids) => { window.__skip = ids }, [...skip])
     const a = await page.evaluate(() => {
       const { s, scn } = window.__maesai
@@ -190,7 +211,8 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
         shelter: scn.shelters[0],
       }
     })
-    if (a.power.length) {
+    if (mistakeLeft && a.clock > 14 * 60) mistakeLeft = null          // no hazardous route came up — play on normally
+    if (a.power.length && mistakeLeft !== 'shock') {
       await say('ไฟฟ้ารั่ว', `พบไฟฟ้ารั่วโซน ${a.power[0]} — สั่ง กฟภ. ตัดไฟก่อนส่งทีมเข้า`)
       await openTab('field')
       await click(page, page.locator(`[data-power="${a.power[0]}"] button`), { hold: ms(500), after: ms(700) })
@@ -206,7 +228,12 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       const mission = a.point.type === 'hardship' ? 'supply' : 'rescue'
       const dest = a.point.injured ? 'hosp' : a.shelter
       let idx = await page.evaluate(([id, m, d]) => { const p = window.__maesai.planFor(id, m, d); return p && p.best ? p.options.indexOf(p.best) : -1 }, [a.point.id, mission, dest])
-      if (idx < 0) {
+      const badIdx = () => page.evaluate(([id, m, d, kind]) => {
+        const p = window.__maesai.planFor(id, m, d)
+        return p ? p.options.findIndex((o) => !o.safe && o.hazards.includes('power') === (kind === 'shock')) : -1
+      }, [a.point.id, mission, dest, mistakeLeft])
+      const planMistake = mistakeLeft && (await badIdx()) >= 0
+      if (idx < 0 && !planMistake) {
         // every route crosses deep water: pump the zone on the way (or wait for the water to drop)
         const deep = await page.evaluate(([id, m, d]) => { const { s } = window.__maesai; return window.__maesai.deepAlong(id, m, d).filter((z) => !s.pumps[z]) }, [a.point.id, mission, dest])
         if (deep.length && a.pumps < 3) {
@@ -230,9 +257,17 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       // Sphere routes arrive asynchronously and join the list — re-read the best option once they are in
       await page.waitForFunction(() => !['loading', 'idle'].includes(document.querySelector('[data-sphere-status]')?.dataset.sphereStatus), null, { timeout: 15000 }).catch(() => {})
       idx = await page.evaluate(([id, m, d]) => { const p = window.__maesai.planFor(id, m, d); return p && p.best ? p.options.indexOf(p.best) : -1 }, [a.point.id, mission, dest])
-      if (idx < 0) { await click(page, page.locator('[data-modal="planner"] button', { hasText: 'ยกเลิก' }), { hold: ms(200), after: ms(300) }); skip.add(a.point.id); continue }
+      const bad = planMistake ? await badIdx() : -1
+      if (idx < 0 && bad < 0) { await click(page, page.locator('[data-modal="planner"] button', { hasText: 'ยกเลิก' }), { hold: ms(200), after: ms(300) }); skip.add(a.point.id); continue }
+      if (planMistake) {
+        if (bad >= 0) {
+          await say('ตั้งใจพลาด', `เลือกเส้นทางที่ผ่าน${mistakeLeft === 'shock' ? 'ไฟรั่ว' : 'น้ำเชี่ยว/น้ำลึก'} — ดูว่าจะเกิดอะไรขึ้น`)
+          idx = bad; mistakeLeft = null
+        }
+      }
       await click(page, page.locator(`[data-route-opt="${idx}"]`), { hold: ms(600), after: ms(900) })
       await click(page, page.locator('[data-modal="planner"] button', { hasText: 'ส่งเรือออก' }), { hold: ms(450), after: ms(600) })
+      await scenes()
       continue
     }
     const blind = a.blind.find((id) => a.clock - (droneAt[id] ?? -999) >= 360)
@@ -242,6 +277,7 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       await openTab('sensors')
       await click(page, page.locator(`[data-drone-zone="${blind}"]`), { hold: ms(300), after: ms(300) })
       await click(page, page.locator('[data-panel="sensors"] button', { hasText: 'ส่งโดรน' }), { hold: ms(400), after: ms(600) })
+      await scenes()
       continue
     }
     // skip to the recession only once every group has had time to be found and helped

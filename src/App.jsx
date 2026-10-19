@@ -29,6 +29,7 @@ import { LeaderboardModal } from './modals/guide'
 import { TitleScreen, HowToPlay } from './modals/intro'
 import { TimeBar } from './panels/timebar'
 import { Cutscene } from './map/Cutscene'
+import { ActionScenes } from './map/ActionScene'
 import { ModeContext } from './ui/label'
 import { logger } from './lib/evalLogger'
 import { leaderboard } from './lib/leaderboard'
@@ -223,6 +224,7 @@ export default function App() {
         <Toast flash={eng.flash} />
 
         <Cutscene eng={eng} />
+        <ActionScenes />
         <ChibiCreator open={creator} onClose={() => setCreator(false)} player={player} setPlayer={setPlayer} />
         <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
           onHowTo={() => setGuide(true)} onBoard={() => setBoard(true)}

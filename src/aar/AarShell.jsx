@@ -8,7 +8,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
-  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb, Scale, Lock, PenLine,
+  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb, Scale, Lock, PenLine, LifeBuoy,
 } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts'
 import { Panel, PanelHead, Src, Btn, ArcGauge, Spark, StatLine, Corners } from '../ui/atoms'
@@ -440,6 +440,7 @@ function ScoreColumn({ eng, score }) {
           <StatLine icon={Users} label="ช่วยผู้ติดค้าง" value={`${score.people.saved}/${score.people.need}`} src="scenario" accent="#22E36B" />
           <StatLine icon={HeartPulse} label="ผู้บาดเจ็บถึงโรงพยาบาล" value={`${score.people.injuredOk}/${score.people.injured}`} src="scenario" />
           <StatLine icon={Route} label="เส้นทางผิด" value={s.routeErrors} src="scenario" accent={s.routeErrors ? '#FF6B8A' : '#22E36B'} />
+          {(s.incidents || []).length > 0 && <StatLine icon={LifeBuoy} label="เรือล่ม / โดนไฟช็อต" value={`${s.incidents.filter((x) => x.kind === 'capsize').length} / ${s.incidents.filter((x) => x.kind === 'shock').length}`} src="scenario" accent="#FF6B8A" />}
           <StatLine icon={Clock} label="วันที่ของภารกิจ" value={`${Math.floor(s.clock / 1440)} / ${MISSION.deadlineDays}`} src="scenario" />
         </div>
       </Panel>
@@ -633,7 +634,7 @@ export function AarShell({ eng, tab, setTab, onPostTest, postDone, player, onSav
       ['DECISION', 'ACT', 'VERDICT', 'WHAT', 'WHY'],
       ...score.decision.items.map((x) => ['DECISION', x.act, x.verdict, x.th, x.why]),
       ['RESULT', 'People saved / needing help', `${score.people.saved} / ${score.people.need}`],
-      ['RESULT', 'Route errors', s.routeErrors], ['RESULT', 'Budget spent', s.budget.spent], ['RESULT', 'Fuel used / total', `${s.fuel.used} / ${s.fuel.total}`], [],
+      ['RESULT', 'Route errors', s.routeErrors], ['RESULT', 'Boats capsized', (s.incidents || []).filter((x) => x.kind === 'capsize').length], ['RESULT', 'Boats hit by live current (crew to hospital)', (s.incidents || []).filter((x) => x.kind === 'shock').length], ['RESULT', 'Budget spent', s.budget.spent], ['RESULT', 'Fuel used / total', `${s.fuel.used} / ${s.fuel.total}`], [],
       ['ZONE', 'ORDER', 'PEAK DEPTH (m)', 'AT RISK HH', 'LEFT BEHIND HH'],
       ...score.exposure.rows.map((r) => [r.sec.id, r.order === null ? 'not ordered' : clockLabel(r.order), r.peak.toFixed(2), r.atRisk, r.remaining]), [],
       ['ROOF', 'ZONE', 'RADAR DAYS', 'MUD', 'VERDICT', 'OUTCOME'],

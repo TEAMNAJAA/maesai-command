@@ -344,7 +344,7 @@ export function Act2SummaryModal({ open, eng, onNext }) {
           {stat(AlertTriangle, 'สูญเสีย/ช่วยไม่ทัน', fmt(lost), lost ? '#FF6B8A' : '#7CFFA0')}
           {stat(HeartPulse, 'ผู้บาดเจ็บถึงโรงพยาบาล', `${injOk}/${injured}`, injOk === injured ? '#7CFFA0' : '#FFD066')}
           {stat(Satellite, 'จุดที่ THEOS-2 พบ', `${byTheos}/${found.length}`, '#7dd3fc')}
-          {stat(Route, 'เส้นทางผิด', s.routeErrors, s.routeErrors ? '#FF6B8A' : '#7CFFA0')}
+          {stat(Route, 'เส้นทางผิด', `${s.routeErrors}${(s.incidents || []).length ? ` · เรือล่ม ${s.incidents.filter((x) => x.kind === 'capsize').length} · ไฟช็อต ${s.incidents.filter((x) => x.kind === 'shock').length}` : ''}`, s.routeErrors ? '#FF6B8A' : '#7CFFA0')}
           {stat(Fuel, 'น้ำมันที่ใช้', `${fmt(s.fuel.used)} / ${fmt(s.fuel.total)} L`)}
           {stat(Wallet, 'งบคงเหลือ', `฿${fmt((s.budget.total - s.budget.spent) / 1e6, 2)}M`, '#FFD066')}
           {stat(Clock, 'เวลาเล่นจริงสะสม', mmss(eng.realMs() / 1000), '#7dd3fc')}

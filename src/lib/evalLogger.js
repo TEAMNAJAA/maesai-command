@@ -154,7 +154,7 @@ export const logger = {
       'first_decision', 'first_decision_clock', 'evacuated_communities', 'triage_hits', 'relief_correct',
       'final_trust', 'mission_score', 'households_exposed', 'total_sec',
       'hints_pointer', 'hints_partial', 'hint_penalty_pts', 'hint_topics', 'stress', 'seed', 'mode',
-      'score_version', 'decision_tier', 'decision_ratio', 'points']
+      'score_version', 'decision_tier', 'decision_ratio', 'points', 'boat_capsize', 'boat_shock']
     const rows = memory.sessions.map((s) => {
       const first = s.rounds.find((r) => r.kind !== 'HOLD')
       const gain = s.pre && s.post && s.pre.score ? ((s.post.score - s.pre.score) / s.pre.score) * 100 : ''
@@ -166,7 +166,8 @@ export const logger = {
         s.triage?.hits ?? '', s.relief?.correct ?? '',
         s.result?.trust ?? '', s.result?.score ?? '', s.result?.exposed ?? '', s.result?.totalSec ?? '',
         ...hintCols(s), (s.stress || []).join(' '), s.seed ?? '', s.mode ?? '',
-        s.result?.scoreVersion ?? (s.result?.score !== undefined && s.result?.score !== null ? 1 : ''), s.result?.decisionTier ?? '', s.result?.decisionRatio ?? '', s.result?.points ?? '']
+        s.result?.scoreVersion ?? (s.result?.score !== undefined && s.result?.score !== null ? 1 : ''), s.result?.decisionTier ?? '', s.result?.decisionRatio ?? '', s.result?.points ?? '',
+        s.triage?.capsize ?? '', s.triage?.shock ?? '']
     })
     return toCSV([head, ...rows])
   },

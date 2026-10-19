@@ -56,6 +56,8 @@ export function makeInitial(modeId, seed, stress = []) {
     act2Orders: {}, act2Shots: [], radarAt: [],
     routeErrors: 0, wrongDest: 0, trips: 0, hospital: 0, sheltered: 0, campFlooded: false, act2Done: false,
     routeLog: [],                     // every boat route chosen vs the best one — for the "what if" debrief
+    incidents: [],                    // B7: boats lost on a hazardous route { kind: capsize|shock, boat, point, at }
+    crewHospital: 0,                  // crew taken to hospital after a shock (nobody dies on screen)
     // act 3
     adjudged: {}, surveyed: [], reviewed: [], act3Done: false,
     locked: {},                       // roof → verdict confirmed (no more changes) · drafts never count

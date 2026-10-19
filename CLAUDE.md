@@ -123,6 +123,13 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 - ทุกคำสั่งใน useEngine ห่อด้วย `wrap(fn, kind)` → `fx.emit('action', {kind})` (`src/lib/fx.js` event bus) → `useChibiPose` เลือกท่า (modal → คัตซีน THEOS → คำสั่งล่าสุด 3.6 วิ → ดีใจ/ตกใจ → วิกฤต → องก์ 3) → `ChibiDock` ใต้แผงซ้าย (`data-chibi-dock`, `data-chibi-say`) · chibi อยู่ในคัตซีน THEOS-2 และการ์ดเดินเวลาด้วย
 - `node scripts/probe-chibi.mjs <outDir>` (ต้องเปิด npm run dev) ภาพทุกท่า + ตรวจว่า chibi ไม่บังปุ่ม/ข้อมูลที่ 1920×1080 และ 1280×720 · exit 2 ถ้าบังหรือมี error
 
+### ฉากเรือ/โดรน + อุบัติเหตุเรือ (B7, 19 ต.ค.)
+- **เส้นทางผ่านอันตราย = เกิดอุบัติเหตุเสมอ (ไม่สุ่ม):** ผ่านไฟรั่ว → `shock` เรือโดนไฟช็อต ลูกเรือ 2 คนส่ง รพ. (`s.crewHospital`) เรือหยุด 9 ชม. · ริมน้ำ/น้ำลึก → `capsize` เรือล่ม ลูกเรือลอยคอถูกช่วยขึ้น ซ่อม 6 ชม. (`BOAT_INCIDENT` ใน missionConfig) · เรือถึงจุดอันตรายที่ 55% ของขาไป · ผู้ติดค้างยังรอ (`firstBoatAt` ไม่ถูกตั้ง) · `s.incidents[]` `{kind, boat, point, at, until, coords, splitAt}` · ยังนับเป็นเส้นทางผิดร้ายแรงใน ledger · **ไม่มีใครตายบนจอ**
+- `src/map/ActionScene.jsx` `ActionScenes` (ใน App): รับ `fx 'scene'` จาก `sceneOf(kind, before, after)` ใน useEngine (ผลมาจาก engine ฉากแค่แสดง) → เรือแล่นตามเส้นทางที่เลือกบนแผนที่จริง (หลังคา GISTDA + ถนน OSM ใต้น้ำ + แม่น้ำสายไหลเชี่ยว, `Backdrop` memo) พร้อมคลื่นหัวเรือ · ไฟช็อต = ประกายไฟ + โครงกระดูกการ์ตูน ~0.3 วิ → ลูกเรือตัวดำผมตั้งตาหมุน + รถพยาบาล · ล่ม = เรือโยกแล้วคว่ำ ลูกเรือในห่วงชูชีพ → **การ์ดความรู้** (`data-knowledge`, `data-knowledge-ok`) · โดรน: ปล่อยจากถนนน้ำท่วม → มุมกล้องสแกนหลังคาจริงของโซน (ไม่เผยผลก่อนโดรนบินครบ)
+- คลิก/Space/Enter/Esc = ข้าม (Space ไม่เดินเวลาต่อ — `stopImmediatePropagation`) · `?speed` เร่ง · ย่อเองบนจอเล็ก · chibi อยู่คอลัมน์ขวาของฉาก ไม่บังเส้นทาง · **โหมดเจ้าหน้าที่ (`prefs.officer`)**: ไม่มีฉากโดรน/เรือปกติ ฉากอุบัติเหตุเหลือประกายไฟ + ข้อเท็จจริง ไม่มีโครงกระดูก/chibi
+- แผนที่: ซากเรือ (⚡/🛟 `data-incident`) อยู่ ณ จุดเกิดเหตุจนซ่อมเสร็จ · สรุปองก์ 2 / AAR / CSV แสดงจำนวนเรือล่ม/ไฟช็อต (`boat_capsize`, `boat_shock` ใน sessions CSV) · what-if นับเวลาซ่อมจริง
+- บอท: `scenes()` ใน demo-flow รอฉาก/กดการ์ดความรู้ · `DEMO_MISTAKE=shock|capsize node record-demo.mjs` ให้บอทเลือกเส้นทางอันตราย 1 ครั้ง (ทดสอบ/อัดคลิปฉากอุบัติเหตุ) · tests/incident.test.js
+
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)
 - **คะแนนรวม (เต็ม 1000) = คะแนนผลงาน × ตัวคูณการตัดสินใจ − คำใบ้** (`missionScore` ใน sim.js → `points`, `perf`, `partPoints` เทียบ `max` เช่น "อพยพ 140 / 200", `decision`, `hintPts`) · ผลงาน: THEOS-2 200 · อพยพ 200 · ผู้ติดค้าง 200 · เยียวยา 200 · โลจิสติกส์ 100 · ความเชื่อมั่น 100 · คำใบ้ 10 แต้ม/คะแนนเดิม (≤ 100)

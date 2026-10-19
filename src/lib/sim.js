@@ -313,7 +313,7 @@ export function decisionLedger(s, scn) {
     const HZ = { river: 'ริมแม่น้ำกระแสแรง', deep: 'น้ำลึกไหลเชี่ยว', power: 'ไฟรั่ว' }
     ;(s.routeLog || []).forEach((r, i) => {
       items.push(item(`route-${i}`, 2, `เส้นทางเรือไป ${r.point} (${clockTh(r.at)})`, r.kind === 'ok' ? 'good' : r.kind === 'long' ? 'fair' : 'critical',
-        r.kind === 'ok' ? 'ปลอดภัยและสั้นที่สุด' : r.kind === 'long' ? `ปลอดภัยแต่อ้อม +${((r.chosenM - (r.bestM || r.chosenM)) / 1000).toFixed(1)} กม.` : `ส่งเรือเข้าเส้นทางอันตราย (${r.hazards.map((h) => HZ[h] || h).join(' / ')})`))
+        r.kind === 'ok' ? 'ปลอดภัยและสั้นที่สุด' : r.kind === 'long' ? `ปลอดภัยแต่อ้อม +${((r.chosenM - (r.bestM || r.chosenM)) / 1000).toFixed(1)} กม.` : `ส่งเรือเข้าเส้นทางอันตราย (${r.hazards.map((h) => HZ[h] || h).join(' / ')}) → ${r.hazards.includes('power') ? 'เรือโดนไฟช็อต' : 'เรือล่ม'}`))
     })
     for (const p of s.points) {
       const lostN = p.lost + (s.act === 2 && p.status === 'waiting' && p.type === 'critical' ? p.left : 0)

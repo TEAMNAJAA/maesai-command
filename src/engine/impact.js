@@ -198,7 +198,7 @@ export function previewField(s, scn, kind, id) {
       rows: [
         row('use', 'info', `ไม่มีค่าใช้จ่าย · ประสาน กฟภ. ${hrs(DURATIONS.powerCut)} → ตัดเสร็จ ${clockLabel(ready)}`),
         row('get', 'good', `เส้นทางเรือที่ผ่านโซน ${id} ไม่นับเป็นอันตราย "ไฟรั่ว" อีก`),
-        row('risk', 'info', 'ถ้าไม่ตัด: เรือที่ผ่านโซนนี้ = เส้นทางผิด เสีย 90 นาทีและคะแนน'),
+        row('risk', 'info', 'ถ้าไม่ตัด: เรือที่ผ่านโซนนี้จะโดนไฟช็อต ลูกเรือต้องส่งโรงพยาบาล เรือหยุดใช้งาน 9 ชม.'),
         ...(known.length ? [row('get', 'good', `ผู้ติดค้างที่รู้แล้วในโซน ${known.length} จุด`, true)] : []),
       ],
     }
@@ -249,7 +249,7 @@ export function previewBoat(s, scn, { point, mission, dest, plan, opt }) {
     rows.push(row('get', 'good', `รับ ${point.left} คนไป${d?.th || 'ปลายทาง'}${trips > 1 ? ` · เรือวนรับ-ส่งเองอีก ${trips - 1} เที่ยว (เรือจุ ${BOAT.capacity} คน)` : ''}`))
     if (point.injured && dest !== 'hosp') rows.push(row('risk', 'bad', `มีผู้บาดเจ็บ ${point.injured} คน แต่ปลายทางไม่ใช่โรงพยาบาล → ต้องส่งต่อ เสียคะแนน`, true))
   }
-  if (grade.kind === 'unsafe') rows.push(row('risk', 'bad', `${grade.th} → เรือต้องถอยกลับหาทางใหม่ เสีย 90 นาที และคะแนน`, true))
+  if (grade.kind === 'unsafe') rows.push(row('risk', 'bad', `${grade.th} → ${(opt.hazards || []).includes('power') ? 'เรือโดนไฟช็อต ลูกเรือส่งโรงพยาบาล' : 'เรือล่ม ต้องซ่อม'} · ผู้ติดค้างยังรอ · ผิดร้ายแรง`, true))
   else if (grade.kind === 'long') rows.push(row('risk', 'warn', `${grade.th} → เปลืองน้ำมันและคะแนนโลจิสติกส์ลด`, true))
   else rows.push(row('get', 'good', 'เส้นทางปลอดภัยและสั้นที่สุดในตัวเลือก', true))
   if (opt.fuelL > fuelLeft) rows.push(row('risk', 'bad', 'น้ำมันไม่พอสำหรับเที่ยวนี้'))

@@ -137,6 +137,12 @@ export const DURATIONS = {
   surveyDays: 2,
 }
 export const BOAT = { speedKmh: 9, capacity: 10, fuelLPerKm: 1.6 }
+// B7: a boat sent down a hazardous route has an accident on the way — always (deterministic, no extra randomness)
+export const BOAT_INCIDENT = {
+  hazardAt: 0.55,               // ส่วนของขาไปที่เรือไปถึงจุดอันตราย
+  capsize: { repairMin: 360, th: 'เรือล่ม', why: 'กระแสน้ำเชี่ยวริมแม่น้ำ/น้ำลึกไหลแรงพลิกเรือขนาดเล็กได้' },   // ลูกเรือลอยคอและถูกช่วยขึ้นมา · ซ่อมเรือ 6 ชม.
+  shock: { repairMin: 540, th: 'เรือโดนไฟช็อต', why: 'น้ำท่วมที่มีไฟรั่วเป็นอันตรายถึงชีวิต ต้องตัดไฟก่อนส่งเรือเข้าพื้นที่' },      // ลูกเรือส่งโรงพยาบาล · ตรวจเรือ/เปลี่ยนลูกเรือ 9 ชม.
+}
 export const FUEL_FACTOR = 1.4   // น้ำมันที่ได้ = 140% ของที่ต้องใช้จริงถ้าวางเส้นทางถูกทุกเที่ยว
 export const ACT2 = {
   cloudMinPct: 35, cloudMaxPct: 65,     // เมฆเคลื่อนผ่านเมือง ครอบคลุมราว 35–65%

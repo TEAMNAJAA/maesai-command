@@ -35,7 +35,7 @@ async function main() {
   await page.waitForFunction(() => !!window.__maesai)
   await page.evaluate(CURSOR_JS)
   await glide(page, W / 2, H / 2, 2)
-  const { score } = await playMission(page, { say: (step, text) => { console.log(`  [${((Date.now() - timer.t0) / 1000).toFixed(0)}s] ${step}: ${text}`); return caption(page, step, text) }, mark: timer.mark, slow: 0.6 })
+  const { score } = await playMission(page, { say: (step, text) => { console.log(`  [${((Date.now() - timer.t0) / 1000).toFixed(0)}s] ${step}: ${text}`); return caption(page, step, text) }, mark: timer.mark, slow: 0.6, mistake: process.env.DEMO_MISTAKE || null })
     .catch(async (e) => { await page.screenshot({ path: join(OUT, 'failure.png') }).catch(() => {}); throw e })
   console.log(`MISSION SCORE ${score}`)
   await finish(session, OUT, 'maesai-demo.webm', timer)

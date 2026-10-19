@@ -43,6 +43,7 @@ body {
 @keyframes glowpulse  { 0%,100% { filter: drop-shadow(0 0 3px currentColor) } 50% { filter: drop-shadow(0 0 12px currentColor) } }
 @keyframes riseIn     { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
 @keyframes fadeIn     { from { opacity: 0 } to { opacity: 1 } }
+@keyframes bubblePop  { from { transform: scale(.82) translateY(6px) } to { transform: none } }
 @keyframes dashflow   { to { stroke-dashoffset: -240 } }
 @keyframes waterflow  { to { stroke-dashoffset: -600 } }
 @keyframes shimmer    { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }

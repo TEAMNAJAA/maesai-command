@@ -29,6 +29,21 @@ const FIXED_SEED = Number(URLQ.get('seed')) || null
 const REC = URLQ.has('rec')                                         // recorder hook (record-*.mjs) — never on in normal play
 const URL_STRESS = parseStress(URLQ.get('stress'))                  // ?stress=data,roads,time | all — Stress Test from a link
 
+/** B7: the short scene that goes with a boat or drone order. The outcome comes from the engine — the scene only shows it. */
+export function sceneOf(kind, before, after) {
+  if (kind === 'boat') {
+    const inc = (after.incidents || []).length > (before.incidents || []).length ? after.incidents[after.incidents.length - 1] : null
+    if (inc) return { kind: 'boat', outcome: inc.kind, boat: inc.boat, point: inc.point, coords: inc.coords, splitAt: inc.splitAt }
+    const job = after.jobs.filter((j) => j.kind === 'boatAtPoint' && j.start === before.clock).pop()
+    return job ? { kind: 'boat', outcome: 'ok', boat: job.boat, point: job.point, coords: job.coords, splitAt: job.splitAt } : null
+  }
+  if (kind === 'drone') {
+    const job = after.jobs.filter((j) => j.kind === 'drone' && j.start === before.clock).pop()
+    return job ? { kind: 'drone', drone: job.drone, section: job.section } : null
+  }
+  return null
+}
+
 export function useEngine() {
   const [s, setS] = useState(() => makeInitial(URLQ.get('mode') === 'expert' ? 'expert' : 'beginner', FIXED_SEED || newSeed(), URL_STRESS))
   const [cut, setCut] = useState(null)              // active cut scene (time jump)
@@ -166,7 +181,11 @@ export function useEngine() {
   const wrap = (fn, kind = null) => (...args) => {
     const before = sRef.current
     const after = commit((p, sc) => fn(p, sc, ...args))
-    if (kind && after !== before) fx.emit('action', { kind })                 // chibi pose, sounds, effects
+    if (kind && after !== before) {
+      fx.emit('action', { kind })                                             // chibi pose, sounds, effects
+      const scene = sceneOf(kind, before, after)
+      if (scene) fx.emit('scene', scene)                                      // B7: boat / drone scene (ActionScene.jsx)
+    }
     return after
   }
   const setCamp = useCallback(wrap(A.setCamp, 'camp'), [commit])
@@ -280,7 +299,9 @@ export function useEngine() {
   const goAct3 = useCallback(() => {
     const p = sRef.current
     const pts = p.points
-    logger.triage({ hits: pts.reduce((a, x) => a + x.rescued, 0), lost: pts.reduce((a, x) => a + x.lost, 0), routeErrors: p.routeErrors })
+    const inc = p.incidents || []
+    logger.triage({ hits: pts.reduce((a, x) => a + x.rescued, 0), lost: pts.reduce((a, x) => a + x.lost, 0), routeErrors: p.routeErrors,
+      capsize: inc.filter((x) => x.kind === 'capsize').length, shock: inc.filter((x) => x.kind === 'shock').length })
     markAct(2)
     commit((q) => enterAct3(q))
   }, [commit])

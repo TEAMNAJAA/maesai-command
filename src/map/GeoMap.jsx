@@ -10,7 +10,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useMemo, useRef, useCallback } from 'react'
-import { DATA, THEOS2, SPHERE, EMBANKMENT, THRESHOLDS, ACT2 } from '../config/missionConfig'
+import { DATA, THEOS2, SPHERE, EMBANKMENT, THRESHOLDS, ACT2, BOAT_INCIDENT } from '../config/missionConfig'
 import { SECTORS, CAMP_SITES, HOSPITAL, SHELTER_POOL } from '../config/scenarioData'
 import {
   makeProjection, geomPath, linePath, boxKm, aoiFeature, aoiStations, aoiRiver, osmRivers, osmRoads, saiRiver, roadWeight, tilesFor, elevationAt, metres,
@@ -304,6 +304,20 @@ function Urban({ eng, proj, roofs, onPoint }) {
         if (!pos) return null
         const [x, y] = proj.pt(pos)
         return <g key={`bd${j.boat}${j.start}`} pointerEvents="none"><circle cx={x} cy={y} r="7" fill="#22E36B" stroke="#fff" strokeWidth="1.5" /><text x={x + 9} y={y + 4} fontSize="9.5" className="num" fill="#BFF5CF" style={halo}>{j.boat} · {j.aboard} คน</text></g>
+      })}
+      {act2 && (s.incidents || []).filter((x) => t >= x.at && t < x.until).map((x) => {
+        const pos = alongRoute(x.coords.slice(0, x.splitAt || x.coords.length), BOAT_INCIDENT.hazardAt)
+        if (!pos) return null
+        const [px0, py0] = proj.pt(pos)
+        const shock = x.kind === 'shock'
+        return (
+          <g key={`inc${x.boat}${x.at}`} pointerEvents="none" data-incident={x.kind}>
+            <circle cx={px0} cy={py0} r="13" fill="none" stroke={shock ? '#FDE047' : '#7DD3FC'} strokeWidth="1.6" strokeDasharray="3 3" className="animate-[spin_6s_linear_infinite]" style={{ transformOrigin: `${px0}px ${py0}px` }} />
+            <circle cx={px0} cy={py0} r="7" fill="#64748b" stroke="#fff" strokeWidth="1.4" />
+            <text x={px0} y={py0 + 4} textAnchor="middle" fontSize="10">{shock ? '⚡' : '🛟'}</text>
+            <text x={px0 + 12} y={py0 + 4} fontSize="9.5" className="num" fill={shock ? '#FEF08A' : '#BAE6FD'} style={halo}>{x.boat} {shock ? 'ไฟช็อต' : 'ล่ม'} · ซ่อม {Math.max(1, Math.ceil((x.until - t) / 60))}h</text>
+          </g>
+        )
       })}
       {act2 && s.jobs.filter((j) => j.kind === 'drone').map((j) => {
         const z = SECTIONS.find((x) => x.id === j.section)

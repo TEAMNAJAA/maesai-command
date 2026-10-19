@@ -3,7 +3,7 @@
    ไม่มีแต้ม AP: คำสั่งใช้ "เวลา" (งานของทีมใช้เวลาจริงในเกม) และ "งบประมาณ" (บาท)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { THEOS2, COSTS, DURATIONS, MODES, TRUST, SFVI, RELIEF, BOAT, THRESHOLDS, EMBANKMENT, CMD_MIN, HINTS } from '../config/missionConfig'
+import { THEOS2, COSTS, DURATIONS, MODES, TRUST, SFVI, RELIEF, BOAT, THRESHOLDS, EMBANKMENT, CMD_MIN, HINTS, BOAT_INCIDENT } from '../config/missionConfig'
 import { CAMP_SITES, HOSPITAL } from '../config/scenarioData'
 import { SECTION_BY_ID } from '../lib/sections'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
@@ -239,18 +239,34 @@ export function dispatchBoat(s, scn, { pointId, mission, dest, plan, optionIdx }
   const kitCost = mission === 'supply' ? Math.ceil(p.people / 3.2) * COSTS.kit : 0
   if (!afford(n, COSTS.boatTrip + kitCost, mission === 'supply' ? 'ถุงยังชีพ' : 'เที่ยวเรือ')) return n
   const grade = gradeChoice(plan, opt)
-  let delay = 0
+  const min = (m) => Math.round((m / 1000 / BOAT.speedKmh) * 60)
+  n.routeLog = [...(n.routeLog || []), { point: p.id, at: n.clock, kind: grade.kind, chosenM: Math.round(opt.distanceM), bestM: plan.best ? Math.round(plan.best.distanceM) : null, hazards: opt.hazards || [], fuelL: opt.fuelL, bestFuelL: plan.best?.fuelL ?? null }]
+  if (grade.kind === 'unsafe') {
+    /* B7 — the boat meets the hazard part-way out: live current → it is shocked; strong current / deep water → it capsizes.
+       The crew always survive; the boat is out of service and the people at the point are still waiting. */
+    const kind = (opt.hazards || []).includes('power') ? 'shock' : 'capsize'
+    const inc = BOAT_INCIDENT[kind]
+    const reach = n.clock + min(opt.leg1M * BOAT_INCIDENT.hazardAt)
+    n.routeErrors += 1
+    n.fuel.used = Math.round((n.fuel.used + opt.fuelL * BOAT_INCIDENT.hazardAt) * 10) / 10
+    boat.busyUntil = reach + inc.repairMin
+    if (kind === 'shock') n.crewHospital = (n.crewHospital || 0) + 2
+    n.incidents = [...(n.incidents || []), { kind, boat: boat.id, point: p.id, at: reach, until: boat.busyUntil, hazards: opt.hazards || [], coords: opt.coords, splitAt: opt.splitAt }]
+    n.trips += 1
+    log(n, 'crit', kind === 'shock' ? 'SHOCK' : 'CAPSIZE', `${boat.id} ${kind === 'shock' ? 'hit live current' : 'capsized'} on the way to ${p.id}. Crew safe.`,
+      kind === 'shock' ? `เรือ ${boat.id} โดนไฟช็อตกลางทางไป ${p.id} — ลูกเรือรอดแต่ต้องส่งโรงพยาบาล · เรือหยุดใช้งาน ${inc.repairMin / 60} ชม. · ผู้ติดค้างยังรออยู่`
+        : `เรือ ${boat.id} ล่มกลางกระแสน้ำเชี่ยวระหว่างทางไป ${p.id} — ลูกเรือลอยคอและถูกช่วยขึ้นมาปลอดภัย · ซ่อมเรือ ${inc.repairMin / 60} ชม. · ผู้ติดค้างยังรออยู่`)
+    toast(n, 'crit', `${inc.th}! เส้นทางผ่านอันตราย`)
+    return spend(n, scn, CMD_MIN.boat)
+  }
   if (grade.kind !== 'ok') {
     n.routeErrors += 1
-    if (grade.kind === 'unsafe') delay = 90
-    log(n, 'crit', 'ROUTE', grade.th, `${grade.th}${delay ? ' — เรือต้องถอยกลับหาทางใหม่ เสียเวลา 90 นาที' : ''} · คะแนนลดลง`)
-    toast(n, 'crit', grade.kind === 'unsafe' ? 'คำนวณเส้นทางผิด!' : 'เส้นทางไม่ใช่เส้นที่ดีที่สุด')
+    log(n, 'warn', 'ROUTE', grade.th, `${grade.th} · คะแนนลดลง`)
+    toast(n, 'warn', 'เส้นทางไม่ใช่เส้นที่ดีที่สุด')
   }
   n.fuel.used = Math.round((n.fuel.used + opt.fuelL) * 10) / 10
   if (p.firstBoatAt === undefined) p.firstBoatAt = n.clock
-  n.routeLog = [...(n.routeLog || []), { point: p.id, at: n.clock, kind: grade.kind, chosenM: Math.round(opt.distanceM), bestM: plan.best ? Math.round(plan.best.distanceM) : null, hazards: opt.hazards || [], fuelL: opt.fuelL, bestFuelL: plan.best?.fuelL ?? null }]
-  const min = (m) => Math.round((m / 1000 / BOAT.speedKmh) * 60)
-  const tPoint = n.clock + delay + min(opt.leg1M)
+  const tPoint = n.clock + min(opt.leg1M)
   const tDest = tPoint + DURATIONS.load + min(opt.leg2M)
   const tHome = tDest + DURATIONS.load + min(opt.backM)
   boat.busyUntil = mission === 'supply' ? tPoint + min(opt.leg2M) : tHome
