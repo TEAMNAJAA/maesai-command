@@ -186,3 +186,12 @@ input[type='range'].hud-range::-webkit-slider-thumb {
 /* Performance: a backdrop blur over the animated map re-blurs every frame (21 → 49 fps when removed,
    measured headless). Panels are already dark and semi-opaque; only the title screen keeps its blur. */
 [class*="backdrop-blur"]:not(.keep-blur) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+/* Performance mode (D5): <html class="perf-lite"> drops cosmetic motion — every number, layer and control stays.
+   Set by src/lib/perf.js (settings menu · auto when the frame rate stays under 30 · prefers-reduced-motion · ?perf=lite) */
+.perf-lite .fx-heavy { display: none !important; }
+.perf-lite .crt::after { display: none; }
+.perf-lite .keep-blur { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.perf-lite [filter="url(#geo-glow)"] { filter: none !important; }
+.perf-lite .chibi-bob, .perf-lite .chibi-prop, .perf-lite .chibi-screen, .perf-lite .chibi-twinkle path, .perf-lite .wake,
+.perf-lite [class*="animate-[waterflow"], .perf-lite [class*="animate-[dashflow"] { animation: none !important; }

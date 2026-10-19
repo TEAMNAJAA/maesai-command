@@ -1,11 +1,33 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   SETTINGS MENU (TopBar) — เปิด/ปิดเพลง · เปิด/ปิดเสียงเอฟเฟกต์ · ระดับเสียงแยกกัน (จำค่าไว้ในเครื่อง)
+   SETTINGS MENU (TopBar) — เพลง/เสียงเอฟเฟกต์ + ระดับเสียง · โหมดประหยัด (D5) · จำค่าไว้ในเครื่อง
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useEffect, useRef, useState } from 'react'
-import { Volume2, VolumeX, Music2, MousePointerClick, X } from 'lucide-react'
+import { Volume2, VolumeX, Music2, MousePointerClick, X, Gauge } from 'lucide-react'
 import { prefs, usePrefs } from '../lib/prefs'
 import { audio } from '../lib/audio'
+import { usePerf } from '../lib/perf'
+
+const PERF_OPTS = [{ id: 'auto', th: 'อัตโนมัติ' }, { id: 'off', th: 'ภาพเต็ม' }, { id: 'on', th: 'ประหยัด' }]
+const PERF_WHY = { manual: 'เปิดโหมดประหยัดอยู่', fps: 'เปิดเองเพราะเฟรมเรตต่ำ', 'reduced-motion': 'เปิดเองตามการตั้งค่าลดการเคลื่อนไหวของเครื่อง' }
+
+/** D5 — fewer moving effects for slow school machines; the data and decisions stay the same. */
+function PerfSection() {
+  const pf = usePerf()
+  return (
+    <div className="py-1.5" data-perf-section data-perf-lite={pf.lite ? 1 : 0}>
+      <Row icon={Gauge} th="โหมดประหยัด (เครื่องช้า)" sub={pf.lite ? `${PERF_WHY[pf.reason]} · ปิดฝน/ฟ้าแลบ/คลื่น/สั่นจอ` : `ภาพเต็ม${pf.fps ? ` · ${pf.fps} fps` : ''} · อัตโนมัติจะเปิดเมื่อกระตุก`} />
+      <div className="mt-0.5 grid grid-cols-3 gap-1 rounded-md border border-white/10 bg-black/30 p-0.5">
+        {PERF_OPTS.map((o) => (
+          <button key={o.id} type="button" onClick={() => prefs.set({ perf: o.id })} data-pref-perf={o.id} data-on={pf.mode === o.id ? 1 : 0}
+            className={`font-thai rounded px-1 py-1 text-[11.5px] font-semibold transition ${pf.mode === o.id ? 'bg-sky-400/25 text-white shadow-[inset_0_0_0_1px_rgba(56,189,248,.6)]' : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}>
+            {o.th}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function Toggle({ on, onChange, id }) {
   return (
@@ -75,6 +97,7 @@ export function SettingsMenu({ extra = null }) {
               </Row>
               <Volume id="sfx" value={p.sfxVol} disabled={!p.sfx} onChange={(v) => { prefs.set({ sfxVol: v }); audio.play('tick') }} />
             </div>
+            <PerfSection />
             {extra}
           </div>
           <div className="font-thai border-t border-white/[0.06] px-3 py-1.5 text-[10px] text-slate-500">จำค่าไว้ในเครื่องนี้ · เสียงทั้งหมดสังเคราะห์ในเบราว์เซอร์ ใช้ได้แบบออฟไลน์</div>
@@ -85,3 +108,23 @@ export function SettingsMenu({ extra = null }) {
 }
 
 export { Toggle as SettingToggle, Row as SettingRow }
+
+/** One quiet line when performance mode switches itself on (slow machine) — says where to change it. */
+export function PerfNotice() {
+  const pf = usePerf()
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    if (pf.reason !== 'fps') return undefined
+    setShow(true)
+    const t = setTimeout(() => setShow(false), 7000)
+    return () => clearTimeout(t)
+  }, [pf.reason])
+  if (!show) return null
+  return (
+    <div className="font-thai fixed bottom-14 left-1/2 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-sky-400/40 bg-[#07101f] px-3 py-2 text-[12.5px] text-sky-100 shadow-[0_12px_40px_-10px_rgba(0,0,0,.9)] animate-[riseIn_.25s_ease-out]" data-perf-notice>
+      <Gauge size={15} className="text-sky-300" />
+      เครื่องนี้แสดงผลช้า — เปิดโหมดประหยัดให้แล้ว (ปิดฝน/ฟ้าแลบ/คลื่น) · เปลี่ยนได้ที่ปุ่ม 🔊 มุมขวาบน
+      <button onClick={() => setShow(false)} className="ml-1 text-slate-500 hover:text-white"><X size={13} /></button>
+    </div>
+  )
+}

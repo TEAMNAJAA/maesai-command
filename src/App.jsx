@@ -40,6 +40,7 @@ import { ChibiDock, useChibiPose } from './ui/chibiDock'
 import { ChibiCreator } from './modals/chibiCreator'
 import { Floaters, useJuice, useShake } from './ui/juice'
 import { fx } from './lib/fx'
+import { PerfNotice } from './ui/settings'
 import { THRESHOLDS } from './config/missionConfig'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
@@ -236,6 +237,7 @@ export default function App() {
         <Cutscene eng={eng} />
         <ActionScenes />
         <Floaters />
+        <PerfNotice />
         <ChibiCreator open={creator} onClose={() => setCreator(false)} player={player} setPlayer={setPlayer} />
         <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
           onHowTo={() => setGuide(true)} onBoard={() => setBoard(true)}

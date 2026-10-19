@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { weatherAt } from '../lib/weather'
 import { audio } from '../lib/audio'
+import { usePerf } from '../lib/perf'
 
 export function Weather({ eng, boost = 0 }) {
   const w = weatherAt(eng.s, eng.scn)
@@ -15,7 +16,8 @@ export function Weather({ eng, boost = 0 }) {
   const [flash, setFlash] = useState(null)
   const level = useRef(lightning)
   level.current = lightning
-  const on = lightning >= 0.15
+  const lite = usePerf().lite                       // D5: no rain layers, no strikes, no thunder
+  const on = lightning >= 0.15 && !lite
   // random strikes while a storm or the T0 crisis lasts — the gap shrinks as it gets worse
   useEffect(() => {
     if (!on) return undefined
@@ -32,6 +34,7 @@ export function Weather({ eng, boost = 0 }) {
     next()
     return () => clearTimeout(tm)
   }, [on])
+  if (lite) return null
   return (
     <div className="fx-heavy pointer-events-none absolute inset-0 z-[5] overflow-hidden" data-weather data-rain={rain.toFixed(2)} data-lightning={lightning.toFixed(2)}>
       {rain > 0.04 && (

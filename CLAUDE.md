@@ -26,6 +26,8 @@ node scripts/probe-whatif.mjs <outDir>   # ภาพ "ถ้าคุณเล�
 node scripts/probe-stress-compare.mjs <outDir>   # หน้าเลือก Stress Test + ผลในเกม · แผงครูเทียบรอบ 1→2 (ข้อมูลสังเคราะห์ในโปรไฟล์เบราว์เซอร์ทดสอบ) · การ์ดพัฒนาการผู้เล่น
 RECORD_PARAMS=stress=all node record-demo.mjs   # smoke test 3 องก์ภายใต้ Stress Test ทุกเงื่อนไข
 node scripts/probe-hints.mjs <outDir>    # ภาพหน้าจอคำใบ้แบบบันไดทั้ง 3 องก์ (ต้องเปิด npm run dev) · exit 2 ถ้าขั้นเกินองก์/ไม่ชี้ข้อมูล
+node scripts/probe-perf.mjs <outDir> [baseUrl]    # โหมดประหยัด: ปุ่มในเมนู · ?perf=lite · reduced-motion · จำลองเครื่องช้า → เปิดเอง (ต้องเปิด npm run dev)
+node scripts/probe-chibi.mjs <outDir> [baseUrl]   # chibi ทุกท่า + ไม่บังปุ่มที่ 1920×1080/1280×720
 node scripts/probe-impact.mjs <outDir>   # ภาพหน้าจอการ์ดผลที่จะเกิด/ⓘ/หน้าต่างยืนยัน ทั้ง 2 โหมด (ต้องเปิด npm run dev ไว้) · exit 2 ถ้ามี error หรือ Space/Esc ผิด
 node scripts/fetch-osm.mjs · scripts/fetch-poi.mjs · scripts/build-dem.mjs   # ข้อมูลพื้นหลัง (ถนน/แม่น้ำ, POI, DEM)
 node scripts/extract-buildings.mjs <BD_footprintTH.shp> <BD_footprintTH.dbf> [--clip=boundary.geojson] [--rescan]
@@ -141,6 +143,11 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 - `src/ui/juice.jsx`: `floatsFor(prev, next)` (ฟังก์ชันล้วน) → ตัวเลขลอยจากผลต่างของ state จริง: งบที่ใช้ (`[data-hud="budget"]`) · น้ำมัน (`data-hud="fuel"`) · ความเชื่อมั่น (`data-hud="trust"`) · คนปลอดภัย/ได้เสบียง (บนหมุด `data-point-marker`) · ครัวเรือนที่สั่งอพยพ (บนโซน `data-zone`) · ตลิ่งที่อุด (`data-gap`) · คะแนนที่หักจากคำใบ้ — **ไม่มีคำว่าถูก/ผิด** (การตัดสินรอจบองก์) · ข้ามองก์ไม่ลอย · `useJuice(s)` + `<Floaters/>` (portal, `data-float`)
 - `useShake(ref)` สั่นทั้งคอนโซลเบา ๆ ด้วย Web Animations เมื่อ fx `shake`: เรือล่ม/ไฟช็อต · น้ำถึงเกณฑ์ Veto · พายุ · มีกลุ่มสูญเสีย · `<Tween>` ตัวเลขงบ/น้ำมันวิ่งไปค่าใหม่ (มี timeout กันค้างเมื่อหน้าไม่ได้วาด) · `.btn` ยุบเมื่อกด · `lowMotion()` = ปิดสั่น/ตัวเลขวิ่งในโหมดประหยัด/ระบบขอลดการเคลื่อนไหว
 - B9: ทุกคำสั่งขยับ chibi — เพิ่ม `review` (ดูหลังคา) `verdict` (ร่างคำตัดสิน) `hint` (ขอคำใบ้) ใน `ACTION_POSE`
+
+### โหมดประหยัด (D5, 20 ต.ค.)
+- `src/lib/perf.js` `installPerf()` (main.jsx) · `prefs.perf`: `auto` (ค่าเริ่มต้น) / `off` ภาพเต็ม / `on` ประหยัด · `?perf=lite|full` · auto เปิดเองเมื่อเฟรมเรต < 30 ติดกัน 2 ช่วง × 4 วิ (ไม่วัดเมื่อแท็บซ่อน, ปิดการวัดใน `?rec` เพื่อให้คลิปได้ภาพเต็ม) หรือเครื่องตั้ง prefers-reduced-motion
+- เปิดแล้ว `<html class="perf-lite" data-perf="lite-manual|lite-fps|lite-reduced-motion">` → ซ่อน `.fx-heavy` · ปิดเส้นสแกน CRT, glow ของแม่น้ำ, backdrop blur, แอนิเมชันน้ำไหล/ใบพัด · `Weather` ไม่เรนเดอร์ (ไม่มีฟ้าร้อง) · ไม่สั่นจอ/ตัวเลขไม่วิ่ง — **ข้อมูลและคะแนนเหมือนเดิม** (tests/perf.test.js)
+- เมนู 🔊 มีส่วน "โหมดประหยัด" (`data-perf-section`, `data-pref-perf`) · เปิดเองแล้วขึ้น `PerfNotice` (`data-perf-notice`) 7 วิ · `node scripts/probe-perf.mjs <outDir> [baseUrl]` ตรวจปุ่ม, URL, reduced-motion และจำลองเครื่องช้า (exit 2 ถ้าไม่ผ่าน)
 
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)
