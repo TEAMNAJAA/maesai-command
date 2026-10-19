@@ -8,12 +8,14 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
-  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye,
+  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb,
 } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts'
 import { Panel, PanelHead, Src, Btn, ArcGauge, Spark, StatLine, Corners } from '../ui/atoms'
 import { useMode } from '../ui/label'
 import { ImpactHover, WhyButton } from '../ui/impact'
+import { HintLadder } from '../ui/hints'
+import { rungOf } from '../engine/hints'
 import { previewVerdict, previewSurvey } from '../engine/impact'
 import { RELIEF, EVENT, SCORE, MODES, MISSION, TIME } from '../config/missionConfig'
 import { LESSONS, RES_PROOF } from '../config/scenarioData'
@@ -236,11 +238,11 @@ function ReliefTab({ eng }) {
         </div>
         <RoofCompare key={roof.id} roof={roof} eng={eng} pan={pan} setPan={setPan} />
         <div className="grid grid-cols-2 gap-2">
-          <RadarSeries roof={roof} hint={mode.reliefHints} />
+          <RadarSeries roof={roof} hint={mode.tutor && rungOf(s, 'a3.relief') >= 3} />
           <div className="rounded border border-white/[0.08] bg-white/[0.025] px-2.5 py-2">
             <div className="font-thai flex items-center gap-1.5 text-[11px] font-semibold text-slate-200"><span className="flex-1">หลักฐานโคลนจาก THEOS-2</span><WhyButton id="survey" /></div>
             <div className="font-thai mt-1 text-[10.5px] leading-snug text-slate-400">
-              {roof.theosCloud ? 'ภาพหลังมีเมฆบังบริเวณบ้าน — ดูคราบโคลนไม่ได้' : mode.reliefHints ? 'ดูปื้นสีน้ำตาลรอบบ้านในภาพหลัง: เป็นปื้นใหญ่สีน้ำตาลทึบ = โคลนชัด' : 'ตีความคราบโคลนจากภาพเอง'}
+              {roof.theosCloud ? 'ภาพหลังมีเมฆบังบริเวณบ้าน — ดูคราบโคลนไม่ได้' : mode.tutor && rungOf(s, 'a3.relief') >= 2 ? 'ดูปื้นสีน้ำตาลรอบบ้านในภาพหลัง: เป็นปื้นใหญ่สีน้ำตาลทึบ = โคลนชัด' : 'ตีความคราบโคลนจากภาพเอง'}
             </div>
             {surveyed ? (
               <div className="font-thai mt-1.5 rounded bg-sky-400/10 px-2 py-1 text-[11px] text-sky-100" data-survey-result>ผลภาคสนาม: ท่วมขัง {roof.days} วัน · โคลน{roof.mud ? 'หนา ต้องล้าง' : 'ไม่พบ'}</div>
@@ -266,6 +268,7 @@ function ReliefTab({ eng }) {
           })}
           {s.adjudged[roof.id] && s.act3Done && <span className="font-thai ml-2 text-[11.5px] font-bold" style={{ color: evaluateRoof(roof, s.adjudged[roof.id]) === 'correct' ? '#7CFFA0' : '#FF9DB2' }}>{outTh[evaluateRoof(roof, s.adjudged[roof.id])]}</span>}
         </div>
+        {mode.tutor && <HintLadder eng={eng} topic="a3.relief" ctx={{ roof }} compact />}
         <div className="font-thai text-[10.5px] leading-snug text-slate-500">เกณฑ์: ท่วมขัง ≥ {RELIEF.inundationMinDays} วัน → เหมาจ่าย ฿{fmt(RELIEF.flatGrant)} · มีโคลนชัด (และเข้าเกณฑ์ท่วมขัง) → +ค่าล้างโคลน ฿{fmt(RELIEF.mudGrant)} · หลักฐานไม่พอ → ส่งสำรวจ (แม่นแต่ช้า) / เสี่ยงตัดสิน</div>
       </div>
     </div>
@@ -292,6 +295,14 @@ function ScoreColumn({ eng, score }) {
               <div className="mt-0.5 h-[4px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full" style={{ width: `${score.parts[k] * 100}%`, background: score.parts[k] >= 0.75 ? '#22E36B' : score.parts[k] >= 0.5 ? '#FFB300' : '#FF3B63' }} /></div>
             </div>
           ))}
+          {MODES[s.modeId].tutor && (
+            <div className="mt-1.5 flex items-center justify-between rounded border px-2 py-1" data-hint-penalty={score.hints.pts}
+              style={{ borderColor: score.hints.pts ? '#FF6B8A44' : '#22E36B44', background: score.hints.pts ? '#FF003C0d' : '#22E36B0d' }}>
+              <span className="font-thai flex items-center gap-1.5 text-[11px] text-slate-300"><Lightbulb size={11} className="text-[#FFD066]" />คำใบ้แบบบันได
+                <span className="text-[9.5px] text-slate-500">ชี้ข้อมูล {score.hints.pointer} · เฉลย {score.hints.partial}</span></span>
+              <span className="num text-[11.5px] font-bold" style={{ color: score.hints.pts ? '#FF9DB2' : '#7CFFA0' }}>{score.hints.pts ? `−${score.hints.pts}` : 'คิดเองทั้งหมด ✓'}</span>
+            </div>
+          )}
         </div>
       </Panel>
       <Panel className="shrink-0">

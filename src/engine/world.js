@@ -35,6 +35,7 @@ export function makeInitial(modeId, seed) {
     trust: 100, trustHist: [100],
     falseAlarms: 0, warnedAt: null,
     layers: { theos: true, elev: true, buildings: true }, layersOpened: [],
+    hints: {},                        // hint-ladder topic → highest rung opened (rung 1 = the free question)
     // act 1
     camp: null,
     taskings: {},                     // passId → targets requested before the pass

@@ -1,10 +1,14 @@
 /* ══════════════════════════════════════════════════════════════════════════
    MISSION QUEST + TUTOR — objectives of each act, derived from the state
    กล่องภารกิจ (มุมขวาบน ทุกโหมด) · แถบผู้ช่วยสอน (ด้านล่าง เฉพาะ Beginner)
+   แถบผู้ช่วยสอนไม่บอกคำตอบ: งานที่ต้องคิดใช้ "คำใบ้แบบบันได" (engine/hints.js) —
+   ขั้น 1 เป็นคำถามชวนคิด ผู้เล่นกดขอขั้นถัดไปเอง · `hint.topic` ชี้หัวข้อ, `hint.lead` = ข้อเท็จจริงสั้น ๆ
    ══════════════════════════════════════════════════════════════════════════ */
 
-import React from 'react'
-import { Check, ChevronRight, Target, X, Lightbulb } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Check, ChevronRight, Target, X, Lightbulb, ChevronUp } from 'lucide-react'
+import { HintLadder, rungLine } from '../ui/hints'
+import { ladder, RUNGS } from '../engine/hints'
 import { SFVI } from '../config/missionConfig'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
 import { TOWN_TARGET } from '../lib/scenario'
@@ -34,15 +38,15 @@ export function questFor(eng) {
       { id: 'evac', title: 'สั่งอพยพรายโซนตามหลักฐาน', done: ordered > 0 && hot.length === 0, detail: `สั่งแล้ว ${ordered} โซน · โซนที่ SFVI ≥ ${SFVI.decisionBand} ยังไม่สั่ง ${hot.length}`, go: { tab: 'zones', view: 'urban' } },
     ]
     let hint
-    if (sfvi.veto1 && hot.length) hint = { lv: 'crit', text: `Veto 1: ระดับน้ำ ≥ 4.20 ม. — สั่งอพยพโซนเสี่ยงทันที (${hot.map((z) => z.id).join(', ')})`, go: { tab: 'zones', view: 'urban' }, cta: 'ไปที่อพยพรายโซน' }
-    else if (!s.camp) hint = { text: 'เริ่มจากตั้งฐานบัญชาการ — เลือกที่ที่พื้นสูงและห่างแม่น้ำ (ดูค่าความสูงในแท็บ ④)', go: { tab: 'base', view: 'urban' }, cta: 'เลือกที่ตั้งฐาน' }
-    else if (next && !(s.taskings[next.id] || []).length && !toRead.length) hint = { text: `ดาวเทียม THEOS-2 รอบ ${next.id} จะผ่านใน ${hm(next.t - s.clock)} — เลือกเป้าหมาย 2 แห่งที่เมฆพยากรณ์ต่ำกว่า 60% (ดูแท็บ "ดาวเทียม" ทางซ้าย)`, go: { tab: 'theos', view: 'catchment', left: 'sat' }, cta: 'วางแผนถ่ายภาพ' }
-    else if (toRead.length) hint = { lv: 'warn', text: `ภาพ THEOS-2 ${toRead.length} ภาพพร้อมแล้ว — แปลภาพ: เทียบภาพก่อน/หลัง หาเฉพาะรอยดินถล่ม "ใหม่"`, go: { tab: 'theos', analyze: toRead[0].id }, cta: 'เปิดภาพวิเคราะห์' }
-    else if (!s.channel.measured && riverImg) hint = { text: 'มีภาพลำน้ำแล้ว — นับพิกเซลความกว้าง แล้วคำนวณ N = 1 − (พิกเซล × 0.5 ม.) ÷ 150', go: { tab: 'bank', channel: true }, cta: 'เปิดเครื่องมือวัดลำน้ำ' }
-    else if (sealedOrQueued < EMBANKMENT_GAPS.length) hint = { text: `จุดฟันหลอยังเปิด ${EMBANKMENT_GAPS.length - sealedOrQueued} จุด — น้ำจะเข้าโซนหลังแนวตลิ่งเร็วขึ้น ส่งทีมบิ๊กแบ็กไปอุด`, go: { tab: 'bank', view: 'corridor' }, cta: 'ดูแนวตลิ่ง' }
-    else if (hot.length) hint = { text: `โซน ${hot.map((z) => z.id).join(', ')} มี SFVI ≥ ${SFVI.decisionBand} แล้ว — เทียบเวลาน้ำถึงกับเวลาที่ต้องใช้อพยพ แล้วสั่งเฉพาะโซนที่น้ำจะถึง`, go: { tab: 'zones', view: 'urban', left: 'zones' }, cta: 'ดูตารางโซน' }
+    if (sfvi.veto1 && hot.length) hint = { lv: 'crit', topic: 'a1.evac', lead: 'Veto 1: ระดับน้ำ ≥ 4.20 ม. ต้องตัดสินใจทันที', go: { tab: 'zones', view: 'urban' }, cta: 'ไปที่อพยพรายโซน' }
+    else if (!s.camp) hint = { topic: 'a1.camp', lead: 'เริ่มจากตั้งฐานบัญชาการ', go: { tab: 'base', view: 'urban' }, cta: 'ไปที่แท็บฐาน' }
+    else if (next && !(s.taskings[next.id] || []).length && !toRead.length) hint = { topic: 'a1.task', lead: `THEOS-2 รอบ ${next.id} ผ่านใน ${hm(next.t - s.clock)}`, go: { tab: 'theos', view: 'catchment' }, cta: 'วางแผนถ่ายภาพ' }
+    else if (toRead.length) hint = { lv: 'warn', topic: 'a1.read', ctx: { imageId: toRead[0].id }, lead: `ภาพ THEOS-2 ${toRead.length} ภาพพร้อมแล้ว`, go: { tab: 'theos', analyze: toRead[0].id }, cta: 'เปิดภาพวิเคราะห์' }
+    else if (!s.channel.measured && riverImg) hint = { topic: 'a1.channel', lead: 'มีภาพลำน้ำแล้ว', go: { tab: 'bank', channel: true }, cta: 'เปิดเครื่องมือวัดลำน้ำ' }
+    else if (sealedOrQueued < EMBANKMENT_GAPS.length) hint = { topic: 'a1.seal', lead: `จุดฟันหลอยังเปิด ${EMBANKMENT_GAPS.length - sealedOrQueued} จุด`, go: { tab: 'bank', view: 'corridor' }, cta: 'ดูแนวตลิ่ง' }
+    else if (hot.length) hint = { topic: 'a1.evac', lead: 'หลักฐานเริ่มพอสำหรับบางโซน', go: { tab: 'zones', view: 'urban', left: 'zones' }, cta: 'ดูตารางโซน' }
     else if (next && (s.taskings[next.id] || []).length) hint = { text: `เลือกเป้าหมายรอบ ${next.id} แล้ว — กด "ให้ THEOS-2 ถ่ายรอบ ${next.id}" ที่แถบเวลาใต้แผนที่ (เวลาจะเดินไปจนได้ภาพ)`, go: { advance: true }, cta: `ให้ THEOS-2 ถ่ายรอบ ${next.id}` }
-    else if (!ordered) hint = { text: 'หมดรอบดาวเทียมแล้ว — ดูตารางโซนว่าโซนใดน้ำจะถึง แล้วสั่งอพยพก่อนเวลาที่เหลือหมด หรือกด +1 ชม. ดูระดับน้ำ', go: { tab: 'zones', view: 'urban', left: 'zones' }, cta: 'ดูตารางโซน' }
+    else if (!ordered) hint = { topic: 'a1.evac', lead: 'หมดรอบดาวเทียมแล้ว', go: { tab: 'zones', view: 'urban', left: 'zones' }, cta: 'ดูตารางโซน' }
     else hint = { text: 'สั่งการครบแล้ว — กด "ข้ามไป T−0" ที่แถบเวลา เพื่อดูผลองก์ 1', go: { advance: 'end' }, cta: 'ข้ามไป T−0' }
     return { title: 'ภารกิจองก์ 1 · เฝ้าระวัง', steps, hint }
   }
@@ -64,11 +68,11 @@ export function questFor(eng) {
       { id: 'route', title: 'วางเส้นทางเรือให้ถูก', done: s.trips > 0 && s.routeErrors === 0, detail: `ส่งแล้ว ${s.trips} เที่ยว · เส้นทางผิด ${s.routeErrors} ครั้ง · ส่งผู้บาดเจ็บผิดที่ ${s.wrongDest}`, go: { tab: 'ops' } },
     ]
     let hint
-    if (power.length) hint = { lv: 'crit', text: `ไฟฟ้ารั่วในโซน ${power.join(', ')} — สั่ง กฟภ. ตัดไฟก่อนส่งทีมเข้า หรือเลือกเส้นทางที่ไม่ผ่าน`, go: { tab: 'field' }, cta: 'ไปที่ภาคสนาม' }
-    else if (comm.length && s.points.some((p) => comm.includes(p.section))) hint = { lv: 'crit', text: `พายุตัดสัญญาณโซน ${comm.join(', ')} — สั่งการทีมเข้าไม่ได้และไม่มีคนโทรแจ้ง ต้องตั้งเสาสื่อสาร`, go: { tab: 'field' }, cta: 'ตั้งเสาสื่อสาร' }
-    else if (nextQ && !s.act2Orders[nextQ.id] && nextQ.t - s.clock < 240) hint = { lv: 'warn', text: `THEOS-2 รอบ ${nextQ.id} ผ่านเมืองใน ${hm(nextQ.t - s.clock)} — สั่งถ่ายเพื่อหาผู้ติดค้างในโซนที่เมฆเปิด`, go: { tab: 'sensors' }, cta: 'สั่งถ่าย THEOS-2' }
-    else if (unattended.length && idle) hint = { lv: unattended[0].deadline - s.clock < 180 ? 'crit' : 'warn', text: `${unattended[0].id}: ${unattended[0].people} คน ${unattended[0].type === 'critical' ? 'อยู่ไม่ได้ ต้องอพยพ' : 'ยังอยู่ได้ ต้องการเสบียง'}${unattended[0].injured ? ` · บาดเจ็บ ${unattended[0].injured} → โรงพยาบาล` : ''} · เหลือ ${hm(unattended[0].deadline - s.clock)}`, go: { plan: unattended[0].id }, cta: 'วางแผนเรือ' }
-    else if (scn.blindSpots.some((id) => !s.jobs.some((j) => j.kind === 'drone' && j.section === id))) hint = { text: `โซน ${scn.blindSpots.join(', ')} เป็นจุดอับ (ซอยลึก/ใต้ร่มไม้) — ดาวเทียมมองไม่เห็นคน ส่งโดรนช่วยส่อง`, go: { tab: 'sensors' }, cta: 'ส่งโดรน' }
+    if (power.length) hint = { lv: 'crit', topic: 'a2.hazard', lead: 'มีรายงานไฟฟ้ารั่ว', go: { tab: 'field' }, cta: 'ไปที่ภาคสนาม' }
+    else if (comm.length && s.points.some((p) => comm.includes(p.section))) hint = { lv: 'crit', topic: 'a2.hazard', lead: 'พายุตัดสัญญาณสื่อสาร', go: { tab: 'field' }, cta: 'ไปที่ภาคสนาม' }
+    else if (nextQ && !s.act2Orders[nextQ.id] && nextQ.t - s.clock < 240) hint = { lv: 'warn', topic: 'a2.pass', lead: `THEOS-2 รอบ ${nextQ.id} ผ่านเมืองใน ${hm(nextQ.t - s.clock)}`, go: { tab: 'sensors' }, cta: 'ไปที่แท็บดาวเทียม' }
+    else if (unattended.length && idle) hint = { lv: unattended[0].deadline - s.clock < 180 ? 'crit' : 'warn', topic: 'a2.route', ctx: { pointId: unattended[0].id }, lead: `${unattended[0].id} รอความช่วยเหลือ · เหลือ ${hm(unattended[0].deadline - s.clock)}`, go: { plan: unattended[0].id }, cta: 'วางแผนเรือ' }
+    else if (scn.blindSpots.some((id) => !s.jobs.some((j) => j.kind === 'drone' && j.section === id))) hint = { topic: 'a2.find', lead: 'ยังมีที่ที่ไม่มีใครมองเห็น', go: { tab: 'sensors' }, cta: 'ไปที่แท็บดาวเทียม' }
     else if (unattended.length && !idle) hint = { text: 'เรือออกหมดทุกลำ — กดเดินเวลาให้เรือกลับมา แล้วส่งต่อ', go: { advance: true }, cta: 'เดินเวลา' }
     else hint = { text: 'ยังไม่มีงานค้าง — กด "เดินเวลา → เหตุการณ์ถัดไป" เพื่อรอรอบ THEOS-2 / สายด่วน / ทีมรายงานผล', go: { advance: true }, cta: 'เดินเวลา' }
     return { title: 'ภารกิจองก์ 2 · วิกฤต', steps, hint }
@@ -122,18 +126,45 @@ export function QuestBox({ eng, onGo }) {
   )
 }
 
-/** Beginner tutor bar — one instruction at a time, with a jump to the right control. */
+/** Beginner tutor bar — the question to think about (rung 1), more only when the player asks. */
 export function TutorBar({ eng, onGo, onHide }) {
   const { hint } = questFor(eng)
+  const [ladderOpen, setLadderOpen] = useState(false)
+  const topic = hint?.topic || null
+  useEffect(() => { setLadderOpen(false) }, [topic])
+  const L = useMemo(() => (topic ? ladder(topic, { s: eng.s, scn: eng.scn, sfvi: eng.sfvi, ...(hint.ctx || {}) }) : null), [topic, eng.s, eng.scn, eng.sfvi, hint?.ctx?.pointId, hint?.ctx?.imageId]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!hint) return null
   const hex = hint.lv === 'crit' ? '#FF003C' : hint.lv === 'warn' ? '#FFB300' : '#38BDF8'
+  const rung = L ? L.open : 0
+  const text = L ? `${hint.lead ? `${hint.lead} — ` : ''}${rungLine(L.rungs[rung])}` : hint.text
   return (
-    <div className="relative z-20 flex h-[38px] shrink-0 items-center gap-3 border-t px-3" data-tutor
+    <div className="relative z-20 flex h-[38px] shrink-0 items-center gap-3 border-t px-3" data-tutor data-tutor-topic={topic || ''}
       style={{ borderColor: `${hex}55`, background: `linear-gradient(90deg, ${hex}22, #050912 60%)` }}>
       <span className="flex shrink-0 items-center gap-1.5 font-thai text-[11px] font-bold" style={{ color: hex }}>
         <Lightbulb size={14} className="animate-[flash_1.6s_ease-in-out_infinite]" /> ผู้ช่วยสอน
       </span>
-      <span className="font-thai min-w-0 flex-1 truncate text-[12.5px] text-slate-100" title={hint.text}>{hint.text}</span>
+      {L && (
+        <span className="font-thai flex shrink-0 items-center gap-1 rounded border px-1.5 py-[2px] text-[10px] font-bold" style={{ borderColor: `${RUNGS[rung].hex}66`, color: RUNGS[rung].hex, background: `${RUNGS[rung].hex}14` }}>
+          {RUNGS[rung].th}
+        </span>
+      )}
+      <span className="font-thai min-w-0 flex-1 truncate text-[12.5px] text-slate-100" title={text}>{text}</span>
+      {L && L.max > 0 && (
+        <button onClick={() => setLadderOpen((o) => !o)} data-hint-toggle
+          className={`font-thai flex shrink-0 items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-semibold transition ${ladderOpen ? 'border-[#FFD066] bg-[#FFD066]/20 text-white' : 'border-[#FFD066]/50 bg-[#FFD066]/[0.08] text-[#FFE0A3] hover:bg-[#FFD066]/15'}`}
+          title="คำใบ้แบบบันได: ถาม → ชี้ที่ข้อมูล → เฉลยบางส่วน">
+          <span className="flex gap-[3px]">
+            {[1, 2, 3].map((r) => <span key={r} className="h-[7px] w-[7px] rounded-full" style={{ background: r <= rung ? RUNGS[r].hex : r <= L.max ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.07)' }} />)}
+          </span>
+          {rung < L.max ? 'ขอคำใบ้เพิ่ม' : 'ดูคำใบ้'}
+          <ChevronUp size={12} className={`transition ${ladderOpen ? '' : 'rotate-180'}`} />
+        </button>
+      )}
+      {ladderOpen && L && (
+        <div className="absolute bottom-[calc(100%+6px)] right-3 z-30 w-[470px] animate-[riseIn_.2s_ease-out] shadow-[0_-18px_50px_-12px_rgba(0,0,0,.85)]" data-hint-popover>
+          <HintLadder eng={eng} topic={topic} ctx={hint.ctx || {}} onGo={onGo} />
+        </div>
+      )}
       {hint.cta && hint.go && (
         <button onClick={() => onGo(hint.go)} data-tutor-go
           className="font-thai flex shrink-0 items-center gap-1 rounded border px-2.5 py-1 text-[11.5px] font-bold transition hover:brightness-125 animate-[beacon_1.6s_ease-in-out_infinite]"

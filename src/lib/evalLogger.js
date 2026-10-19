@@ -4,7 +4,7 @@
    แล้วส่งออก CSV ไปวิเคราะห์สถิติ (Paired t-test, % ผ่านเกณฑ์) ในรายงาน Final Package
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { EVAL } from '../config/missionConfig'
+import { EVAL, HINTS } from '../config/missionConfig'
 
 const KEY = EVAL.storageKey
 let memory = { sessions: [] }      // fallback when storage is blocked (private window, file:// policy)
@@ -45,6 +45,7 @@ export const logger = {
       pre: null, post: null,
       actMs: { 1: 0, 2: 0, 3: 0 },
       layersOpened: [],
+      hints: [],        // hint-ladder rungs the player asked for (rung 2 = pointer, rung 3 = partial answer)
       rounds: [],
       triage: null,
       relief: null,
@@ -82,6 +83,14 @@ export const logger = {
     if (!current || current.layersOpened.some((l) => l.id === id)) return
     current.layersOpened.push({ id, act, at: now() - current._t0 })
     save()
+  },
+
+  /** Hint ladder: the player asked for rung 2 (pointer) or 3 (partial answer) of a topic. */
+  hint({ topic, rung, act, clock }) {
+    if (!current) return
+    if (!current.hints) current.hints = []
+    current.hints.push({ topic, rung, act, clock, at: now() - current._t0 })
+    save(); emit()
   },
 
   /** One decision round: EVACUATE / STANDBY / HOLD / TACTICAL_EVAC … */
@@ -129,6 +138,7 @@ export const logger = {
       briefingMin: briefing,
       briefingPass: briefing !== null ? briefing < EVAL.briefingTargetMin : null,
       avgRoundSec: avg(ss.flatMap((s) => s.rounds.map((r) => r.roundSec))),
+      avgDeepHints: avg(ss.filter((s) => s.hintsEnabled).map((s) => (s.hints || []).length)),
     }
   },
 
@@ -136,7 +146,8 @@ export const logger = {
     const head = ['session_id', 'player', 'started_at', 'demo', 'hints', 'briefing_min', 'pre_score', 'post_score', 'gain_pct',
       'act1_sec', 'act2_sec', 'act3_sec', 'layers_opened_total', 'layers_before_first_decision', 'decisions',
       'first_decision', 'first_decision_clock', 'evacuated_communities', 'triage_hits', 'relief_correct',
-      'final_trust', 'mission_score', 'households_exposed', 'total_sec']
+      'final_trust', 'mission_score', 'households_exposed', 'total_sec',
+      'hints_pointer', 'hints_partial', 'hint_penalty_pts', 'hint_topics']
     const rows = memory.sessions.map((s) => {
       const first = s.rounds.find((r) => r.kind !== 'HOLD')
       const gain = s.pre && s.post && s.pre.score ? ((s.post.score - s.pre.score) / s.pre.score) * 100 : ''
@@ -146,8 +157,19 @@ export const logger = {
         s.layersOpened.length, first?.layersOpened ?? '', s.rounds.length,
         first?.kind ?? '', first?.clockLabel ?? '', first?.communities?.join(' ') ?? '',
         s.triage?.hits ?? '', s.relief?.correct ?? '',
-        s.result?.trust ?? '', s.result?.score ?? '', s.result?.exposed ?? '', s.result?.totalSec ?? '']
+        s.result?.trust ?? '', s.result?.score ?? '', s.result?.exposed ?? '', s.result?.totalSec ?? '',
+        ...hintCols(s)]
     })
+    return toCSV([head, ...rows])
+  },
+
+  /** One row per hint request — when, in which act, on which topic, how deep. */
+  hintsCSV() {
+    const head = ['session_id', 'player', 'act', 'clock_min', 'topic', 'rung', 'rung_kind', 'sec_from_start']
+    const rows = []
+    for (const s of memory.sessions) for (const h of s.hints || []) {
+      rows.push([s.id, s.player, h.act, h.clock, h.topic, h.rung, h.rung === 2 ? 'pointer' : 'partial', Math.round(h.at / 1000)])
+    }
     return toCSV([head, ...rows])
   },
 
@@ -164,6 +186,16 @@ export const logger = {
     }
     return toCSV([head, ...rows])
   },
+}
+
+/** Hint columns of the sessions CSV (penalty mirrors sim.hintPenalty). */
+function hintCols(s) {
+  const hs = s.hints || []
+  const top = {}
+  for (const h of hs) top[h.topic] = Math.max(top[h.topic] || 1, h.rung)
+  let pts = 0
+  for (const r of Object.values(top)) for (let k = 2; k <= r; k++) pts += HINTS.cost[k] || 0
+  return [hs.filter((h) => h.rung === 2).length, hs.filter((h) => h.rung === 3).length, Math.min(HINTS.maxPenalty, pts), Object.keys(top).join(' ')]
 }
 
 function toCSV(rows) {

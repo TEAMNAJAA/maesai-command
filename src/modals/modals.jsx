@@ -5,12 +5,13 @@
 
 import React, { useState, useMemo } from 'react'
 import {
-  Shield, Satellite, Ship, Building2, AlertTriangle, Megaphone, CheckCircle2, XCircle, Clock, Database, Download, Trash2, ArrowRight, GraduationCap, Flag, BookOpen, Trophy, Users, HeartPulse, Fuel, Route, Wallet,
+  Shield, Satellite, Ship, Building2, AlertTriangle, Megaphone, CheckCircle2, XCircle, Clock, Database, Download, Trash2, ArrowRight, GraduationCap, Flag, BookOpen, Trophy, Users, HeartPulse, Fuel, Route, Wallet, Lightbulb,
 } from 'lucide-react'
 import { Modal, Btn, Src, SrcLegend } from '../ui/atoms'
 import { QUIZ } from '../config/scenarioData'
 import { SFVI, THRESHOLDS, RELIEF, TRUST, EVAL, MODES } from '../config/missionConfig'
 import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
+import { hintPenalty } from '../lib/sim'
 import { questFor } from '../panels/quest'
 import { leaderboard } from '../lib/leaderboard'
 import { clockLabel, clockToDate, fmt, pct, mmss } from '../lib/format'
@@ -247,11 +248,12 @@ export function Act1SummaryModal({ open, eng, onNext }) {
           {wasted.length > 0 && <div className="mt-0.5 text-[12px] font-normal text-[#FFE0A3]">สั่งอพยพโซนที่น้ำไม่ถึง {wasted.map((r) => r.sec.id).join(', ')} — งบเสียเปล่า</div>}
           {s.falseAlarms > 0 && <div className="mt-0.5 text-[12px] font-normal text-[#FFB3C2]">เตือนผิด {s.falseAlarms} ครั้ง — คนไม่เชื่อคำเตือนมากขึ้น</div>}
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-2">
+        <div className={`mt-3 grid gap-2 ${eng.mode.tutor ? 'grid-cols-5' : 'grid-cols-4'}`}>
           {stat('ครัวเรือนยังติดอยู่', fmt(exposure.exposed), 'scenario', exposure.exposed ? '#FF6B8A' : '#7CFFA0')}
           {stat('โซนที่สั่ง / ที่น้ำถึง', `${ordered.length} / ${wet.length}`, 'scenario', missedZones.length ? '#FFD066' : '#7CFFA0')}
           {stat('ภาพ THEOS-2 ใช้ได้', `${usable}`, 'image', usable >= 3 ? '#7CFFA0' : '#FFD066')}
           {stat('เวลาเล่นจริง', mmss(eng.realMs() / 1000), null, '#7dd3fc')}
+          {eng.mode.tutor && (() => { const h = hintPenalty(s); return stat('ขอคำใบ้ (ชี้ / เฉลย)', `${h.pointer} / ${h.partial}`, null, h.pts ? '#FFD066' : '#7CFFA0') })()}
         </div>
         <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.025] p-3">
           <div className="font-thai text-[12px] font-bold text-white">ภารกิจองก์ 1</div>
@@ -315,6 +317,16 @@ export function Act2SummaryModal({ open, eng, onNext }) {
           {stat(Wallet, 'งบคงเหลือ', `฿${fmt((s.budget.total - s.budget.spent) / 1e6, 2)}M`, '#FFD066')}
           {stat(Clock, 'เวลาเล่นจริงสะสม', mmss(eng.realMs() / 1000), '#7dd3fc')}
         </div>
+        {eng.mode.tutor && (() => {
+          const h = hintPenalty(s)
+          return (
+            <div className="font-thai mt-2 flex items-center gap-2 rounded-lg border border-[#FFD066]/25 bg-[#FFD066]/[0.05] px-3 py-1.5 text-[12px] text-slate-300" data-hint-summary>
+              <Lightbulb size={13} className="text-[#FFD066]" />
+              คำใบ้แบบบันไดที่ขอทั้งหมด: ชี้ที่ข้อมูล {h.pointer} · เฉลยบางส่วน {h.partial} · หักคะแนน <b className={h.pts ? 'text-[#FF9DB2]' : 'text-[#7CFFA0]'}>−{h.pts}</b>
+              <span className="ml-auto text-[11px] text-slate-500">องก์ 3 มีแค่คำถาม — ใช้สิ่งที่เรียนมา</span>
+            </div>
+          )
+        })()}
         <div className="font-thai mt-3 text-[11.5px] leading-snug text-slate-400">องก์ 3: ภาพ THEOS-2 หลังน้ำลดและไทม์ซีรีส์เรดาร์มาถึงแล้ว — ตัดสินเยียวยา {eng.scn.roofs.length} หลังคาให้ครบภายในวันที่ 60</div>
         <div className="mt-4 flex justify-end">
           <Btn variant="primary" size="lg" icon={ArrowRight} onClick={onNext}><span className="font-thai normal-case tracking-normal text-[14px]" data-act2-next>เข้าสู่ องก์ 3: ฟื้นฟู</span></Btn>
@@ -367,14 +379,14 @@ export function TeacherPanel({ open, onClose, version }) {
         <table className="mt-4 w-full border-collapse">
           <thead>
             <tr className="border-b border-white/10">
-              {['รอบ', 'ผู้เล่น', 'คำแนะนำ', 'Pre', 'Post', 'ชั้นข้อมูลก่อนตัดสินใจ', 'การตัดสินใจ', 'คะแนนภารกิจ'].map((h) => (
+              {['รอบ', 'ผู้เล่น', 'คำแนะนำ', 'ขอคำใบ้ (ชี้/เฉลย)', 'Pre', 'Post', 'ชั้นข้อมูลก่อนตัดสินใจ', 'การตัดสินใจ', 'คะแนนภารกิจ'].map((h) => (
                 <th key={h} className="font-thai px-2 py-1.5 text-left text-[11px] font-semibold text-slate-400">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {sessions.length === 0 && (
-              <tr><td colSpan={8} className="font-thai px-2 py-3 text-center text-[12px] text-slate-500">ยังไม่มีบันทึก</td></tr>
+              <tr><td colSpan={9} className="font-thai px-2 py-3 text-center text-[12px] text-slate-500">ยังไม่มีบันทึก</td></tr>
             )}
             {sessions.map((s) => {
               const first = s.rounds.find((r) => r.kind !== 'HOLD') || s.rounds[0]
@@ -383,6 +395,7 @@ export function TeacherPanel({ open, onClose, version }) {
                   <td className="num px-2 py-1.5 text-[11px] text-slate-300">{s.id}{s.demo && <span className="font-thai ml-1 text-[10px] text-[#FFD066]">สาธิต</span>}</td>
                   <td className="font-thai px-2 py-1.5 text-[11.5px] text-white">{s.player || '—'}</td>
                   <td className="font-thai px-2 py-1.5 text-[11px] text-slate-400">{s.hintsEnabled ? 'เปิด' : 'ปิด'}</td>
+                  <td className="num px-2 py-1.5 text-[11.5px] text-slate-300">{s.hintsEnabled ? `${(s.hints || []).filter((h) => h.rung === 2).length} / ${(s.hints || []).filter((h) => h.rung === 3).length}` : '—'}</td>
                   <td className="num px-2 py-1.5 text-[11.5px] text-slate-300">{s.pre?.score ?? '—'}</td>
                   <td className="num px-2 py-1.5 text-[11.5px] text-slate-300">{s.post?.score ?? '—'}</td>
                   <td className="num px-2 py-1.5 text-[11.5px]" style={{ color: (first?.layersOpened ?? 0) >= EVAL.minLayersBeforeDecision ? '#7CFFA0' : '#FF9DB2' }}>{first ? first.layersOpened : '—'}</td>
@@ -400,6 +413,9 @@ export function TeacherPanel({ open, onClose, version }) {
           </Btn>
           <Btn variant="ghost" icon={Download} onClick={() => downloadText(logger.roundsCSV(), `maesai-rounds-${stamp}.csv`)}>
             <span className="font-thai normal-case tracking-normal text-[12.5px]">Export CSV · รายการตัดสินใจ</span>
+          </Btn>
+          <Btn variant="ghost" icon={Download} onClick={() => downloadText(logger.hintsCSV(), `maesai-hints-${stamp}.csv`)}>
+            <span className="font-thai normal-case tracking-normal text-[12.5px]">Export CSV · การขอคำใบ้</span>
           </Btn>
           <div className="ml-auto">
             {confirm ? (

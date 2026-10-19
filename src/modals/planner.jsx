@@ -14,6 +14,8 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { Ship, HeartPulse, Users, Package, Check, Loader2, CheckCircle2, WifiOff, RotateCcw, Clock, Fuel, Navigation, Satellite, Cpu } from 'lucide-react'
 import { Modal, Btn, Src } from '../ui/atoms'
 import { ImpactHover, WhyButton } from '../ui/impact'
+import { HintLadder } from '../ui/hints'
+import { rungOf } from '../engine/hints'
 import { previewBoat } from '../engine/impact'
 import { useMode } from '../ui/label'
 import { BOAT, ACT2, COSTS, DURATIONS } from '../config/missionConfig'
@@ -49,7 +51,7 @@ function SphereStatus({ status, count, onRetry }) {
   )
 }
 
-function RouteCard({ o, i, active, focused, mode, onPick, onHover }) {
+function RouteCard({ o, i, active, focused, mode, showHazards, onPick, onHover }) {
   const hex = COLOR[o.variant] || '#94a3b8'
   const sphere = o.source === 'sphere'
   return (
@@ -67,7 +69,7 @@ function RouteCard({ o, i, active, focused, mode, onPick, onHover }) {
         {o.via && <span className="font-thai flex items-center gap-1 text-[#BFF5CF]"><Navigation size={10} />ผ่านจุดแวะ {o.via.length}</span>}
       </div>
       {o.steps?.length > 0 && <div className="font-thai mt-0.5 truncate pl-1 text-[10px] text-slate-500">ผ่าน: {o.steps.join(' → ')}</div>}
-      {mode.routeHints && (
+      {showHazards && (
         <div className="mt-1 flex flex-wrap gap-1 pl-1">
           {o.safe
             ? <span className="font-thai rounded bg-[#22E36B]/15 px-1.5 py-[1px] text-[10px] text-[#7CFFA0]">✓ ไม่พบอันตรายบนเส้นทาง</span>
@@ -109,8 +111,10 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
   const choice = options.findIndex((o) => o.variant === pickVar)
   const opt = choice >= 0 ? options[choice] : null
   const focus = options.find((o) => o.variant === hoverVar) || opt
-  const marks = useMemo(() => (focus && p && camp && mode.routeHints ? hazardMarks(s, scn, focus.coords, s.clock, [[camp.lon, camp.lat], [p.lon, p.lat], ...(destPt ? [[destPt.lon, destPt.lat]] : [[camp.lon, camp.lat]])]) : []),
-    [focus, s.clock, s.pumps, s.powerCut, mode.routeHints]) // eslint-disable-line react-hooks/exhaustive-deps
+  // hint ladder: rung 2 ("ชี้ที่ข้อมูล") marks where the route under the pointer meets a hazard · rung 3 names them on the cards
+  const routeRung = mode.tutor ? rungOf(s, 'a2.route') : 0
+  const marks = useMemo(() => (focus && p && camp && routeRung >= 2 ? hazardMarks(s, scn, focus.coords, s.clock, [[camp.lon, camp.lat], [p.lon, p.lat], ...(destPt ? [[destPt.lon, destPt.lat]] : [[camp.lon, camp.lat]])]) : []),
+    [focus, s.clock, s.pumps, s.powerCut, routeRung]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!p) return null
   const idle = s.boats.some((b) => b.busyUntil <= s.clock)
   const fuelLeft = s.fuel.total - s.fuel.used
@@ -121,7 +125,7 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
   }
   const sphereOpts = options.filter((o) => o.source === 'sphere')
   const offlineOpts = options.filter((o) => o.source !== 'sphere')
-  const cardProps = (o) => ({ o, i: options.indexOf(o), active: o.variant === pickVar, focused: o.variant === hoverVar, mode, onPick: setPickVar, onHover: setHoverVar })
+  const cardProps = (o) => ({ o, i: options.indexOf(o), active: o.variant === pickVar, focused: o.variant === hoverVar, mode, showHazards: routeRung >= 3, onPick: setPickVar, onHover: setHoverVar })
   // trip timeline for the chosen route
   const tPoint = opt ? s.clock + travel(opt.leg1M) : null
   const tDest = opt && mission === 'rescue' ? tPoint + DURATIONS.load + travel(opt.leg2M) : null
@@ -171,7 +175,7 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
                     </button>
                   ))}
                 </div>
-                {mode.routeHints && p.injured > 0 && dest !== 'hosp' && <div className="font-thai mt-1 text-[10.5px] text-[#FF9DB2]">มีผู้บาดเจ็บ — ควรส่งโรงพยาบาล</div>}
+                {mode.tutor && p.injured > 0 && dest !== 'hosp' && <div className="font-thai mt-1 text-[10.5px] text-[#FF9DB2]">มีผู้บาดเจ็บ — ควรส่งโรงพยาบาล</div>}
               </div>
             )}
             <div>
@@ -199,9 +203,10 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
               </div>
               <div className="font-thai mt-1.5 text-[10.5px] leading-snug text-slate-500">
                 Sphere คำนวณเส้นทางบนถนนจริงแต่ไม่รู้ว่าน้ำท่วมตรงไหน — ทุกเส้นทางจึงต้องตรวจกับข้อมูลเรดาร์/ไฟรั่วของเกมก่อนเลือก
-                {!mode.routeHints && ' · โหมด Expert: อ่านอันตรายเองจากแผนที่'}
+                {!mode.tutor && ' · โหมด Expert: อ่านอันตรายเองจากแผนที่'}
               </div>
             </div>
+            {mode.tutor && <HintLadder eng={eng} topic="a2.route" ctx={{ pointId: p.id }} compact />}
           </div>
 
           <div>

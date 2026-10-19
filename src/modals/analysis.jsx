@@ -12,6 +12,8 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ScanSearch, Check, X, ChevronRight, Ruler, Lightbulb, Satellite } from 'lucide-react'
 import { Modal, Btn, Src } from '../ui/atoms'
 import { WhyButton } from '../ui/impact'
+import { HintLadder } from '../ui/hints'
+import { rungOf } from '../engine/hints'
 import { useMode } from '../ui/label'
 import { THEOS2, THRESHOLDS, DATA } from '../config/missionConfig'
 import { SECTORS } from '../config/scenarioData'
@@ -269,15 +271,7 @@ export function ImageAnalysisModal({ eng, imageId, onClose }) {
             <div className="font-thai mt-1.5 text-[11px] text-slate-400">ลากเส้นกลางเพื่อเทียบภาพก่อน/หลัง · คลิกหมุดบนภาพ = ระบุว่าเป็นดินถล่มใหม่ (คลิกซ้ำเพื่อยกเลิก) · หมุดที่ไม่ได้คลิกนับเป็น "ไม่ใช่" · ภาพจำลองเพื่อการฝึก (รอภาพ THEOS-2 จริงจาก GISTDA)</div>
           </div>
           <div className="flex min-h-0 flex-col gap-2">
-            {mode.tutor && !done && (
-              <div className="font-thai rounded border border-[#FFD066]/35 bg-[#FFD066]/[0.06] px-2.5 py-2 text-[11px] leading-snug text-[#FFE6A8]">
-                <div className="mb-1 flex items-center gap-1 font-bold"><Lightbulb size={12} /> วิธีดู</div>
-                • <b>ดินถล่มใหม่</b>: แนวสีน้ำตาลแดงยาวลงตามลาดเขา มีดินกองที่ปลาย และ<b>ไม่มีในภาพก่อน</b><br />
-                • ทุ่งนา/ไร่: สี่เหลี่ยม มีแนวร่อง — มีในภาพก่อนด้วย<br />
-                • เงาเมฆ: ปื้นเทาเข้มไม่มีพื้นผิว มีเมฆขาวอยู่ข้าง ๆ<br />
-                • รอยเก่า: สีน้ำตาลอมเขียว มีในภาพก่อนแล้ว
-              </div>
-            )}
+            {mode.tutor && !done && <HintLadder eng={eng} topic="a1.read" ctx={{ imageId: img.id }} compact />}
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
               {scene.cands.map((c, i) => (
                 <div key={c.id} className={`rounded border px-2 py-1.5 ${focus === c.id ? 'border-sky-400 bg-sky-400/10' : 'border-white/[0.08] bg-white/[0.02]'}`} onClick={() => setFocus(c.id)}>
@@ -380,7 +374,7 @@ export function ChannelModal({ eng, onClose }) {
           </div>
           <span className="ml-auto"><Src t="image" /></span>
         </div>
-        <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full select-none rounded-lg border border-white/15 bg-[#1b1b1b]">
+        <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full select-none rounded-lg border border-white/15 bg-[#1b1b1b]" data-channel-image>
           <defs>
             <filter id="pan-ground" x="0" y="0" width="100%" height="100%">
               <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="4" seed="6" />
@@ -437,6 +431,17 @@ export function ChannelModal({ eng, onClose }) {
             <rect width={W} height={H} filter="url(#pan-grain)" opacity="0.1" style={{ mixBlendMode: 'overlay' }} />
           </g>
           <text x="12" y={H - 12} fontSize="11" fill="#e2e8f0" className="num" style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>THEOS-2 PAN · 1 พิกเซล = {THEOS2.panM} ม.</text>
+          {/* hint ladder rung 2 ("ชี้ที่ข้อมูล"): where the water edges are — the player still measures and computes */}
+          {mode.tutor && rungOf(s, 'a1.channel') >= 2 && (
+            <g data-river-guide pointerEvents="none">
+              {[left0, left0 + riverPx].map((x, i) => (
+                <g key={i}>
+                  <line x1={x} y1="0" x2={x} y2={H} stroke="#FFD066" strokeWidth="1.6" strokeDasharray="7 5" style={{ animation: 'guidedash 0.9s linear infinite' }} />
+                  <text x={x + (i ? 6 : -6)} y="22" textAnchor={i ? 'start' : 'end'} fontSize="12" fontWeight="700" fill="#FFD066" style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 3 }}>ขอบน้ำ</text>
+                </g>
+              ))}
+            </g>
+          )}
           {/* the gauge */}
           <line x1={a} y1={H / 2} x2={b} y2={H / 2} stroke="#38BDF8" strokeWidth="2.5" />
           {Array.from({ length: Math.floor(Math.abs(b - a) / (PX * 2)) + 1 }, (_, i) => {
@@ -459,7 +464,7 @@ export function ChannelModal({ eng, onClose }) {
             <div className="font-thai text-[13px] font-bold text-white">สูตร</div>
             <div className="num mt-1 text-[14px] text-sky-200">ความกว้าง (ม.) = จำนวนพิกเซล × {THEOS2.panM} ม./พิกเซล</div>
             <div className="num text-[14px] text-sky-200">N = 1 − ความกว้าง ÷ {THRESHOLDS.origChannelWidth}</div>
-            {mode.tutor && <div className="font-thai mt-2 text-[12px] leading-snug text-[#FFE0A3]">ตัวอย่างวิธีคิด: ถ้าวัดได้ 40 พิกเซล → 40 × 0.5 = 20 ม. → N = 1 − 20 ÷ 150 = 0.87 · ค่า 0.5 ม. และ 150 ม. ดูได้ในแท็บ "ดาวเทียม" ทางซ้าย</div>}
+            {mode.tutor && !s.channel.measured && <HintLadder eng={eng} topic="a1.channel" compact className="mt-2" />}
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <label className="font-thai text-[12px] text-slate-300">ค่า N ที่คำนวณได้ (ทศนิยม 2 ตำแหน่ง)</label>

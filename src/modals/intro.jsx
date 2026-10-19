@@ -8,10 +8,10 @@
 import React, { useRef } from 'react'
 import {
   Play, BookOpen, Trophy, Satellite, Ship, Building2, Target, Users, Map, Clock, FastForward, Database, GraduationCap, Scale,
-  CheckCircle2, X, ArrowRight, Layers, Timer, Zap,
+  CheckCircle2, X, ArrowRight, Layers, Timer, Zap, Lightbulb, HelpCircle, MousePointerClick, KeyRound,
 } from 'lucide-react'
 import { SrcLegend } from '../ui/atoms'
-import { SFVI, THRESHOLDS, THEOS2, RELIEF, ACT2, MODES, SCORE, TIME } from '../config/missionConfig'
+import { SFVI, THRESHOLDS, THEOS2, RELIEF, ACT2, MODES, SCORE, TIME, HINTS } from '../config/missionConfig'
 import { leaderboard } from '../lib/leaderboard'
 import { fmt, mmss } from '../lib/format'
 
@@ -165,7 +165,35 @@ export function HowToPlay({ open, onClose, onStart }) {
               </div>
             ))}
           </div>
-          <div className="font-thai mt-2 text-[12.5px] text-slate-400">ทุกองก์มี <b className="text-[#FFE0A3]">กล่องภารกิจ</b> มุมขวาบนบอกว่าต้องทำอะไรต่อ · โหมดผู้เริ่มต้นมี <b className="text-[#FFE0A3]">แถบผู้ช่วยสอน</b> ด้านล่างพร้อมปุ่มพาไปจุดที่ต้องกด · จบองก์มีหน้าสรุปผลทุกครั้ง</div>
+          <div className="font-thai mt-2 text-[12.5px] text-slate-400">ทุกองก์มี <b className="text-[#FFE0A3]">กล่องภารกิจ</b> มุมขวาบนบอกว่าต้องทำอะไรต่อ · โหมดผู้เริ่มต้นมี <b className="text-[#FFE0A3]">แถบผู้ช่วยสอน</b> ด้านล่าง ที่ถามให้คิดก่อน ไม่บอกคำตอบ · จบองก์มีหน้าสรุปผลทุกครั้ง</div>
+
+          {/* 3b · hint ladder */}
+          <div className="mt-3 rounded-xl border border-[#FFD066]/30 bg-gradient-to-r from-[#FFD066]/[0.07] to-transparent p-4" data-howto-hints>
+            <div className="flex items-center gap-2"><Lightbulb size={17} className="text-[#FFD066]" /><span className="font-thai text-[15px] font-bold text-white">คำใบ้แบบบันได — ผู้ช่วยไม่คิดแทน แค่ช่วยให้คิดเป็น</span></div>
+            <div className="mt-2.5 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2">
+              {[[HelpCircle, 'ขั้น 1 · ถามชวนคิด', 'ผู้ช่วยสอนถามคำถามที่ต้องคิด เช่น "น้ำจะถึงโซนไหนก่อนที่การอพยพจะเสร็จ?"', '#7DD3FC', 'ฟรี'],
+                [MousePointerClick, 'ขั้น 2 · ชี้ที่ข้อมูล', 'กดขอเอง: พาไปที่ข้อมูลที่ต้องอ่าน พร้อมไฟกะพริบรอบจุดนั้น', '#FFD066', `−${HINTS.cost[2]} คะแนน`],
+                [KeyRound, 'ขั้น 3 · เฉลยบางส่วน', 'กดขอเอง: ตัวเลข/รายชื่อบางส่วน หรือตัวอย่างวิธีคิด — ยังต้องตัดสินใจเอง', '#FF8FA8', `−${HINTS.cost[3]} คะแนน`]].map(([Icon, th, d, hex, cost], i) => (
+                <React.Fragment key={th}>
+                  {i > 0 && <ArrowRight size={16} className="self-center text-slate-600" />}
+                  <div className="rounded-lg border p-2.5" style={{ borderColor: `${hex}55`, background: `${hex}0d` }}>
+                    <div className="flex items-center gap-1.5"><Icon size={14} style={{ color: hex }} /><span className="font-thai text-[13px] font-bold" style={{ color: hex }}>{th}</span>
+                      <span className="font-thai ml-auto rounded px-1.5 text-[10.5px]" style={{ background: `${hex}22`, color: hex }}>{cost}</span></div>
+                    <div className="font-thai mt-1 text-[12px] leading-snug text-slate-300">{d}</div>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <span className="font-thai text-[12.5px] font-semibold text-slate-300">ตัวช่วยค่อย ๆ ถอนออก:</span>
+              {[1, 2, 3].map((a) => (
+                <span key={a} className="font-thai flex items-center gap-1.5 text-[12.5px] text-slate-300">องก์ {a}
+                  <span className="flex gap-[3px]">{[1, 2, 3].map((r) => <span key={r} className="h-[9px] w-[9px] rounded-full" style={{ background: r <= HINTS.maxRung[a] ? ['#7DD3FC', '#FFD066', '#FF8FA8'][r - 1] : 'rgba(255,255,255,.12)' }} />)}</span>
+                </span>
+              ))}
+              <span className="font-thai text-[12px] text-slate-500">หักรวมไม่เกิน {HINTS.maxPenalty} คะแนน · ครูเห็นจำนวนครั้งที่ขอคำใบ้ใน Log — เล่นรอบสองควรขอน้อยลง</span>
+            </div>
+          </div>
 
           {/* 4 · rules */}
           <H2 icon={Scale} id="rules">กฎการตัดสินใจ (Decision Rule / Logic Matrix)</H2>
@@ -223,7 +251,8 @@ export function HowToPlay({ open, onClose, onStart }) {
                 <li>• แบบทดสอบก่อน/หลังเล่น 5 ข้อ → วัดคะแนนที่เพิ่มขึ้น</li>
                 <li>• บันทึกทุกการตัดสินใจ ชั้นข้อมูลที่เปิด เวลาแต่ละองก์ → ครูส่งออก CSV (Ctrl+Shift+L)</li>
                 <li>• เล่นซ้ำได้ ทุกเกมสุ่มสถานการณ์ใหม่ (ความกว้างลำน้ำ เมฆ จุดอพยพ ผู้ติดค้าง) — วัดว่าเวลาเล่นลดลง คะแนนสูงขึ้น</li>
-                <li>• 2 โหมด: <b className="text-[#7CFFA0]">{MODES.beginner.th}</b> (มีผู้ช่วยสอน) · <b className="text-[#FF9DB2]">{MODES.expert.th}</b> (ศัพท์เทคนิค ไม่มีตัวช่วย ทรัพยากรน้อยกว่า)</li>
+                <li>• บันทึกการขอคำใบ้ขั้น 2–3 ทุกครั้ง → วัดว่าผู้เรียนพึ่งตัวช่วยน้อยลงเมื่อเล่นซ้ำ</li>
+                <li>• 2 โหมด: <b className="text-[#7CFFA0]">{MODES.beginner.th}</b> (ผู้ช่วยสอน + คำใบ้แบบบันได) · <b className="text-[#FF9DB2]">{MODES.expert.th}</b> (ศัพท์เทคนิค ไม่มีตัวช่วย ทรัพยากรน้อยกว่า)</li>
               </ul>
             </div>
           </div>
@@ -272,7 +301,7 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, onStart,
                   <button key={id} onClick={() => setMode(id)} data-mode-pick={id}
                     className={`font-thai rounded-lg border-2 px-3 py-2 text-left ${modeId === id ? (id === 'expert' ? 'border-[#FF6B8A] bg-[#FF003C]/12' : 'border-[#22E36B] bg-[#22E36B]/12') : 'border-white/10 hover:border-white/25'}`}>
                     <div className="text-[13.5px] font-bold text-white">{m.th}</div>
-                    <div className="text-[10.5px] text-slate-400">{id === 'beginner' ? 'มีผู้ช่วยสอน' : 'ไม่มีตัวช่วย'}</div>
+                    <div className="text-[10.5px] text-slate-400">{id === 'beginner' ? 'ผู้ช่วยสอน + คำใบ้แบบบันได' : 'ไม่มีตัวช่วย'}</div>
                   </button>
                 ))}
               </div>

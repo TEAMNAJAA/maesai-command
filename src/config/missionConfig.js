@@ -103,12 +103,12 @@ export const MISSION = {
 export const MODES = {
   beginner: {
     th: 'ผู้เริ่มต้น', en: 'Beginner', budget: 11_000_000, crews: 3, boats: 6, drones: 3, pumps: 4,
-    tutor: true, labels: 'dual', routeHints: true, reliefHints: true,
+    tutor: true, labels: 'dual',   // tutor = แถบผู้ช่วยสอน + คำใบ้แบบบันได (HINTS)
     impactJudge: true,     // การ์ดผลที่จะเกิด: แสดงการประเมินตามกฎ (เตือนผิด/ทันเวลา/งบเสียเปล่า) — Expert เห็นแค่ต้นทุน
   },
   expert: {
     th: 'ผู้เชี่ยวชาญ', en: 'Expert', budget: 8_500_000, crews: 2, boats: 4, drones: 2, pumps: 3,
-    tutor: false, labels: 'tech', routeHints: false, reliefHints: false,
+    tutor: false, labels: 'tech',
     impactJudge: false,
   },
 }
@@ -285,6 +285,16 @@ export const SCORE = {
   logistics: 0.10, // เส้นทางถูก น้ำมันพอ งบไม่บานปลาย ส่งทันกรอบ 60 วัน
   relief: 0.20,    // ตัดสินเยียวยาถูกต้อง
   trust: 0.10,     // ความเชื่อมั่นประชาชนตอนจบ
+}
+
+/* ── 12b · คำใบ้แบบบันได (Hint ladder) — ตัวช่วยที่ค่อย ๆ ถอนออก (scaffolding) ── */
+// ขั้น 1 ถามชวนคิด (ฟรี เห็นเองในแถบผู้ช่วยสอน) → ขั้น 2 ชี้ที่ข้อมูล → ขั้น 3 เฉลยบางส่วน
+// ผู้เล่นต้องกดขอขั้นถัดไปเอง · เปิดแต่ละขั้นของแต่ละหัวข้อหักคะแนนครั้งเดียว · โหมดผู้เชี่ยวชาญไม่มีคำใบ้
+export const HINTS = {
+  maxRung: { 1: 3, 2: 2, 3: 1 },   // องก์ 1 ครบ 3 ขั้น · องก์ 2 ถึงขั้นชี้ข้อมูล · องก์ 3 มีแค่คำถาม
+  cost: { 1: 0, 2: 1, 3: 2 },      // คะแนน (เต็ม 100) ที่หักเมื่อเปิดขั้นนั้น
+  maxPenalty: 10,                  // หักรวมทั้งภารกิจไม่เกินนี้
+  spotMs: 4500,                    // เวลาที่กรอบไฟชี้ข้อมูลกะพริบ (ขั้น 2)
 }
 
 /* ── 13 · Sandbox test / logging ─────────────────────────────────────────── */

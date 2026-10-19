@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import {
-  SFVI, THRESHOLDS, CLOUD_RULE, HYDRO, RELIEF, SCORE, DURATIONS, RESCUE, ACT2, EVAL,
+  SFVI, THRESHOLDS, CLOUD_RULE, HYDRO, RELIEF, SCORE, DURATIONS, RESCUE, ACT2, EVAL, HINTS,
 } from '../config/missionConfig'
 import { SECTIONS, SECTION_BY_ID, sectionDepth, GAPS_BY_SECTION } from './sections'
 import { BUILDINGS } from './buildings'
@@ -207,6 +207,18 @@ export function reliefSummary(s, scn) {
   }
 }
 
+/* ── Hint ladder penalty — rung 2 and 3 cost score points, once per topic ─── */
+
+export function hintPenalty(s) {
+  let raw = 0, pointer = 0, partial = 0
+  for (const r of Object.values(s.hints || {})) {
+    for (let k = 2; k <= r; k++) raw += HINTS.cost[k] || 0
+    if (r >= 2) pointer++
+    if (r >= 3) partial++
+  }
+  return { pts: Math.min(HINTS.maxPenalty, raw), raw, pointer, partial }
+}
+
 /* ── Mission score — computed from what the player actually did ──────────── */
 
 export function missionScore(s, scn) {
@@ -242,10 +254,12 @@ export function missionScore(s, scn) {
 
   const rel = reliefSummary(s, scn)
   const parts = { theos, evac, rescue, logistics, relief: rel.accuracy, trust: s.trust / 100 }
-  const total = Object.entries(SCORE).reduce((a, [k, w]) => a + w * parts[k], 0)
+  const base = Object.entries(SCORE).reduce((a, [k, w]) => a + w * parts[k], 0)
+  const hints = hintPenalty(s)
+  const total = Math.max(0, base - hints.pts / 100)
   const firstOrder = s.decisions.find((d) => d.kind === 'EVACUATE')
   return {
-    total, parts, exposure: exp, relief: rel, scars: st,
+    total, base, hints, parts, exposure: exp, relief: rel, scars: st,
     people: { need: needPeople, saved, lost, injured, injuredOk },
     layersAtFirst: firstOrder?.layersOpened ?? s.layersOpened.length, minLayers: EVAL.minLayersBeforeDecision,
   }

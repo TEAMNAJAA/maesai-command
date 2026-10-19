@@ -3,7 +3,7 @@
    ไม่มีแต้ม AP: คำสั่งใช้ "เวลา" (งานของทีมใช้เวลาจริงในเกม) และ "งบประมาณ" (บาท)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { THEOS2, COSTS, DURATIONS, MODES, TRUST, SFVI, RELIEF, BOAT, THRESHOLDS, EMBANKMENT, CMD_MIN } from '../config/missionConfig'
+import { THEOS2, COSTS, DURATIONS, MODES, TRUST, SFVI, RELIEF, BOAT, THRESHOLDS, EMBANKMENT, CMD_MIN, HINTS } from '../config/missionConfig'
 import { CAMP_SITES, HOSPITAL } from '../config/scenarioData'
 import { SECTION_BY_ID } from '../lib/sections'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
@@ -27,6 +27,16 @@ const afford = (n, cost, what) => {
 /** Orders take effect at once; the command time they take moves the mission clock on. */
 const spend = (n, scn, min) => (min > 0 ? advanceTo(n, scn, n.clock + min) : n)
 const withTrust = (n, t) => { n.trust = Math.max(0, Math.min(100, t)); n.trustHist = [...n.trustHist.slice(-30), n.trust] }
+
+/* ── Hint ladder — the player asks for the next rung (no game time) ────────── */
+
+/** Open rung `rung` of a hint topic: one step at a time, only up to the act's limit, Beginner only. */
+export function revealHint(s, scn, topic, rung) {
+  if (!mode(s).tutor) return s
+  const cur = s.hints?.[topic] || 1
+  if (rung !== cur + 1 || rung > (HINTS.maxRung[s.act] || 1)) return s
+  return { ...s, hints: { ...(s.hints || {}), [topic]: rung } }
+}
 
 /* ── Act 1 · base camp ───────────────────────────────────────────────────── */
 
