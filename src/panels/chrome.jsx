@@ -7,7 +7,7 @@ import {
   AlertTriangle, Timer, ChevronRight, ChevronUp, ChevronDown, RotateCcw, BookOpen, Database, Lightbulb, Check, ScrollText, Trophy, Wallet, Fuel, CalendarClock,
 } from 'lucide-react'
 import { Panel } from '../ui/atoms'
-import { SPHERE, MISSION, TIME } from '../config/missionConfig'
+import { SPHERE, MISSION, TIME, STRESS } from '../config/missionConfig'
 import { ACT_WINDOW } from '../lib/sim'
 import { fmt, clockHeadline, clockToDate, clamp, mmss } from '../lib/format'
 import { sphereReady } from '../lib/sphere'
@@ -90,6 +90,12 @@ export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, 
         style={{ color: s.modeId === 'expert' ? '#FF9DB2' : '#7CFFA0', borderColor: s.modeId === 'expert' ? '#FF003C66' : '#22E36B66' }}>
         {mode.th} · {mode.en}
       </span>
+      {s.stress?.length > 0 && (
+        <span className="font-thai rounded border border-[#FF8A3D]/60 bg-[#FF8A3D]/12 px-1.5 py-[3px] text-[10.5px] font-bold text-[#FFB27A]" data-stress-badge
+          title={s.stress.map((k) => `${STRESS[k].th}: ${STRESS[k].desc}`).join('\n')}>
+          STRESS TEST · {s.stress.map((k) => STRESS[k].th).join(' · ')}
+        </span>
+      )}
 
       <div className="relative mx-auto flex flex-col items-center">
         <div className="clip-notch border px-6 py-1" style={{ borderColor: `${act.hex}55`, background: `linear-gradient(180deg, ${act.hex}18, transparent)` }}>

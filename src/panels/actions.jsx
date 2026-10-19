@@ -379,7 +379,7 @@ function Sensors({ eng }) {
             <span className="min-w-0 flex-1">
               <span className="num block text-[11.5px] font-bold text-white">รอบ {q.id} · {clockLabel(q.t)}</span>
               <span className="font-thai block text-[9.5px] text-slate-500">
-                {shot ? `เห็นพื้นดิน ${shot.clear.length}/10 โซน: ${shot.clear.join(' ')}` : past ? 'ผ่านไปแล้ว (ไม่ได้สั่ง)' : ordered ? `สั่งแล้ว · อีก ${hm(q.t - t)}` : `อีก ${hm(q.t - t)} — เห็นเฉพาะโซนที่เมฆเปิดตอนนั้น`}
+                {shot?.lost ? 'ภาพสูญหาย — ประมวลผลล้มเหลว (Stress Test)' : shot ? `เห็นพื้นดิน ${shot.clear.length}/10 โซน: ${shot.clear.join(' ')}` : past ? 'ผ่านไปแล้ว (ไม่ได้สั่ง)' : ordered ? `สั่งแล้ว · อีก ${hm(q.t - t)}` : `อีก ${hm(q.t - t)} — เห็นเฉพาะโซนที่เมฆเปิดตอนนั้น`}
               </span>
             </span>
             {!past && !ordered && <ImpactHover card={I.previewPass2(s, scn, q.id)}><Btn size="sm" variant="primary" icon={Satellite} onClick={() => eng.orderPass2(q.id)}><span className="font-thai normal-case tracking-normal">สั่งถ่าย</span></Btn></ImpactHover>}

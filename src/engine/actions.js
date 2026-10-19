@@ -25,7 +25,7 @@ const afford = (n, cost, what) => {
   return true
 }
 /** Orders take effect at once; the command time they take moves the mission clock on. */
-const spend = (n, scn, min) => (min > 0 ? advanceTo(n, scn, n.clock + min) : n)
+const spend = (n, scn, min) => (min > 0 ? advanceTo(n, scn, n.clock + Math.round(min * (scn.stress?.cmdFactor || 1))) : n)
 const withTrust = (n, t) => { n.trust = Math.max(0, Math.min(100, t)); n.trustHist = [...n.trustHist.slice(-30), n.trust] }
 
 /* ── Hint ladder — the player asks for the next rung (no game time) ────────── */
@@ -246,6 +246,8 @@ export function dispatchBoat(s, scn, { pointId, mission, dest, plan, optionIdx }
     toast(n, 'crit', grade.kind === 'unsafe' ? 'คำนวณเส้นทางผิด!' : 'เส้นทางไม่ใช่เส้นที่ดีที่สุด')
   }
   n.fuel.used = Math.round((n.fuel.used + opt.fuelL) * 10) / 10
+  if (p.firstBoatAt === undefined) p.firstBoatAt = n.clock
+  n.routeLog = [...(n.routeLog || []), { point: p.id, at: n.clock, kind: grade.kind, chosenM: Math.round(opt.distanceM), bestM: plan.best ? Math.round(plan.best.distanceM) : null, hazards: opt.hazards || [], fuelL: opt.fuelL, bestFuelL: plan.best?.fuelL ?? null }]
   const min = (m) => Math.round((m / 1000 / BOAT.speedKmh) * 60)
   const tPoint = n.clock + delay + min(opt.leg1M)
   const tDest = tPoint + DURATIONS.load + min(opt.leg2M)

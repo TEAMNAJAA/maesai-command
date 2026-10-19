@@ -15,9 +15,12 @@ import { Panel, PanelHead, Src, Btn, ArcGauge, Spark, StatLine, Corners } from '
 import { useMode } from '../ui/label'
 import { ImpactHover, WhyButton } from '../ui/impact'
 import { HintLadder } from '../ui/hints'
+import { WhatIfPanel } from '../ui/whatif'
+import { DeltaChip, fmtVal } from '../modals/teacherCompare'
+import { sessionMetrics, previousRound, METRICS } from '../lib/compare'
 import { rungOf } from '../engine/hints'
 import { previewVerdict, previewSurvey } from '../engine/impact'
-import { RELIEF, EVENT, SCORE, MODES, MISSION, TIME } from '../config/missionConfig'
+import { RELIEF, EVENT, SCORE, MODES, MISSION, TIME, STRESS } from '../config/missionConfig'
 import { LESSONS, RES_PROOF } from '../config/scenarioData'
 import { BUILDINGS } from '../lib/buildings'
 import { SECTION_BY_ID } from '../lib/sections'
@@ -324,6 +327,60 @@ function ScoreColumn({ eng, score }) {
   )
 }
 
+/** The same player's previous round on this machine (new scenario) — did the decisions get better? */
+function PrevRound({ eng, player }) {
+  const prev = useMemo(() => previousRound(logger.sessions(), player, logger.current?.id), [player, eng.s.act3Done]) // eslint-disable-line react-hooks/exhaustive-deps
+  const now = useMemo(() => sessionMetrics(eng.s, eng.scn, eng.realMs() / 1000), [eng.s, eng.scn]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!player) return null
+  if (!prev) {
+    return (
+      <div className="font-thai flex items-center gap-2 rounded-xl border border-dashed border-white/12 px-4 py-2.5 text-[12px] text-slate-400" data-prev-round="none">
+        <Activity size={14} className="text-[#C4B5FD]" />เล่นอีกรอบด้วยชื่อ "{player}" — ระบบสุ่มสถานการณ์ใหม่ แล้วจะเทียบพัฒนาการของคุณให้ที่นี่
+      </div>
+    )
+  }
+  const m = prev.result.metrics
+  const keys = ['score', 'falseAlarms', 'savedPct', 'missed', 'hints', 'realSec']
+  return (
+    <Panel data-prev-round="1">
+      <PanelHead title="YOUR PROGRESS · เทียบกับรอบก่อนของคุณ" icon={Activity} accent="#C4B5FD"
+        right={<span className="font-thai text-[10.5px] text-slate-500">รอบก่อน seed {m.seed ?? '—'} · รอบนี้ seed {eng.s.seed}{m.seed === eng.s.seed ? ' (สถานการณ์เดิม)' : ' (สถานการณ์ใหม่)'}</span>} />
+      <div className="grid grid-cols-6 gap-2 px-3 py-2.5">
+        {keys.map((k) => {
+          const meta = METRICS.find((x) => x.k === k)
+          const d = m[k] === null || m[k] === undefined || now[k] === null ? null : now[k] - m[k]
+          return (
+            <div key={k} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+              <div className="font-thai truncate text-[10.5px] text-slate-400" title={meta.th}>{meta.th}</div>
+              <div className="num mt-0.5 text-[13px] text-slate-300">{fmtVal(k, m[k])} → <b className="text-white">{fmtVal(k, now[k])}</b></div>
+              <div className="mt-0.5"><DeltaChip k={k} d={d} better={meta.better} /></div>
+            </div>
+          )
+        })}
+      </div>
+    </Panel>
+  )
+}
+
+/** "ถ้าคุณเลือกอีกทาง" for the whole mission — one tab per act (act 3 once every roof is decided). */
+function WhatIfTabs({ eng, relDone }) {
+  const [act, setAct] = useState(relDone ? 3 : 1)
+  return (
+    <div data-whatif-tabs>
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className="font-thai mr-1 text-[12px] font-semibold text-slate-300">บทเรียนจากการตัดสินใจของคุณ</span>
+        {[[1, 'องก์ 1 · เฝ้าระวัง'], [2, 'องก์ 2 · วิกฤต'], [3, 'องก์ 3 · ฟื้นฟู']].map(([a, th]) => (
+          <button key={a} onClick={() => setAct(a)} data-whatif-act={a}
+            className={`font-thai rounded-md border px-2.5 py-1 text-[11.5px] font-semibold transition ${act === a ? 'border-[#A78BFA] bg-[#A78BFA]/20 text-white' : 'border-white/10 text-slate-400 hover:text-white'}`}>{th}</button>
+        ))}
+      </div>
+      {act === 3 && !relDone
+        ? <div className="font-thai rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[12.5px] text-slate-400">ตัดสินเยียวยาให้ครบทุกหลังก่อน แล้วจะเห็นว่าแต่ละหลังควรตัดสินอย่างไร</div>
+        : <WhatIfPanel key={act} eng={eng} act={act} limit={4} />}
+    </div>
+  )
+}
+
 function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }) {
   const { s } = eng
   const rel = score.relief
@@ -336,7 +393,7 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
           <Trophy size={22} className="text-[#FFD066]" />
           <div>
             <div className="font-thai text-[16px] font-bold text-white">{allDone ? `ภารกิจจบ — คะแนน ${Math.round(score.total * 100)}%` : `ยังตัดสินเยียวยาไม่ครบ (${rel.done}/${rel.total})`}</div>
-            <div className="font-thai text-[12px] text-slate-400">{MODES[s.modeId].th} · seed {s.seed} · ผู้เล่น {player || 'ไม่ระบุชื่อ'} · เวลาเล่นจริง <b className="num text-white">{mmss(eng.realMs() / 1000)}</b>
+            <div className="font-thai text-[12px] text-slate-400">{MODES[s.modeId].th} · seed {s.seed} · ผู้เล่น {player || 'ไม่ระบุชื่อ'}{s.stress?.length > 0 && <span className="ml-1 rounded bg-[#FF8A3D]/20 px-1.5 py-[1px] text-[11px] font-bold text-[#FFB27A]">Stress Test: {s.stress.map((k) => STRESS[k].th).join(' · ')}</span>} · เวลาเล่นจริง <b className="num text-white">{mmss(eng.realMs() / 1000)}</b>
               {eng.realMs() > 0 && eng.realMs() / 1000 <= TIME.expertTargetSec && <span className="ml-1.5 rounded bg-[#FFD066]/20 px-1.5 py-[1px] text-[11px] font-bold text-[#FFE0A3]">⚡ ภายใน {TIME.expertTargetSec / 60} นาที</span>}</div>
           </div>
           <div className="ml-auto flex gap-2">
@@ -355,6 +412,8 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
           ))}
         </div>
       </Panel>
+      {allDone && <PrevRound eng={eng} player={player} />}
+      <WhatIfTabs eng={eng} relDone={allDone} />
       <Panel>
         <PanelHead title="DECISION TIMELINE · เส้นเวลาการตัดสินใจ" icon={Clock} right={<Src t="scenario" mini />} />
         <div className="flex gap-1 overflow-x-auto px-3 py-2.5">

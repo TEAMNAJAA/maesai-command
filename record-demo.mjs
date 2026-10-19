@@ -22,6 +22,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const SEED = Number(process.env.RECORD_SEED) || 4242
 const SPEED = Number(process.env.RECORD_SPEED) || 3          // faster cut scenes for the smoke test
 const APP = (process.env.RECORD_URL || pathToFileURL(join(HERE, 'dist', 'index.html')).href) + `?demo&rec&seed=${SEED}&speed=${SPEED}`
+  + (process.env.RECORD_PARAMS ? `&${process.env.RECORD_PARAMS}` : '')        // e.g. RECORD_PARAMS=stress=all
 const OUT = resolve(HERE, process.env.RECORD_OUT || join('recordings', `run-${new Date().toISOString().slice(0, 19).replace(/\D/g, '')}`))
 const W = 1920, H = 1080
 const timer = makeMarks()

@@ -37,7 +37,7 @@ export function LeaderboardModal({ open, onClose, highlight, version }) {
             {rows.map((r, i) => (
               <tr key={r.at + r.name} className="border-b border-white/[0.05]" style={highlight && highlight.at === r.at ? { background: 'rgba(255,208,102,.12)' } : undefined}>
                 <td className="num px-2 py-1.5 text-[13px] font-bold" style={{ color: i === 0 ? '#FFD066' : i === 1 ? '#cbd5e1' : i === 2 ? '#d6a46c' : '#94a3b8' }}>{i + 1}</td>
-                <td className="font-thai px-2 py-1.5 text-[12.5px] text-white">{r.name}</td>
+                <td className="font-thai px-2 py-1.5 text-[12.5px] text-white">{r.name}{r.stress?.length > 0 && <span className="font-thai ml-1.5 rounded bg-[#FF8A3D]/20 px-1 text-[10px] font-bold text-[#FFB27A]" title={`Stress Test: ${r.stress.join(', ')}`}>STRESS ×{r.stress.length}</span>}</td>
                 <td className="num px-2 py-1.5 text-[13px] font-bold text-[#7CFFA0]">{Math.round(r.score)}%</td>
                 <td className="num px-2 py-1.5 text-[11.5px] text-slate-400">{mmss(r.sec)}{r.sec && r.sec <= TIME.expertTargetSec ? <Zap size={11} className="ml-1 inline text-[#FFD066]" /> : null}</td>
                 <td className="num px-2 py-1.5 text-[11px] text-slate-500">{r.seed}</td>

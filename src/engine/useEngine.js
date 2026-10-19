@@ -7,7 +7,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { TIME, MODES, MISSION, THRESHOLDS, ACT2 } from '../config/missionConfig'
+import { TIME, MODES, MISSION, THRESHOLDS, ACT2, parseStress } from '../config/missionConfig'
 import { LAYERS, SHELTER_POOL } from '../config/scenarioData'
 import { makeScenario } from '../lib/scenario'
 import { computeSfvi, exposureSummary, reliefSummary, peakDepth, arrivalAt, evacNeedMin, depthAt, HARM_M } from '../lib/sim'
@@ -26,16 +26,18 @@ const URLQ = typeof window !== 'undefined' ? new URLSearchParams(window.location
 const SPEED = Math.max(0.2, Number(URLQ.get('speed')) || 1)        // cut-scene speed (recordings use > 1)
 const FIXED_SEED = Number(URLQ.get('seed')) || null
 const REC = URLQ.has('rec')                                         // recorder hook (record-*.mjs) — never on in normal play
+const URL_STRESS = parseStress(URLQ.get('stress'))                  // ?stress=data,roads,time | all — Stress Test from a link
 
 export function useEngine() {
-  const [s, setS] = useState(() => makeInitial(URLQ.get('mode') === 'expert' ? 'expert' : 'beginner', FIXED_SEED || newSeed()))
+  const [s, setS] = useState(() => makeInitial(URLQ.get('mode') === 'expert' ? 'expert' : 'beginner', FIXED_SEED || newSeed(), URL_STRESS))
   const [cut, setCut] = useState(null)              // active cut scene (time jump)
   const busy = useRef(false)
   const skip = useRef(false)
   const real = useRef({ start: null, actStart: null, acts: {} })
   const [flash, setFlash] = useState(null)
   const sRef = useRef(s)
-  const scn = useMemo(() => makeScenario(s.seed, s.modeId), [s.seed, s.modeId])
+  const stressKey = (s.stress || []).join()
+  const scn = useMemo(() => makeScenario(s.seed, s.modeId, s.stress), [s.seed, s.modeId, stressKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const scnRef = useRef(scn)
   scnRef.current = scn
   const mode = MODES[s.modeId]
@@ -279,15 +281,21 @@ export function useEngine() {
     commit((p) => ({ ...p, act3Done: true }))
   }, [commit])
 
-  const newGame = useCallback((modeId = sRef.current.modeId, seed = FIXED_SEED || newSeed()) => {
+  const newGame = useCallback((modeId = sRef.current.modeId, seed = FIXED_SEED || newSeed(), stress = sRef.current.stress) => {
     vetoAnnounced.current = false
     real.current = { start: null, actStart: null, acts: {} }
-    commit((p) => ({ ...makeInitial(modeId, seed), resetSeq: (p.resetSeq || 0) + 1 }))
+    commit((p) => ({ ...makeInitial(modeId, seed, stress), resetSeq: (p.resetSeq || 0) + 1 }))
   }, [commit])
+  const untouched = () => sRef.current.act === 1 && sRef.current.clock <= sRef.current.t0
   const setMode = useCallback((modeId) => {
-    if (sRef.current.act !== 1 || sRef.current.clock > -48 * 60) return newGame(modeId)
-    commit((p) => ({ ...makeInitial(modeId, p.seed), resetSeq: p.resetSeq }))
-  }, [commit, newGame])
+    if (!untouched()) return newGame(modeId)
+    commit((p) => ({ ...makeInitial(modeId, p.seed, p.stress), resetSeq: p.resetSeq }))
+  }, [commit, newGame]) // eslint-disable-line react-hooks/exhaustive-deps
+  /** Stress Test conditions chosen by the teacher (title screen) — same seed, so the effect is comparable. */
+  const setStress = useCallback((list) => {
+    if (!untouched()) return newGame(sRef.current.modeId, sRef.current.seed, list)
+    commit((p) => ({ ...makeInitial(p.modeId, p.seed, list), resetSeq: p.resetSeq }))
+  }, [commit, newGame]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* recorder hook: lets record-*.mjs read the answers it needs to play a clean run */
   useEffect(() => {
@@ -323,6 +331,6 @@ export function useEngine() {
     setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, orderZones, toggleLayer, routeZone, revealHint,
     orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat, requestBoatRoutes, boatRouteStatus, boatRouteVer,
     reviewRoof, survey, adjudicate,
-    goAct2, goAct3, ackVeto, finishMission, newGame, setMode,
+    goAct2, goAct3, ackVeto, finishMission, newGame, setMode, setStress,
   }
 }

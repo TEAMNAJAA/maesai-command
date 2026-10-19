@@ -13,6 +13,8 @@ import { SFVI, THRESHOLDS, RELIEF, TRUST, EVAL, MODES } from '../config/missionC
 import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
 import { hintPenalty } from '../lib/sim'
 import { questFor } from '../panels/quest'
+import { WhatIfPanel } from '../ui/whatif'
+import { RoundCompare } from './teacherCompare'
 import { leaderboard } from '../lib/leaderboard'
 import { clockLabel, clockToDate, fmt, pct, mmss } from '../lib/format'
 import { logger, downloadText } from '../lib/evalLogger'
@@ -234,7 +236,7 @@ export function Act1SummaryModal({ open, eng, onNext }) {
     </div>
   )
   return (
-    <Modal open closable={false} width={760} tone={vhex} z={86}>
+    <Modal open closable={false} width={880} tone={vhex} z={86}>
       <div className="p-6" data-modal="act1-summary">
         <div className="flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-lg border-2" style={{ borderColor: vhex, background: `${vhex}1A` }}><Flag size={21} style={{ color: vhex }} /></div>
@@ -267,6 +269,7 @@ export function Act1SummaryModal({ open, eng, onNext }) {
           </div>
           <div className="font-thai mt-2 text-[11px] text-slate-400">SFVI ล่าสุด {sfvi.basin.toFixed(2)} · L = {sfvi.scars.labelled}/{scn.totalScars} (ระบุถูก {sfvi.scars.tp} · ผิด {sfvi.scars.fp}) · N = {sfvi.N.toFixed(2)} · ความเชื่อมั่น {Math.round(s.trust)}%</div>
         </div>
+        <WhatIfPanel eng={eng} act={1} limit={3} compact className="mt-3" />
         <div className="font-thai mt-3 text-[11.5px] leading-snug text-slate-400">องก์ 2: เมฆเคลื่อนผ่านเมือง 35–65% — ใช้ THEOS-2 ถ่ายช่องเมฆหาผู้ติดค้าง · เรดาร์เช็คน้ำบอกความลึก · เรือกู้ภัยออกจากฐานของคุณ</div>
         <div className="mt-4 flex justify-end">
           <Btn variant="danger" size="lg" icon={ArrowRight} onClick={onNext}><span className="font-thai normal-case tracking-normal text-[14px]" data-act1-next>เข้าสู่ องก์ 2: วิกฤตน้ำท่วม</span></Btn>
@@ -297,7 +300,7 @@ export function Act2SummaryModal({ open, eng, onNext }) {
     </div>
   )
   return (
-    <Modal open closable={false} width={720} tone={hex} z={86}>
+    <Modal open closable={false} width={880} tone={hex} z={86}>
       <div className="p-6" data-modal="act2-summary">
         <div className="flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-lg border-2" style={{ borderColor: hex, background: `${hex}1A` }}><Flag size={21} style={{ color: hex }} /></div>
@@ -317,6 +320,7 @@ export function Act2SummaryModal({ open, eng, onNext }) {
           {stat(Wallet, 'งบคงเหลือ', `฿${fmt((s.budget.total - s.budget.spent) / 1e6, 2)}M`, '#FFD066')}
           {stat(Clock, 'เวลาเล่นจริงสะสม', mmss(eng.realMs() / 1000), '#7dd3fc')}
         </div>
+        <WhatIfPanel eng={eng} act={2} limit={3} compact className="mt-3" />
         {eng.mode.tutor && (() => {
           const h = hintPenalty(s)
           return (
@@ -342,12 +346,13 @@ export function TeacherPanel({ open, onClose, version }) {
   const sum = useMemo(() => logger.summary(), [open, version])
   const sessions = useMemo(() => logger.sessions().slice(-12).reverse(), [open, version])
   const [confirm, setConfirm] = useState(false)
+  const [view, setView] = useState('overview')
   const stamp = new Date().toISOString().slice(0, 16).replace(/\D/g, '')
   const chip = (ok) => (ok === null ? <span className="font-thai text-[11px] text-slate-500">ยังไม่มีข้อมูล</span>
     : ok ? <span className="font-thai rounded bg-[#22E36B]/15 px-1.5 py-0.5 text-[11px] text-[#7CFFA0]">ผ่าน</span>
       : <span className="font-thai rounded bg-[#FF003C]/15 px-1.5 py-0.5 text-[11px] text-[#FF9DB2]">ไม่ผ่าน</span>)
   return (
-    <Modal open={open} onClose={onClose} width={860} z={95}>
+    <Modal open={open} onClose={onClose} width={1080} z={95}>
       <div className="p-6" data-modal="teacher">
         <div className="flex items-center gap-3">
           <Database size={20} className="text-sky-300" />
@@ -357,6 +362,14 @@ export function TeacherPanel({ open, onClose, version }) {
           </div>
         </div>
         <div className="font-thai mt-1 text-[12px] text-slate-400">เก็บในเครื่องนี้ (localStorage) · {sum.sessions} รอบการเล่น{sum.demo ? ` (ไม่นับโหมดสาธิต ${sum.demo} รอบ)` : ''} · ส่งออก CSV ไปวิเคราะห์ Paired t-test ในรายงาน</div>
+        <div className="mt-3 flex gap-1.5 border-b border-white/10">
+          {[['overview', 'ภาพรวม Sandbox Test'], ['compare', 'เทียบรอบ 1 → รอบ 2 (สถานการณ์ใหม่)']].map(([id, th]) => (
+            <button key={id} onClick={() => setView(id)} data-teacher-tab={id}
+              className={`font-thai -mb-px rounded-t-md border px-3 py-1.5 text-[12.5px] font-semibold ${view === id ? 'border-white/15 border-b-[#070D1C] bg-[#070D1C] text-white' : 'border-transparent text-slate-400 hover:text-white'}`}>{th}</button>
+          ))}
+        </div>
+        {view === 'compare' && <RoundCompare version={version} />}
+        {view === 'overview' && (<>
 
         <div className="mt-4 grid grid-cols-3 gap-2.5">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -429,6 +442,7 @@ export function TeacherPanel({ open, onClose, version }) {
             )}
           </div>
         </div>
+        </>)}
       </div>
     </Modal>
   )

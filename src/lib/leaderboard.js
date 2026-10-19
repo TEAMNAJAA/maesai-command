@@ -16,8 +16,8 @@ export const leaderboard = {
     return memory.filter((e) => e.mode === modeId).sort((a, b) => b.score - a.score || a.sec - b.sec).slice(0, n)
   },
   /** Add a finished run; returns its rank within the mode (1-based). */
-  add({ name, mode, score, sec, seed, parts }) {
-    const e = { name: String(name || 'ไม่ระบุชื่อ').slice(0, 24), mode, score: Math.round(score), sec: Math.round(sec), seed, parts, at: new Date().toISOString() }
+  add({ name, mode, score, sec, seed, parts, stress = [] }) {
+    const e = { name: String(name || 'ไม่ระบุชื่อ').slice(0, 24), mode, score: Math.round(score), sec: Math.round(sec), seed, parts, stress, at: new Date().toISOString() }
     memory = [...memory, e]
     try { localStorage.setItem(KEY, JSON.stringify(memory)) } catch { /* ignore */ }
     return this.top(mode, 999).findIndex((x) => x === e || (x.at === e.at && x.name === e.name)) + 1

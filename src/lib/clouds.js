@@ -14,7 +14,8 @@ const WM = (CLOUD_BOX[2] - CLOUD_BOX[0]) * KX, HM = (CLOUD_BOX[3] - CLOUD_BOX[1]
 export function cloudCover(scn, t) {
   const c = scn.clouds
   const k = Math.sin(((t / 60) / c.periodH) * Math.PI * 2 + c.phase)
-  return (ACT2.cloudMinPct + (ACT2.cloudMaxPct - ACT2.cloudMinPct) * (0.5 + 0.5 * k)) / 100
+  const base = (ACT2.cloudMinPct + (ACT2.cloudMaxPct - ACT2.cloudMinPct) * (0.5 + 0.5 * k)) / 100
+  return Math.min(0.9, base + (c.bonus || 0))                // Stress Test "data loss": thicker cloud
 }
 
 /** Cloud cells at t as {lon, lat, rM}; positions wrap around the window so cover stays steady. */

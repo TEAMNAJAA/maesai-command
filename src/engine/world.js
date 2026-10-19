@@ -5,7 +5,7 @@
    ทุกฟังก์ชันเป็น pure: รับ state เดิม คืน state ใหม่ (log อยู่ใน state.logs)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { THEOS2, MODES, MISSION, BOAT, FUEL_FACTOR, ACT2, DURATIONS, THRESHOLDS, TIME } from '../config/missionConfig'
+import { THEOS2, MODES, MISSION, BOAT, FUEL_FACTOR, ACT2, DURATIONS, THRESHOLDS, TIME, STRESS } from '../config/missionConfig'
 import { CAMP_SITES, HOSPITAL, SHELTER_POOL } from '../config/scenarioData'
 import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
 import { T_START, levelAt } from '../lib/hydro'
@@ -25,12 +25,16 @@ export const campOf = (s) => CAMP_SITES.find((c) => c.id === s.camp) || null
 export const shelterList = (scn) => scn.shelters.map((id) => SHELTER_POOL.find((x) => x.id === id))
 export const destOf = (id) => (id === 'hosp' ? HOSPITAL : SHELTER_POOL.find((x) => x.id === id))
 
-export function makeInitial(modeId, seed) {
+export function makeInitial(modeId, seed, stress = []) {
   const mode = MODES[modeId] || MODES.beginner
   SEQ = 0
+  const list = (stress || []).filter((k) => STRESS[k])
+  const t0 = list.includes('time') ? STRESS.time.startH * 60 : T_START   // Stress Test "less time": the warning came late
+  const logs = [mkLog('info', 'SYSTEM', 'Mae Sai Incident Command Post online — THEOS-2 tasking window open.', 'ศูนย์บัญชาการเหตุการณ์อุทกภัยแม่สายออนไลน์ · หน้าต่างสั่งถ่าย THEOS-2 เปิดแล้ว')]
+  if (list.length) logs.unshift(mkLog('crit', 'STRESS TEST', `Stress test: ${list.map((k) => STRESS[k].en).join(', ')}.`, `โหมด Stress Test: ${list.map((k) => STRESS[k].th).join(' · ')} — กฎการตัดสินใจเดิมยังใช้ได้ไหม?`))
   return {
-    modeId, seed,
-    act: 1, clock: T_START,
+    modeId, seed, stress: list, t0,
+    act: 1, clock: t0,
     budget: { total: mode.budget, spent: 0 },
     trust: 100, trustHist: [100],
     falseAlarms: 0, warnedAt: null,
@@ -41,7 +45,7 @@ export function makeInitial(modeId, seed) {
     taskings: {},                     // passId → targets requested before the pass
     images: [],                       // THEOS-2 acquisitions
     channel: { measured: false, attempts: 0, at: null, lastInput: null },
-    sealed: [], crews: Array.from({ length: mode.crews }, (_, i) => ({ id: `C${i + 1}`, busyUntil: T_START })),
+    sealed: [], crews: Array.from({ length: mode.crews }, (_, i) => ({ id: `C${i + 1}`, busyUntil: t0 })),
     orders: {},                       // zone id → minute of the evacuation order
     routes: {},                       // zone id → evacuation route to a shelter (Sphere / offline)
     decisions: [],
@@ -51,10 +55,11 @@ export function makeInitial(modeId, seed) {
     pumps: {}, powerCut: {}, towers: {}, commDown: [], stormHit: false, hazardsLive: [],
     act2Orders: {}, act2Shots: [], radarAt: [],
     routeErrors: 0, wrongDest: 0, trips: 0, hospital: 0, sheltered: 0, campFlooded: false, act2Done: false,
+    routeLog: [],                     // every boat route chosen vs the best one — for the "what if" debrief
     // act 3
     adjudged: {}, surveyed: [], reviewed: [], act3Done: false,
     jobs: [],
-    logs: [mkLog('info', 'SYSTEM', 'Mae Sai Incident Command Post online — THEOS-2 tasking window open.', 'ศูนย์บัญชาการเหตุการณ์อุทกภัยแม่สายออนไลน์ · หน้าต่างสั่งถ่าย THEOS-2 เปิดแล้ว')],
+    logs,
     toasts: [],
     eventSeq: 0, lastEvent: null,
     resetSeq: 0,
@@ -129,9 +134,9 @@ function arrivalCache(n, id) {
   return ARR.get(key)
 }
 
-function reveal(n, p, how) {
+function reveal(n, p, how, at = n.clock) {
   if (p.revealed || p.status !== 'waiting') return false
-  p.revealed = how
+  p.revealed = how; p.revealedAt = at
   return true
 }
 
@@ -152,6 +157,12 @@ export function advanceTo(s, scn, to) {
       if (!crossed(pass.t)) continue
       const targets = n.taskings[pass.id] || []
       if (!targets.length) { log(n, 'info', 'THEOS-2', `${pass.id} passed with no tasking.`, `ดาวเทียม THEOS-2 รอบ ${pass.id} ผ่านไปโดยไม่ได้สั่งถ่าย`); continue }
+      if (scn.stress?.lostPass === pass.id) {
+        log(n, 'crit', 'STRESS · DOWNLINK', `${pass.id}: ground station lost the downlink — no images from this pass.`, `สถานีภาครับสัญญาณ THEOS-2 รอบ ${pass.id} ไม่ได้ — ภาพรอบนี้สูญหายทั้งหมด (Stress Test: ข้อมูลหาย)`)
+        toast(n, 'crit', `ภาพรอบ ${pass.id} สูญหาย`)
+        event(n, 'lostpass', `สถานีภาครับสัญญาณ THEOS-2 รอบ ${pass.id} ไม่ได้ — ต้องตัดสินใจด้วยข้อมูลที่มี`)
+        continue
+      }
       for (const tg of targets) {
         const cloud = pass.actual[tg]
         const usable = cloud <= THEOS2.cloudUsablePct
@@ -199,10 +210,17 @@ export function advanceTo(s, scn, to) {
     for (const q of scn.act2Passes) {
       if (!crossed(q.t)) continue
       if (!n.act2Orders[q.id]) { log(n, 'warn', 'THEOS-2', `${q.id} passed over town — not tasked.`, `THEOS-2 รอบ ${q.id} ผ่านเมืองไปโดยไม่ได้สั่งถ่าย`); continue }
+      if (scn.stress?.lostQ === q.id) {
+        n.act2Shots.push({ id: q.id, t: q.t, clear: [], lost: true })
+        log(n, 'crit', 'STRESS · AWAGAD', `${q.id}: processing failed — no image.`, `ประมวลผลภาพ THEOS-2 รอบ ${q.id} ล้มเหลว — ไม่ได้ภาพ (Stress Test: ข้อมูลหาย) ใช้สายด่วนและโดรนแทน`)
+        toast(n, 'crit', `ภาพรอบ ${q.id} สูญหาย`)
+        event(n, 'lostpass', `ภาพ THEOS-2 รอบ ${q.id} สูญหาย — ใช้สายด่วนและโดรนแทน`)
+        continue
+      }
       const clear = clearSections(scn, q.t)
       let found = 0
       for (const p of n.points) {
-        if (clear.includes(p.section) && !scn.blindSpots.includes(p.section) && pointActive(n, p) && reveal(n, p, 'theos')) found++
+        if (clear.includes(p.section) && !scn.blindSpots.includes(p.section) && pointActive(n, p) && reveal(n, p, 'theos', q.t)) found++
       }
       n.act2Shots.push({ id: q.id, t: q.t, clear })
       log(n, 'good', 'THEOS-2', `${q.id}: ${clear.length}/10 zones clear of cloud — ${found} stranded groups located.`,
@@ -212,17 +230,17 @@ export function advanceTo(s, scn, to) {
     }
     for (const p of n.points) {
       if (p.status !== 'waiting') continue
-      if (!p.revealed && to >= p.hotlineAt && pointActive(n, p) && !n.commDown.includes(p.section) && reveal(n, p, 'hotline')) {
+      if (!p.revealed && to >= p.hotlineAt && pointActive(n, p) && !n.commDown.includes(p.section) && reveal(n, p, 'hotline', Math.max(from, p.hotlineAt))) {
         log(n, 'warn', '1784', `Hotline: ${p.people} people stranded in ${p.section}.`, `สายด่วน 1784 แจ้ง: ผู้ติดค้าง ${p.people} คน โซน ${p.section}`)
         event(n, 'hotline', `สายด่วน 1784: ผู้ติดค้าง ${p.people} คน โซน ${p.section}`)
       }
       if (to >= p.deadline) {
         if (p.type === 'hardship') {
-          p.type = 'critical'; p.deadline = to + 6 * 60
+          p.type = 'critical'; p.escalated = p.deadline; p.deadline = to + 6 * 60
           log(n, 'crit', 'ESCALATION', `${p.id}: supplies never arrived — now needs evacuation.`, `${p.id}: ไม่ได้รับเสบียง อาการทรุด ต้องอพยพด้วยเรือภายใน 6 ชม.`)
           event(n, 'escalate', `${p.id} ไม่ได้รับเสบียง — ต้องอพยพด่วน`)
         } else {
-          p.lost += p.left; p.left = 0; p.status = 'lost'
+          p.lost += p.left; p.left = 0; p.status = 'lost'; p.lostAt = p.deadline
           log(n, 'crit', 'CASUALTIES', `${p.id}: water overtook the house before rescue.`, `${p.id}: น้ำท่วมมิดก่อนเรือไปถึง — มีผู้สูญเสีย`)
           toast(n, 'crit', `ไม่ทันเวลา · ${p.id}`)
           event(n, 'lost', `${p.id} ช่วยไม่ทัน — น้ำท่วมมิดบ้าน`)
@@ -261,7 +279,7 @@ function finishJob(n, scn, j) {
       break
     case 'drone': {
       let found = 0
-      for (const p of n.points) if (p.section === j.section && pointActive(n, p) && reveal(n, p, 'drone')) found++
+      for (const p of n.points) if (p.section === j.section && pointActive(n, p) && reveal(n, p, 'drone', j.at)) found++
       log(n, 'good', 'UAV', `Drone sortie over ${j.section}: ${found} groups found.`, `โดรนบินสำรวจโซน ${j.section} พบผู้ติดค้าง ${found} จุด`)
       toast(n, found ? 'ok' : 'warn', `โดรนโซน ${j.section}: พบ ${found} จุด`)
       event(n, 'drone', `โดรนโซน ${j.section} พบผู้ติดค้าง ${found} จุด`)

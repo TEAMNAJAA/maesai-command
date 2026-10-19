@@ -26,6 +26,7 @@ const hrs = (m) => (Math.abs(m) >= 60 ? `${(m / 60).toFixed(Math.round(m) % 60 ?
 const row = (group, tone, th, judge = false) => ({ group, tone, th, judge })
 const tgt = (t) => (t === 'TOWN' ? 'ตัวเมือง' : `Sector ${t}`)
 const RIVER = ['D', 'E', 'TOWN']
+const cmd = (scn, m) => Math.round(m * (scn.stress?.cmdFactor || 1))   // Stress Test "less time": orders take longer
 
 /* ── Act 1 ───────────────────────────────────────────────────────────────── */
 
@@ -39,7 +40,7 @@ export function previewEvac(s, scn, ids) {
   const dTrust = Math.round((after.trust - s.trust) * 10) / 10
   const rows = [
     row('use', 'info', `งบ ${baht(after.budget.spent - s.budget.spent)} (${ids.length} โซน · คงเหลือ ${baht(after.budget.total - after.budget.spent)})`),
-    row('use', 'info', `เวลาสั่งการ ${CMD_MIN.evacuate} นาที`),
+    row('use', 'info', `เวลาสั่งการ ${cmd(scn, CMD_MIN.evacuate)} นาที`),
   ]
   const zs = ids.map((id) => {
     const sec = SECTION_BY_ID[id]
@@ -119,7 +120,7 @@ export function previewSeal(s, scn, ids) {
   const rows = [
     row('use', 'info', `บิ๊กแบ็ก ${fmt(bags)} ใบ · ${baht(after.budget.spent - s.budget.spent)}`),
     row('use', 'info', `ทีม ${s.crews.length} ชุดทำตามคิวถึง ${clockLabel(finish)} (ทีมไม่ว่างระหว่างนี้)`),
-    row('use', 'info', `เวลาสั่งการ ${CMD_MIN.seal} นาที`),
+    row('use', 'info', `เวลาสั่งการ ${cmd(scn, CMD_MIN.seal)} นาที`),
   ]
   if (started < ids.length) rows.push(row('risk', 'bad', `งบพอสำหรับ ${started} จาก ${ids.length} จุด`))
   const s2 = { ...s, sealed: [...new Set([...s.sealed, ...ids])] }
@@ -138,7 +139,7 @@ export function previewSeal(s, scn, ids) {
 export function previewCamp(s, scn, id) {
   const site = CAMP_SITES.find((c) => c.id === id)
   if (!site) return null
-  const rows = [row('use', 'info', `${baht(COSTS.camp)} · เวลาสั่งการ ${CMD_MIN.camp} นาที`)]
+  const rows = [row('use', 'info', `${baht(COSTS.camp)} · เวลาสั่งการ ${cmd(scn, CMD_MIN.camp)} นาที`)]
   const near = SECTIONS.reduce((m, z) => (metres([site.lon, site.lat], z.c) < metres([site.lon, site.lat], m.c) ? z : m))
   const flooded = metres([site.lon, site.lat], near.c) < 700 && peakDepth(s, near) >= HARM_M
   const wet = SECTIONS.filter((z) => peakDepth(s, z) >= HARM_M)
@@ -161,7 +162,7 @@ export function previewPass2(s, scn, qid) {
   return {
     title: `สั่ง THEOS-2 รอบ ${qid}`,
     rows: [
-      row('use', 'info', `เวลาสั่งการ ${CMD_MIN.pass2} นาที · ไม่มีค่าใช้จ่าย`),
+      row('use', 'info', `เวลาสั่งการ ${cmd(scn, CMD_MIN.pass2)} นาที · ไม่มีค่าใช้จ่าย`),
       row('get', 'good', `ภาพตัวเมืองตอน ${clockLabel(q.t)} — เห็นผู้ติดค้างบนหลังคาในโซนที่เมฆเปิด`),
       row('risk', 'info', `ตอนนี้เมฆปกคลุมเมือง ${Math.round(cloudCover(scn, s.clock) * 100)}% (ตอนดาวเทียมผ่านอาจต่างไป) · จุดอับ ${scn.blindSpots.join(', ')} ภาพมองไม่เห็นคน`),
     ],

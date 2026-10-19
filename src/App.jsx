@@ -33,6 +33,7 @@ import { ModeContext } from './ui/label'
 import { logger } from './lib/evalLogger'
 import { leaderboard } from './lib/leaderboard'
 import { waitComparison } from './lib/sim'
+import { sessionMetrics } from './lib/compare'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
 
@@ -77,7 +78,7 @@ export default function App() {
     const prev = logger.current
     if (prev && prev.rounds.length && !prev.result) logger.finish({ trust: Math.round(s.trust), score: null, exposed: null, abandoned: true })
     sessionFor.current = s.resetSeq
-    logger.start({ hintsEnabled: eng.mode.tutor, demo: DEMO })
+    logger.start({ hintsEnabled: eng.mode.tutor, demo: DEMO, stress: s.stress || [], seed: s.seed, mode: s.modeId })
     if (DEMO) logger.briefingDone()
     logger.enterAct(1)
     if (s.resetSeq > 0) {
@@ -86,6 +87,7 @@ export default function App() {
     }
   }, [s.resetSeq]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => logger.subscribe(() => setLogVersion((v) => v + 1)), [])
+  useEffect(() => { logger.meta({ stress: s.stress || [], seed: s.seed, mode: s.modeId, hintsEnabled: eng.mode.tutor }) }, [s.seed, s.modeId, (s.stress || []).join()]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (DEMO) eng.start() }, [s.resetSeq]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* act changes: default view, tabs */
@@ -128,12 +130,12 @@ export default function App() {
     logger.finish({ trust: Math.round(eng.s.trust), score: saved?.score ?? null, exposed: eng.exposure.exposed, post: score })
   }
   const saveScore = (score) => {
-    const entry = { name: player || 'ไม่ระบุชื่อ', mode: s.modeId, score: score.total * 100, sec: eng.realMs() / 1000, seed: s.seed, parts: score.parts }
+    const entry = { name: player || 'ไม่ระบุชื่อ', mode: s.modeId, score: score.total * 100, sec: eng.realMs() / 1000, seed: s.seed, parts: score.parts, stress: s.stress || [] }
     const rank = leaderboard.add(entry)
     const top = leaderboard.top(s.modeId, 999)
     setSaved({ rank, at: top[rank - 1]?.at, score: Math.round(score.total * 100) })
     eng.finishMission()
-    logger.finish({ trust: Math.round(s.trust), score: Math.round(score.total * 100), exposed: eng.exposure.exposed })
+    logger.finish({ trust: Math.round(s.trust), score: Math.round(score.total * 100), exposed: eng.exposure.exposed, metrics: sessionMetrics(s, eng.scn, eng.realMs() / 1000) })
     setBoard(true)
   }
 
@@ -180,7 +182,7 @@ export default function App() {
         <Toast flash={eng.flash} />
 
         <Cutscene eng={eng} />
-        <TitleScreen open={phase === 'title' && !guide} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode}
+        <TitleScreen open={phase === 'title' && !guide} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
           onHowTo={() => setGuide(true)} onBoard={() => setBoard(true)}
           onStart={() => { logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') }} />
         <QuizModal open={phase === 'pretest'} kind="pre" onDone={(score) => { setPreScore(score); setPhase('play'); eng.start() }} onSkip={() => { setPhase('play'); eng.start() }} />

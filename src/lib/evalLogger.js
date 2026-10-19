@@ -33,7 +33,7 @@ export const logger = {
   subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
 
   /** Begin a new player session (called when the briefing opens). */
-  start({ hintsEnabled, demo = false }) {
+  start({ hintsEnabled, demo = false, stress = [], seed = null, mode = null }) {
     stored = false
     current = {
       id: `S${new Date().toISOString().replace(/\D/g, '').slice(2, 14)}-${Math.random().toString(36).slice(2, 5)}`,
@@ -41,6 +41,8 @@ export const logger = {
       player: '',
       hintsEnabled,
       demo,             // presentation / recording run — excluded from Sandbox statistics
+      stress,           // Stress Test conditions chosen by the teacher
+      seed, mode,
       briefingMs: null,
       pre: null, post: null,
       actMs: { 1: 0, 2: 0, 3: 0 },
@@ -56,6 +58,8 @@ export const logger = {
     return current.id
   },
   get current() { return current },
+  /** Mode / seed / Stress Test changed on the title screen before play — keep the session in step. */
+  meta(fields) { if (current) { Object.assign(current, fields); if (stored) save() } },
   setPlayer(label) { if (current) { current.player = String(label || '').slice(0, 40); save() } },
 
   briefingDone() {
@@ -105,10 +109,12 @@ export const logger = {
   triage(t) { if (current) { current.triage = t; save(); emit() } },
   relief(r) { if (current) { current.relief = r; save() } },
 
+  /** End of the run (score saved) — called again after the post-test: later calls merge, they never drop the metrics. */
   finish(result) {
     if (!current) return
     this.enterAct(current._act)
-    current.result = { ...result, totalSec: Math.round((now() - current._t0) / 1000), at: new Date().toISOString() }
+    const prev = current.result || {}
+    current.result = { ...prev, ...result, metrics: result.metrics || prev.metrics, totalSec: prev.totalSec ?? Math.round((now() - current._t0) / 1000), at: prev.at || new Date().toISOString() }
     save(); emit()
   },
 
@@ -147,7 +153,7 @@ export const logger = {
       'act1_sec', 'act2_sec', 'act3_sec', 'layers_opened_total', 'layers_before_first_decision', 'decisions',
       'first_decision', 'first_decision_clock', 'evacuated_communities', 'triage_hits', 'relief_correct',
       'final_trust', 'mission_score', 'households_exposed', 'total_sec',
-      'hints_pointer', 'hints_partial', 'hint_penalty_pts', 'hint_topics']
+      'hints_pointer', 'hints_partial', 'hint_penalty_pts', 'hint_topics', 'stress', 'seed', 'mode']
     const rows = memory.sessions.map((s) => {
       const first = s.rounds.find((r) => r.kind !== 'HOLD')
       const gain = s.pre && s.post && s.pre.score ? ((s.post.score - s.pre.score) / s.pre.score) * 100 : ''
@@ -158,7 +164,7 @@ export const logger = {
         first?.kind ?? '', first?.clockLabel ?? '', first?.communities?.join(' ') ?? '',
         s.triage?.hits ?? '', s.relief?.correct ?? '',
         s.result?.trust ?? '', s.result?.score ?? '', s.result?.exposed ?? '', s.result?.totalSec ?? '',
-        ...hintCols(s)]
+        ...hintCols(s), (s.stress || []).join(' '), s.seed ?? '', s.mode ?? '']
     })
     return toCSV([head, ...rows])
   },

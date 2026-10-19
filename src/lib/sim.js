@@ -169,7 +169,7 @@ export function makePoints(s, scn) {
         id: `${sec.id}-${k + 1}`, section: sec.id, lon: b.c[0], lat: b.c[1], fid: b.fid,
         people, left: people, injured, type: critical ? 'critical' : 'hardship',
         refuser: r.chance(clamp(refusalShare(s) * 3)), deadline,
-        hotlineAt: Math.max(0, arrival) + Math.round(r.range(ACT2.hotlineDelayH[0], ACT2.hotlineDelayH[1]) * 60),
+        hotlineAt: Math.max(0, arrival) + Math.round(r.range(ACT2.hotlineDelayH[0], ACT2.hotlineDelayH[1]) * 60) + (scn.stress?.hotlineExtraMin || 0),
         revealed: null, status: 'waiting', assigned: null, rescued: 0, toHospital: 0, lost: 0,
       })
     }

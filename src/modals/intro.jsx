@@ -8,10 +8,10 @@
 import React, { useRef } from 'react'
 import {
   Play, BookOpen, Trophy, Satellite, Ship, Building2, Target, Users, Map, Clock, FastForward, Database, GraduationCap, Scale,
-  CheckCircle2, X, ArrowRight, Layers, Timer, Zap, Lightbulb, HelpCircle, MousePointerClick, KeyRound,
+  CheckCircle2, X, ArrowRight, Layers, Timer, Zap, Lightbulb, HelpCircle, MousePointerClick, KeyRound, FlaskConical, CloudOff, Construction, Hourglass,
 } from 'lucide-react'
 import { SrcLegend } from '../ui/atoms'
-import { SFVI, THRESHOLDS, THEOS2, RELIEF, ACT2, MODES, SCORE, TIME, HINTS } from '../config/missionConfig'
+import { SFVI, THRESHOLDS, THEOS2, RELIEF, ACT2, MODES, SCORE, TIME, HINTS, STRESS, STRESS_KEYS } from '../config/missionConfig'
 import { leaderboard } from '../lib/leaderboard'
 import { fmt, mmss } from '../lib/format'
 
@@ -252,6 +252,8 @@ export function HowToPlay({ open, onClose, onStart }) {
                 <li>• บันทึกทุกการตัดสินใจ ชั้นข้อมูลที่เปิด เวลาแต่ละองก์ → ครูส่งออก CSV (Ctrl+Shift+L)</li>
                 <li>• เล่นซ้ำได้ ทุกเกมสุ่มสถานการณ์ใหม่ (ความกว้างลำน้ำ เมฆ จุดอพยพ ผู้ติดค้าง) — วัดว่าเวลาเล่นลดลง คะแนนสูงขึ้น</li>
                 <li>• บันทึกการขอคำใบ้ขั้น 2–3 ทุกครั้ง → วัดว่าผู้เรียนพึ่งตัวช่วยน้อยลงเมื่อเล่นซ้ำ</li>
+                <li>• <b className="text-[#FFB27A]">Stress Test</b> (ครูเลือกที่หน้าเปิดเกม): {STRESS_KEYS.map((k) => STRESS[k].th).join(' · ')} — ทดสอบว่ากฎการตัดสินใจยังใช้ได้เมื่อข้อมูลไม่ครบหรือเวลาน้อยลง</li>
+                <li>• จบแต่ละองก์มี <b className="text-[#C4B5FD]">"ถ้าคุณเลือกอีกทาง"</b> — คำนวณใหม่ว่าถ้าเปลี่ยนการตัดสินใจจะช่วยคนได้เพิ่มเท่าไร</li>
                 <li>• 2 โหมด: <b className="text-[#7CFFA0]">{MODES.beginner.th}</b> (ผู้ช่วยสอน + คำใบ้แบบบันได) · <b className="text-[#FF9DB2]">{MODES.expert.th}</b> (ศัพท์เทคนิค ไม่มีตัวช่วย ทรัพยากรน้อยกว่า)</li>
               </ul>
             </div>
@@ -264,7 +266,39 @@ export function HowToPlay({ open, onClose, onStart }) {
 
 /* ── Title screen ───────────────────────────────────────────────────────── */
 
-export function TitleScreen({ open, player, setPlayer, modeId, setMode, onStart, onHowTo, onBoard }) {
+const STRESS_ICON = { data: CloudOff, roads: Construction, time: Hourglass }
+
+/** Teacher's Stress Test picker — special conditions that test the decision rules. */
+export function StressPicker({ stress = [], setStress }) {
+  const toggle = (k) => setStress(STRESS_KEYS.filter((x) => (x === k ? !stress.includes(k) : stress.includes(x))))
+  return (
+    <div className="mt-3 rounded-lg border border-[#FF8A3D]/30 bg-[#FF8A3D]/[0.05] px-3 py-2.5" data-stress-picker>
+      <div className="flex items-center gap-2">
+        <FlaskConical size={14} className="text-[#FFB27A]" />
+        <span className="font-thai text-[12.5px] font-bold text-[#FFD2B0]">Stress Test · ครูเลือกเงื่อนไขพิเศษ</span>
+        <span className="font-thai hidden text-[11px] text-slate-400 lg:inline">ทดสอบว่ากฎการตัดสินใจยังใช้ได้เมื่อสถานการณ์แย่ลง</span>
+        {stress.length > 0 && <button onClick={() => setStress([])} className="font-thai ml-auto rounded px-1.5 text-[11px] text-slate-400 hover:bg-white/10 hover:text-white">ปิดทั้งหมด</button>}
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        {STRESS_KEYS.map((k) => {
+          const on = stress.includes(k), Icon = STRESS_ICON[k]
+          return (
+            <button key={k} onClick={() => toggle(k)} data-stress={k} data-on={on ? 1 : 0} title={STRESS[k].desc}
+              className={`flex items-start gap-2 rounded-lg border-2 px-2.5 py-1.5 text-left transition ${on ? 'border-[#FF8A3D] bg-[#FF8A3D]/15' : 'border-white/10 hover:border-[#FF8A3D]/40'}`}>
+              <Icon size={15} className={`mt-0.5 shrink-0 ${on ? 'text-[#FFB27A]' : 'text-slate-500'}`} />
+              <span className="min-w-0">
+                <span className={`font-thai block text-[12.5px] font-bold ${on ? 'text-white' : 'text-slate-300'}`}>{STRESS[k].th}</span>
+                <span className="font-thai block text-[10.5px] leading-snug text-slate-400">{STRESS[k].short}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, setStress, onStart, onHowTo, onBoard }) {
   if (!open) return null
   const top = leaderboard.top(modeId, 3)
   return (
@@ -306,6 +340,7 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, onStart,
                 ))}
               </div>
             </div>
+            {setStress && <StressPicker stress={stress} setStress={setStress} />}
             <div className="mt-4 flex gap-2.5">
               <button onClick={onStart} data-start className="btn flex flex-1 items-center justify-center gap-2 border-[#22E36B]/70 bg-[#22E36B]/20 py-3.5 text-white hover:bg-[#22E36B]/30 shadow-[0_0_30px_-8px_#22E36B]">
                 <Play size={18} fill="currentColor" /><span className="font-thai normal-case tracking-normal text-[18px] font-bold">เริ่มภารกิจ</span>

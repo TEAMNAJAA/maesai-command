@@ -1,7 +1,7 @@
 # CLAUDE.md — THEOS-2 Mae Sai Command
 
 > ไฟล์นี้บันทึก Context ถาวรของโปรเจกต์ ให้อ่านก่อนเริ่มงานทุกครั้ง
-> ร่างครั้งแรก 3 ต.ค. 2569 · 4 ต.ค. แยกโมดูล/config/แผนที่จริง/logger · 10 ต.ค. อาคารจริง GISTDA + Sphere API · 16 ต.ค. ออกแบบใหม่ (Beginner/Expert, เวลา+งบ, 10 โซน, กู้ภัยองก์ 2, leaderboard) · **17 ต.ค. เวลาเดินเมื่อผู้เล่นสั่งการ + คัตซีน, หน้าเปิดเกม + หน้าวิธีเล่น (ทีมเข้ารอบชิงชนะเลิศแล้ว)** · 19 ต.ค. การ์ด "ผลที่จะเกิด" + ปุ่ม ⓘ "ทำไมต้องทำ" + คำใบ้แบบบันได
+> ร่างครั้งแรก 3 ต.ค. 2569 · 4 ต.ค. แยกโมดูล/config/แผนที่จริง/logger · 10 ต.ค. อาคารจริง GISTDA + Sphere API · 16 ต.ค. ออกแบบใหม่ (Beginner/Expert, เวลา+งบ, 10 โซน, กู้ภัยองก์ 2, leaderboard) · **17 ต.ค. เวลาเดินเมื่อผู้เล่นสั่งการ + คัตซีน, หน้าเปิดเกม + หน้าวิธีเล่น (ทีมเข้ารอบชิงชนะเลิศแล้ว)** · 19 ต.ค. การ์ด "ผลที่จะเกิด" + ปุ่ม ⓘ "ทำไมต้องทำ" + คำใบ้แบบบันได + "ถ้าคุณเลือกอีกทาง" + Stress Test + เทียบรอบ 1/2 ในแผงครู
 > แหล่งความจริงของตรรกะเกม = ใบสมัคร `gistda-request/revenge_ใบสมัคร_แก้ไข_ฉบับสะอาด.docx/.pdf`
 
 ## 1. โปรเจกต์คืออะไร
@@ -22,6 +22,9 @@ npm run build            # dist/index.html ไฟล์เดียว (~2.7 MB)
 npx vitest run           # tests/ — scenario + engine (บอทเล่นเก่ง vs ไม่ทำอะไร)
 node record-demo.mjs     # smoke test 3 องก์จาก dist/?demo&rec → recordings/run-<ts>/ (exit 2 ถ้าหน้าเว็บมี error)
 node record-perfect-run.mjs  # คลิปเล่นสมบูรณ์จากหน้าเปิดเกม + คำบรรยายไทย → recordings/perfect-run-<ts>/demo_gameplay.mp4
+node scripts/probe-whatif.mjs <outDir>   # ภาพ "ถ้าคุณเลือกอีกทาง" ท้ายองก์ 1/2 + AAR หลังเล่นแบบตั้งใจพลาด (ต้องเปิด npm run dev)
+node scripts/probe-stress-compare.mjs <outDir>   # หน้าเลือก Stress Test + ผลในเกม · แผงครูเทียบรอบ 1→2 (ข้อมูลสังเคราะห์ในโปรไฟล์เบราว์เซอร์ทดสอบ) · การ์ดพัฒนาการผู้เล่น
+RECORD_PARAMS=stress=all node record-demo.mjs   # smoke test 3 องก์ภายใต้ Stress Test ทุกเงื่อนไข
 node scripts/probe-hints.mjs <outDir>    # ภาพหน้าจอคำใบ้แบบบันไดทั้ง 3 องก์ (ต้องเปิด npm run dev) · exit 2 ถ้าขั้นเกินองก์/ไม่ชี้ข้อมูล
 node scripts/probe-impact.mjs <outDir>   # ภาพหน้าจอการ์ดผลที่จะเกิด/ⓘ/หน้าต่างยืนยัน ทั้ง 2 โหมด (ต้องเปิด npm run dev ไว้) · exit 2 ถ้ามี error หรือ Space/Esc ผิด
 node scripts/fetch-osm.mjs · scripts/fetch-poi.mjs · scripts/build-dem.mjs   # ข้อมูลพื้นหลัง (ถนน/แม่น้ำ, POI, DEM)
@@ -29,12 +32,13 @@ node scripts/extract-buildings.mjs <BD_footprintTH.shp> <BD_footprintTH.dbf> [--
 python scripts/build-final-mission-package.py   # สร้าง gistda-request/revenge_Final_Mission_Package.docx
 ```
 
-- **URL params:** `?demo` ข้ามหน้าเปิดเกม/pre-test (ไม่นับสถิติ) · `?seed=N` สถานการณ์ตายตัว · `?mode=expert` · `?speed=N` เร่งคัตซีน (ใช้ตอนอัดคลิป) · `?rec` เปิด `window.__maesai` ให้สคริปต์อัดคลิปอ่านเฉลย (ห้ามใช้ตอนเล่นจริง)
+- **URL params:** `?demo` ข้ามหน้าเปิดเกม/pre-test (ไม่นับสถิติ) · `?seed=N` สถานการณ์ตายตัว · `?mode=expert` · `?stress=data,roads,time` หรือ `?stress=all` (Stress Test) · `?speed=N` เร่งคัตซีน (ใช้ตอนอัดคลิป) · `?rec` เปิด `window.__maesai` ให้สคริปต์อัดคลิปอ่านเฉลย (ห้ามใช้ตอนเล่นจริง)
 - **ห้ามดับเบิลคลิก `index.html` ที่ root** — เป็น entry ของ Vite
 - คีย์ลัด: `Space` = เดินเวลาไปเหตุการณ์ถัดไป · `Ctrl+Shift+L` แผงครู
 - **Sphere API key อยู่ใน `missionConfig.js` (SPHERE.apiKey)** ตามที่ผู้ใช้สั่ง — ตั้งทับได้ด้วย `.env.local` → `VITE_SPHERE_API_KEY` · ออฟไลน์/คีย์ใช้ไม่ได้ = fallback ข้อมูลในเครื่อง
 - ไฟล์อาคารดิบทั้งประเทศอยู่ที่ `C:\Users\Computer\Downloads\BD_footprintTH-001.shp` + โฟลเดอร์ `BD_footprintTH-20261009T194218Z-1-002` — **ห้ามคัดลอกเข้า repo**
 - Viewport ที่ทดสอบ: 1920×1080 (หลัก) และ 1280×720 · แผงซ้าย/ขวาพับได้
+- แผงครู (Ctrl+Shift+L) มี 2 แท็บ: ภาพรวม Sandbox Test · เทียบรอบ 1 → รอบ 2 (Paired t-test) · Export CSV 4 แบบ: รายผู้เล่น · รายการตัดสินใจ · การขอคำใบ้ · รอบ 1 เทียบรอบ 2
 - **เครื่องมือบนเครื่อง:** Node.js 24 + npm 11 (ใช้ `npm.cmd` ใน PowerShell — execution policy บล็อก npm.ps1) · Git · Playwright Chromium + ffmpeg · Python + python-docx/PyMuPDF
 - **Git:** GitHub repo **private** `TEAMNAJAA/maesai-command` (branch `main`) · `.gitignore` ตัด `node_modules/`, `recordings/`, `*.local`, `.env` · repo มีใบสมัครที่มีเบอร์โทร/อีเมลสมาชิก **ห้ามเปลี่ยนเป็น public**
 
@@ -53,6 +57,9 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 | `src/engine/world.js` | state เริ่มต้น, `advanceTo` (เหตุการณ์ตามเวลา + `event()` ที่ทำให้ปุ่ม "เดินเวลา" หยุด), `enterAct2/3`, งานภาคสนาม (jobs), เรือวิ่งรับ-ส่งเอง (shuttle) |
 | `src/engine/actions.js` | ทุกคำสั่งเป็น pure transition และ `spend(CMD_MIN.x)` เดินเวลาตามเวลาสั่งการ |
 | `src/engine/impact.js` | **การ์ด "ผลที่จะเกิด"**: `previewEvac/Capture/Seal/Camp/Pass2/Field(pump·power·tower·drone)/Boat/Skip/Verdict/Survey` — รันคำสั่งจริงจาก actions.js บนสำเนา state แล้วอ่านผลต่าง (งบ เวลา ความเชื่อมั่น) + แบบจำลอง → `{title, rows:[{group: use/get/risk, tone, th, judge}], verdict}` · แถว `judge` = ประเมินตามกฎ (เตือนผิด/ทันเวลา/เสียเปล่า) แสดงเฉพาะ Beginner (`MODES.impactJudge`) |
+| `src/engine/whatif.js` | **"ถ้าคุณเลือกอีกทาง"** `whatIf(s, scn, act)` → การ์ดเรียงตามผลกระทบ `{title, you, alt, delta, lesson, sum}` + `good` (สิ่งที่ทำได้ดี) + `totals` — เปลี่ยนการตัดสินใจทีละเรื่องแล้วคำนวณใหม่ด้วยแบบจำลองเดียวกับเกม: องก์ 1 เวลาสั่งอพยพรายโซน/เตือนผิด/อุดตลิ่ง/ค่า N/เป้า THEOS-2 (เมฆจริง)/แปลภาพ/ฐาน · องก์ 2 คนที่สูญเสีย (ไม่มีใครพบ→โดรน/เสา/THEOS-2 · พบแล้วไม่ส่งเรือ/ส่งช้า), รอบ Q ที่ไม่ได้สั่ง, เสบียงไม่ทัน, เส้นทาง, ผู้บาดเจ็บ · องก์ 3 คำตัดสินผิดรายหลัง, สำรวจเกินจำเป็น, ผลถ้าใช้ทั้งอำเภอ |
+| `src/ui/whatif.jsx` | `WhatIfPanel` (คุณเลือก → ถ้าเลือก, ตัวเลขผลต่าง, บทเรียน, สิ่งที่ทำได้ดี) ในหน้าสรุปองก์ 1–2 และแท็บองก์ 1/2/3 ในหน้าสรุปภารกิจ |
+| `src/lib/compare.js` · `src/modals/teacherCompare.jsx` | **เทียบรอบ 1 → 2**: `sessionMetrics()` (บันทึกตอนจบภารกิจใน `result.metrics`) · `roundPairs()` จับคู่ด้วยชื่อผู้เล่น (ไม่นับ demo/ยังไม่จบ, เตือนถ้า seed ซ้ำ) · `pairedT()` Paired t-test (incomplete beta) · `compareSummary` · `previousRound` · `pairsCSV` → แท็บ "เทียบรอบ 1 → รอบ 2" ในแผงครู (การ์ดสรุป + กราฟเส้นรายคน + ตาราง 9 ตัวชี้วัด + ตารางรายคน + Export CSV) และการ์ด "เทียบกับรอบก่อนของคุณ" ในหน้าสรุปภารกิจ |
 | `src/engine/hints.js` | **คำใบ้แบบบันได**: `ladder(topic, ctx)` → 3 ขั้น (ถามชวนคิด → ชี้ที่ข้อมูล `go`/`spot` → เฉลยบางส่วน) ของ 11 หัวข้อ `a1.camp/task/read/channel/seal/evac` · `a2.pass/find/hazard/route` · `a3.relief` — คำนวณจาก state ปัจจุบัน · `rungOf`, `maxRungFor` |
 | `src/ui/hints.jsx` | `HintLadder` (การ์ดบันได ใช้ในแถบผู้ช่วยสอน + หน้าแปลภาพ/วัดลำน้ำ/วางแผนเรือ/เยียวยา) · `spotlight(selector)` ไฟกะพริบ `[data-hint-spot]` รอบข้อมูลที่ขั้น 2 ชี้ |
 | `src/ui/impact.jsx` | `ImpactCard` (ใช้/ได้/เสี่ยง + แถบสรุป) · `ImpactHover` (การ์ดลอยเมื่อชี้ปุ่ม, portal) · `ConfirmImpact` (หน้าต่างยืนยันก่อนสั่งอพยพ/ข้ามไปจบองก์ — Enter ยืนยัน, Esc ยกเลิก, **Space ไม่ทำอะไร** กันกดยืนยันโดยติดมือ) · `WhyButton` ⓘ อ่าน `WHY` ใน scenarioData.js |
@@ -98,6 +105,11 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 - สิ่งที่เคยให้คำตอบตรง ๆ ย้ายไปอยู่หลังบันได: รายชื่อโซน SFVI ≥ 0.62 (ขั้น 3 อพยพ) · "วิธีดู" ดินถล่ม (ขั้น 2 แปลภาพ) · ตัวอย่างคำนวณ N (ขั้น 3) + เส้นประขอบน้ำ (ขั้น 2) · เครื่องหมายอันตรายบนแผนที่เรือ (ขั้น 2) / ป้ายอันตรายบนการ์ดเส้นทาง (ขั้น 3 — ปิดในองก์ 2) · นับวันท่วมขังให้ (ขั้น 3 — ปิดในองก์ 3)
 - คะแนน: `missionScore().total = base − hints.pts/100` · AAR แสดงแถว "คำใบ้แบบบันได" · สรุปองก์แสดงจำนวนที่ขอ · Logger: `session.hints[]`, sessions CSV (`hints_pointer`, `hints_partial`, `hint_penalty_pts`, `hint_topics`) + `hintsCSV()` รายครั้ง (ปุ่มในแผงครู)
 - เพิ่มหัวข้อ → เพิ่มใน `TOPICS` ของ hints.js + ให้ `questFor` คืน `topic` + เทสต์ใน tests/hints.test.js · ขั้น 1 ห้ามมีชื่อโซน/ตัวเลขคำตอบ
+
+### "ถ้าคุณเลือกอีกทาง" (ข้อ 11) · Stress Test (ข้อ 4) · เทียบรอบ 1/2 (ข้อ 12) — 19 ต.ค.
+- **What-if** แสดงหลังจบองก์เท่านั้น จึงเปิดเผยความจริงได้ (เมฆจริง จุดที่ไม่มีใครพบ ผลจริงของหลังคา) · ประวัติที่ต้องใช้: `p.revealedAt` `p.firstBoatAt` `p.escalated` `p.lostAt` และ `s.routeLog[]` (เส้นทางที่เลือกเทียบเส้นที่ดีที่สุดทุกเที่ยว) · ตอนจบองก์ 2 คนที่ยังรอในบ้านที่อยู่ไม่ได้นับเป็นสูญเสีย (เหมือน enterAct3)
+- **Stress Test** (`STRESS` ใน missionConfig) ครูเลือกที่หน้าเปิดเกม (`StressPicker`, seed เดิม) หรือ `?stress=` · ใช้สตรีมสุ่มแยก (`R('stress')`) หลังสุ่มฉากปกติ → **ปิด Stress = ฉากเหมือนเดิมทุกอย่าง** · ข้อมูลหาย: `scn.stress.lostPass/lostQ` (ภาพหาย + event), เมฆ +15 จุด (`clouds.bonus`), สายด่วน +2 ชม., เรดาร์ขาดรอบ +2 หลัง · ถนนขาด: +4–6 ถนน, จุดอพยพ 2 แห่ง · เวลาลดลง: เริ่ม T−36 (`s.t0`), `CMD_MIN` ×1.5 (`scn.stress.cmdFactor` ใน `spend`) · แสดงป้ายบน TopBar, Leaderboard (STRESS ×n), AAR, Log/CSV (`stress`, `seed`, `mode`)
+- **เทียบรอบ** ต้องให้ผู้เล่นใช้ชื่อเดิมและกดบันทึกคะแนน (เขียน `result.metrics`) · `logger.finish` รวมผลเดิม (แบบทดสอบหลังเรียนไม่ลบ metrics) · `logger.meta()` อัปเดต mode/seed/stress เมื่อครูเปลี่ยนก่อนเริ่ม
 
 ### SFVI และคะแนน
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ) · คะแนน: THEOS-2 .20 · อพยพ .20 · ผู้ติดค้าง .20 · เยียวยา .20 · โลจิสติกส์ .10 · ความเชื่อมั่น .10 − คำใบ้ขั้น 2–3 (≤ 10 คะแนน)

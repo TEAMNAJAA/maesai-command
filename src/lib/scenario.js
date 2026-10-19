@@ -5,7 +5,7 @@
    (ผู้ติดค้างในองก์ 2 สร้างตอนเริ่มองก์ 2 จากการตัดสินใจจริงของผู้เล่น — ดู sim.js)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { THEOS2, ACT2, MODES, RELIEF } from '../config/missionConfig'
+import { THEOS2, ACT2, MODES, RELIEF, STRESS } from '../config/missionConfig'
 import { SECTORS, SHELTER_POOL } from '../config/scenarioData'
 import { SECTIONS } from './sections'
 import { BUILDINGS } from './buildings'
@@ -31,7 +31,7 @@ function sectorScene(r, sec) {
   return { scars, cands: r.shuffle(cands).map((c, i) => ({ ...c, id: `${sec.id}${i + 1}` })) }
 }
 
-export function makeScenario(seed, modeId = 'beginner') {
+export function makeScenario(seed, modeId = 'beginner', stress = []) {
   const mode = MODES[modeId] || MODES.beginner
   const R = (label) => substream(seed, label)
 
@@ -109,10 +109,33 @@ export function makeScenario(seed, modeId = 'beginner') {
     }
   })
 
+  /* ── Stress Test: applied after the base draw (own random stream) so the normal game never changes ── */
+  const list = (stress || []).filter((k) => STRESS[k])
+  const st = { list, lostPass: null, lostQ: null, hotlineExtraMin: 0, startMin: null, cmdFactor: 1 }
+  const rx = R('stress')
+  if (list.includes('time')) { st.startMin = STRESS.time.startH * H; st.cmdFactor = STRESS.time.cmdFactor }
+  if (list.includes('data')) {
+    const open = passes.filter((p) => st.startMin === null || p.t > st.startMin)
+    st.lostPass = rx.pick(open).id
+    st.lostQ = rx.pick(act2Passes).id
+    clouds.bonus = STRESS.data.cloudBonus
+    st.hotlineExtraMin = STRESS.data.hotlineExtraH * H
+    const spare = roofs.filter((r) => !r.radarGap && !r.theosCloud)
+    for (const r of rx.sample(spare, Math.min(STRESS.data.extraRadarGaps, spare.length))) {
+      r.radarGap = true
+      r.series = Array.from({ length: 14 }, (_, d) => (d >= r.days - 3 && d <= r.days + 1 ? null : d < r.days ? 1 : 0))
+    }
+  }
+  if (list.includes('roads')) {
+    const more = townRoads.map((f) => f.properties.osm).filter((id) => !blockedRoads.includes(id))
+    blockedRoads.push(...rx.sample(more, Math.min(more.length, rx.int(STRESS.roads.extraBlocked[0], STRESS.roads.extraBlocked[1]))))
+    shelters.splice(STRESS.roads.shelters)
+  }
+
   return {
     seed, modeId, mode,
     scenes, totalScars, channel, passes,
     act2Passes, clouds, stormAt, commDown, powerHazards, blindSpots, shelters, blockedRoads,
-    roofs,
+    roofs, stress: st,
   }
 }
