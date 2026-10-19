@@ -3,7 +3,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useEffect, useRef, useState } from 'react'
-import { Volume2, VolumeX, Music2, MousePointerClick, X, Gauge } from 'lucide-react'
+import { Volume2, VolumeX, Music2, MousePointerClick, X, Gauge, ShieldCheck } from 'lucide-react'
 import { prefs, usePrefs } from '../lib/prefs'
 import { audio } from '../lib/audio'
 import { usePerf } from '../lib/perf'
@@ -98,6 +98,11 @@ export function SettingsMenu({ extra = null }) {
               <Volume id="sfx" value={p.sfxVol} disabled={!p.sfx} onChange={(v) => { prefs.set({ sfxVol: v }); audio.play('tick') }} />
             </div>
             <PerfSection />
+            <div className="py-1.5" data-officer-section>
+              <Row icon={ShieldCheck} th="โหมดฝึกเจ้าหน้าที่" sub="ไม่มีตัวการ์ตูน บอส เพลง หรือเอฟเฟกต์ตลก · ข้อมูลครบเหมือนเดิม">
+                <Toggle id="officer" on={p.officer} onChange={(v) => prefs.set({ officer: v })} />
+              </Row>
+            </div>
             {extra}
           </div>
           <div className="font-thai border-t border-white/[0.06] px-3 py-1.5 text-[10px] text-slate-500">จำค่าไว้ในเครื่องนี้ · เสียงทั้งหมดสังเคราะห์ในเบราว์เซอร์ ใช้ได้แบบออฟไลน์</div>

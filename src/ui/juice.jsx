@@ -11,6 +11,7 @@ import { fx } from '../lib/fx'
 import { hintPenalty } from '../lib/sim'
 import { SECTION_BY_ID } from '../lib/sections'
 import { DECISION } from '../config/missionConfig'
+import { prefs } from '../lib/prefs'
 
 /** Motion is cut in performance mode (D5) and for players who ask the OS for less motion. */
 export const lowMotion = () => typeof document !== 'undefined' && (document.documentElement.classList.contains('perf-lite')
@@ -99,7 +100,7 @@ export function Floaters() {
 export function useShake(ref) {
   useEffect(() => fx.on('shake', ({ strength = 1 } = {}) => {
     const el = ref.current
-    if (!el || lowMotion() || !el.animate) return
+    if (!el || lowMotion() || prefs.get().officer || !el.animate) return
     const a = 2.6 * Math.min(2.5, strength)
     el.animate([
       { transform: 'translate(0, 0)' }, { transform: `translate(${-a}px, ${a * 0.45}px)` }, { transform: `translate(${a * 0.9}px, ${-a * 0.4}px)` },

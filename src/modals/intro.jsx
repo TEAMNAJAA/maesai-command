@@ -8,7 +8,7 @@
 import React, { useRef } from 'react'
 import {
   Play, BookOpen, Trophy, Satellite, Ship, Building2, Target, Users, Map, Clock, FastForward, Database, GraduationCap, Scale,
-  CheckCircle2, X, ArrowRight, Layers, Timer, Zap, Lightbulb, HelpCircle, MousePointerClick, KeyRound, FlaskConical, CloudOff, Construction, Hourglass,
+  CheckCircle2, X, ArrowRight, Layers, Timer, Zap, Lightbulb, HelpCircle, MousePointerClick, KeyRound, FlaskConical, CloudOff, Construction, Hourglass, ShieldCheck,
 } from 'lucide-react'
 import { SrcLegend } from '../ui/atoms'
 import { SFVI, THRESHOLDS, THEOS2, RELIEF, ACT2, MODES, SCORE, TIME, HINTS, STRESS, STRESS_KEYS } from '../config/missionConfig'
@@ -311,7 +311,7 @@ function TitleChibi({ onChibi }) {
   )
 }
 
-export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, setStress, onStart, onHowTo, onBoard, onChibi }) {
+export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, setStress, onStart, onHowTo, onBoard, onChibi, officer = false, setOfficer }) {
   if (!open) return null
   const top = leaderboard.top(modeId, 3)
   return (
@@ -338,7 +338,7 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
         <div className="mt-5 grid grid-cols-[1fr_300px] gap-4">
           <div className="rounded-xl border border-white/10 bg-black/30 p-4">
             <div className="grid grid-cols-[auto_1fr_auto] items-end gap-3">
-              {onChibi && <TitleChibi onChibi={onChibi} />}
+              {onChibi && !officer && <TitleChibi onChibi={onChibi} />}
               <label>
                 <span className="font-thai text-[12px] text-slate-400">ชื่อผู้เล่น / ทีม</span>
                 <input value={player} onChange={(e) => setPlayer(e.target.value)} maxLength={24} placeholder="เช่น ม.6/2-05" data-player
@@ -362,6 +362,14 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
               <button onClick={onHowTo} data-howto className="btn flex items-center gap-2 border-sky-400/60 bg-sky-400/12 px-5 text-sky-100 hover:bg-sky-400/25">
                 <BookOpen size={17} /><span className="font-thai normal-case tracking-normal text-[15px] font-bold">วิธีเล่น</span>
               </button>
+              {setOfficer && (
+                <button onClick={() => setOfficer(!officer)} data-officer-toggle data-on={officer ? 1 : 0}
+                  title="สำหรับเจ้าหน้าที่ ปภ./อปท./EOC: ไม่มีตัวการ์ตูน บอส เพลง หรือเอฟเฟกต์ตลก — ข้อมูลและระบบสนับสนุนการตัดสินใจครบเหมือนเดิม"
+                  className={`btn flex items-center gap-2 px-3.5 ${officer ? 'border-[#94A3B8] bg-[#94A3B8]/20 text-white' : 'border-white/15 bg-white/[0.04] text-slate-300 hover:border-white/35'}`}>
+                  <ShieldCheck size={17} className={officer ? 'text-[#E2E8F0]' : 'text-slate-400'} />
+                  <span className="font-thai normal-case tracking-normal text-left leading-tight"><span className="block text-[13.5px] font-bold">โหมดฝึกเจ้าหน้าที่</span><span className="block text-[10.5px] font-normal text-slate-400">{officer ? 'เปิด · ไม่มีการ์ตูน/บอส/เพลง' : 'ปิด'}</span></span>
+                </button>
+              )}
             </div>
             <div className="font-thai mt-2.5 text-center text-[12px] text-slate-500">ใช้เวลา ~7 นาทีสำหรับผู้เล่นเก่ง · ครั้งแรก 12–15 นาที · ไม่ต้องรอ เวลาเดินเมื่อคุณสั่งการ</div>
           </div>

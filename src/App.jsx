@@ -41,6 +41,7 @@ import { ChibiCreator } from './modals/chibiCreator'
 import { Floaters, useJuice, useShake } from './ui/juice'
 import { fx } from './lib/fx'
 import { PerfNotice } from './ui/settings'
+import { prefs, usePrefs } from './lib/prefs'
 import { BossBattle } from './modals/BossBattle'
 import { THRESHOLDS } from './config/missionConfig'
 
@@ -88,7 +89,7 @@ export default function App() {
     const prev = logger.current
     if (prev && prev.rounds.length && !prev.result) logger.finish({ trust: Math.round(s.trust), score: null, exposed: null, abandoned: true })
     sessionFor.current = s.resetSeq
-    logger.start({ hintsEnabled: eng.mode.tutor, demo: DEMO, stress: s.stress || [], seed: s.seed, mode: s.modeId })
+    logger.start({ hintsEnabled: eng.mode.tutor, demo: DEMO, stress: s.stress || [], seed: s.seed, mode: s.modeId, officer: prefs.get().officer })
     if (DEMO) logger.briefingDone()
     logger.enterAct(1)
     if (s.resetSeq > 0) {
@@ -175,6 +176,9 @@ export default function App() {
   }
 
   const playing = phase === 'play'
+  const officer = usePrefs().officer              // F4: officer-training mode
+  useEffect(() => { logger.meta({ officer }) }, [officer])
+  useEffect(() => { if (bossOn && officer) eng.autoBoss() }, [bossOn, officer]) // eslint-disable-line react-hooks/exhaustive-deps
   /* C1 game feel: floats from real state changes, a light shake when things go badly */
   const shakeRef = useRef(null)
   useJuice(s)
@@ -185,7 +189,7 @@ export default function App() {
   useEffect(() => { if (playing && lostCount) fx.emit('shake', { strength: 0.7 }) }, [lostCount]) // eslint-disable-line react-hooks/exhaustive-deps
   const crisis = (s.act === 1 && eng.veto1) || (s.act === 2 && s.points.some((p) => p.revealed && p.status === 'waiting' && p.deadline - s.clock < 120))
   const pose = useChibiPose({ eng, modal: analyze ? 'analysis' : channel ? 'channel' : plan ? 'planner' : null, crisis })
-  const dock = <ChibiDock pose={pose} name={player} />
+  const dock = officer ? null : <ChibiDock pose={pose} name={player} />
   const quest = playing && s.act < 3 && eng.mode.tutor && tutorOn ? questFor(eng) : null
   const target = quest?.hint?.go
   const beaconTab = target?.tab && target.tab !== tab ? target.tab : null
@@ -241,14 +245,14 @@ export default function App() {
         <Floaters />
         <PerfNotice />
         <ChibiCreator open={creator} onClose={() => setCreator(false)} player={player} setPlayer={setPlayer} />
-        <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
+        <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} officer={officer} setOfficer={(v) => prefs.set({ officer: v })} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
           onHowTo={() => setGuide(true)} onBoard={() => setBoard(true)}
           onStart={() => { logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') }} />
         <QuizModal open={phase === 'pretest'} kind="pre" onDone={(score) => { setPreScore(score); setPhase('play'); eng.start() }} onSkip={() => { setPhase('play'); eng.start() }} />
         <QuizModal open={postOpen} kind="post" preScore={preScore} onDone={finishPost} onSkip={() => setPostOpen(false)} />
         <VetoAlert open={playing && eng.veto1 && s.act === 1 && !s.vetoAck && !eng.act1Over} eng={eng} onAck={eng.ackVeto} onDecide={() => go({ tab: 'zones', view: 'urban', left: 'zones' })} />
         <WaitCompareModal data={wait} onClose={() => setWait(null)} onEvacuate={() => { setWait(null); go({ tab: 'zones' }) }} />
-        {bossOn && <BossBattle eng={eng} player={player} onFinish={eng.finishBoss} />}
+        {bossOn && !officer && <BossBattle eng={eng} player={player} onFinish={eng.finishBoss} />}
         <Act1SummaryModal open={playing && eng.act1Over && !!s.boss?.done} eng={eng} onNext={eng.goAct2} />
         <Act2SummaryModal open={playing && eng.act2Over} eng={eng} onNext={eng.goAct3} />
         {analyze && <ImageAnalysisModal eng={eng} imageId={analyze} onClose={() => setAnalyze(null)} />}

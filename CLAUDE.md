@@ -26,6 +26,7 @@ node scripts/probe-whatif.mjs <outDir>   # ภาพ "ถ้าคุณเล�
 node scripts/probe-stress-compare.mjs <outDir>   # หน้าเลือก Stress Test + ผลในเกม · แผงครูเทียบรอบ 1→2 (ข้อมูลสังเคราะห์ในโปรไฟล์เบราว์เซอร์ทดสอบ) · การ์ดพัฒนาการผู้เล่น
 RECORD_PARAMS=stress=all node record-demo.mjs   # smoke test 3 องก์ภายใต้ Stress Test ทุกเงื่อนไข
 node scripts/probe-hints.mjs <outDir>    # ภาพหน้าจอคำใบ้แบบบันไดทั้ง 3 องก์ (ต้องเปิด npm run dev) · exit 2 ถ้าขั้นเกินองก์/ไม่ชี้ข้อมูล
+node scripts/probe-officer.mjs <outDir> [baseUrl] # โหมดฝึกเจ้าหน้าที่: ปุ่ม/เมนู/?officer · ไม่มี chibi/บอส · สรุปตลิ่งจากการเตรียมตัว (ต้องเปิด npm run dev)
 node scripts/probe-boss.mjs <outDir> [baseUrl]    # คืนวิกฤต T0 (บอส): 1920/1280 · Expert ซ่อนท่าถัดไป · ไม่เตรียมตัว → ตลิ่งแตก (ต้องเปิด npm run dev)
 node scripts/probe-perf.mjs <outDir> [baseUrl]    # โหมดประหยัด: ปุ่มในเมนู · ?perf=lite · reduced-motion · จำลองเครื่องช้า → เปิดเอง (ต้องเปิด npm run dev)
 node scripts/probe-chibi.mjs <outDir> [baseUrl]   # chibi ทุกท่า + ไม่บังปุ่มที่ 1920×1080/1280×720
@@ -35,7 +36,7 @@ node scripts/extract-buildings.mjs <BD_footprintTH.shp> <BD_footprintTH.dbf> [--
 python scripts/build-final-mission-package.py   # สร้าง gistda-request/revenge_Final_Mission_Package.docx
 ```
 
-- **URL params:** `?demo` ข้ามหน้าเปิดเกม/pre-test (ไม่นับสถิติ) · `?seed=N` สถานการณ์ตายตัว · `?mode=expert` · `?stress=data,roads,time` หรือ `?stress=all` (Stress Test) · `?speed=N` เร่งคัตซีน (ใช้ตอนอัดคลิป) · `?rec` เปิด `window.__maesai` ให้สคริปต์อัดคลิปอ่านเฉลย (ห้ามใช้ตอนเล่นจริง)
+- **URL params:** `?officer` โหมดฝึกเจ้าหน้าที่ · `?perf=lite|full` โหมดประหยัด · `?mute` ปิดเสียง · `?chibilab` ดูท่า chibi · `?demo` ข้ามหน้าเปิดเกม/pre-test (ไม่นับสถิติ) · `?seed=N` สถานการณ์ตายตัว · `?mode=expert` · `?stress=data,roads,time` หรือ `?stress=all` (Stress Test) · `?speed=N` เร่งคัตซีน (ใช้ตอนอัดคลิป) · `?rec` เปิด `window.__maesai` ให้สคริปต์อัดคลิปอ่านเฉลย (ห้ามใช้ตอนเล่นจริง)
 - **ห้ามดับเบิลคลิก `index.html` ที่ root** — เป็น entry ของ Vite
 - คีย์ลัด: `Space` = เดินเวลาไปเหตุการณ์ถัดไป · `Ctrl+Shift+L` แผงครู
 - **Sphere API key อยู่ใน `missionConfig.js` (SPHERE.apiKey)** ตามที่ผู้ใช้สั่ง — ตั้งทับได้ด้วย `.env.local` → `VITE_SPHERE_API_KEY` · ออฟไลน์/คีย์ใช้ไม่ได้ = fallback ข้อมูลในเครื่อง
@@ -158,6 +159,12 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
   - ทุกตา = 1 รายการใน decisionLedger (`s.bossLog`) + รายการผล `boss` (ดี/ผิด) · `bossBest` (ค้นทุกชุดการ์ดที่ใช้ได้) ใช้กับโหมดเจ้าหน้าที่/ข้ามฉาก/บอท · `enterAct2` เรียก `resolveBoss` ถ้ายังไม่ได้สู้ (ไม่มีรายการรายตา)
 - `src/modals/BossBattle.jsx` (`data-boss`, `data-boss-card`, `data-boss-end`, `data-boss-busy`, `data-boss-intent`, `data-boss-result`, `data-boss-continue`) เปิดเมื่อ T0 ก่อนสรุปองก์ 1 · มวลน้ำเป็นคลื่นยักษ์ม้วนตัว ไม่มีหน้า (เคารพผู้ประสบภัย) · D4: แสงแดงเรือง ฝนหนัก ฟ้าแลบถี่ + ฟ้าร้อง เพลงระดับ 3 chibi จริงจัง · Enter = จบตา · `window.__maesai.bossBest()` (?rec) ให้บอท · สรุปองก์ 1 มี `EmbankmentSummary` (`data-embankment-summary=held|breached`) · CSV `boss_won/boss_fought/boss_turns`
 - `node scripts/probe-boss.mjs <outDir> [baseUrl]` ภาพทุกช่วงที่ 1920/1280 + Expert ซ่อนท่า + ไม่เตรียมตัว → ตลิ่งแตก → องก์ 2 มี breach · tests/boss.test.js
+
+### โหมดฝึกเจ้าหน้าที่ (F4, 20 ต.ค.)
+- `prefs.officer` — เปิดที่หน้าเปิดเกม (`data-officer-toggle` ข้างปุ่มวิธีเล่น) · เมนู 🔊 (`data-pref="officer"`) · `?officer` (`?officer=0` ปิด) · ป้าย "โหมดฝึกเจ้าหน้าที่" บน TopBar (`data-officer-badge`)
+- ปิด: chibi ทุกที่ (dock, หน้าเปิดเกม, หน้าสร้างตัวละคร, คัตซีน, ฉากเรือ/โดรน) · ฉากบอส (T0 จัดการอัตโนมัติด้วย `eng.autoBoss()` → สรุปองก์ 1 แสดง `EmbankmentSummary` "ประเมินจากการเตรียมตัว" ไม่มีรายการตัดสินใจรายตา) · เพลง · เอฟเฟกต์ตลก (โครงกระดูก/ตัวดำ — เหลือประกายไฟ + ข้อเท็จจริง) · สั่นจอ
+- คงไว้: ระบบสนับสนุนการตัดสินใจทั้งหมด (SFVI, การ์ดผลที่จะเกิด, ⓘ, คำใบ้, what-if, สภาพอากาศ, ตัวเลขลอยที่เป็นข้อมูล) · บันทึก `session.officer` + คอลัมน์ `officer` ใน sessions CSV
+- `node scripts/probe-officer.mjs <outDir> [baseUrl]` ตรวจปุ่มหน้าเปิดเกม/เมนู/URL ทั้ง 1920 และ 1280 · `RECORD_PARAMS=officer node record-demo.mjs` เล่น 3 องก์ในโหมดนี้ · tests/officer.test.js
 
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)

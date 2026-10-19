@@ -13,6 +13,7 @@ import { fmt, clockHeadline, clockToDate, clamp, mmss } from '../lib/format'
 import { sphereReady } from '../lib/sphere'
 import { SettingsMenu } from '../ui/settings'
 import { Tween } from '../ui/juice'
+import { usePrefs } from '../lib/prefs'
 
 export const ACTS = [
   { n: 1, roman: 'I', th: 'เฝ้าระวัง', code: 'T−48', long: 'มองต้นน้ำที่มองไม่เห็น', en: 'SEEING THE UNSEEN UPSTREAM', hex: '#22E36B' },
@@ -69,6 +70,7 @@ function PlayTimer({ eng }) {
 
 export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, onReset }) {
   const { s, mode, situation, veto1 } = eng
+  const officer = usePrefs().officer
   const act = ACTS[s.act - 1]
   const sitHex = situation === 'CRITICAL' ? '#FF003C' : situation === 'HIGH' ? '#FF7A1A' : situation === 'REVIEW' ? '#38BDF8' : '#FFB300'
   const sitTh = { CRITICAL: 'วิกฤต', HIGH: 'สูง', REVIEW: 'ทบทวน', ELEVATED: 'เฝ้าระวัง' }[situation]
@@ -92,6 +94,12 @@ export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, 
         style={{ color: s.modeId === 'expert' ? '#FF9DB2' : '#7CFFA0', borderColor: s.modeId === 'expert' ? '#FF003C66' : '#22E36B66' }}>
         {mode.th} · {mode.en}
       </span>
+      {officer && (
+        <span className="font-thai rounded border border-[#94A3B8]/60 bg-[#94A3B8]/12 px-1.5 py-[3px] text-[10.5px] font-bold text-[#E2E8F0]" data-officer-badge
+          title="โหมดฝึกเจ้าหน้าที่: ไม่มีตัวการ์ตูน บอส เพลง หรือเอฟเฟกต์ตลก">
+          โหมดฝึกเจ้าหน้าที่
+        </span>
+      )}
       {s.stress?.length > 0 && (
         <span className="font-thai rounded border border-[#FF8A3D]/60 bg-[#FF8A3D]/12 px-1.5 py-[3px] text-[10.5px] font-bold text-[#FFB27A]" data-stress-badge
           title={s.stress.map((k) => `${STRESS[k].th}: ${STRESS[k].desc}`).join('\n')}>

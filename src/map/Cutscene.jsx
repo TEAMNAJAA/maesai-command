@@ -21,6 +21,7 @@ import { levelAt } from '../lib/hydro'
 import { clockLabel, clockToDate, clamp } from '../lib/format'
 import { Chibi } from '../ui/chibi'
 import { useProfile } from '../lib/profile'
+import { usePrefs } from '../lib/prefs'
 
 const W = 900, SH = 330                       // card width · scene height
 const KX = 111320 * Math.cos((20.44 * Math.PI) / 180)
@@ -389,6 +390,7 @@ function ProcessShot({ k, cut, eng }) {
 
 function SceneChibi({ pose, say, size = 70, className = '' }) {
   const me = useProfile()
+  if (usePrefs().officer) return null                 // F4: no cartoon in officer-training mode
   return (
     <div className={`pointer-events-none flex items-end gap-1 ${className}`} data-scene-chibi={pose}>
       <Chibi profile={me} pose={pose} size={size} />
