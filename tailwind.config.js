@@ -3,6 +3,9 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      // every whole-number opacity step (/12, /88, /97 …) — the default scale only has multiples of 5,
+      // and off-scale modifiers were silently dropped (transparent modal panels, bright fallback borders)
+      opacity: Object.fromEntries(Array.from({ length: 101 }, (_, i) => [String(i), String(i / 100)])),
       colors: {
         void: '#050912',
         abyss: '#0B132B',

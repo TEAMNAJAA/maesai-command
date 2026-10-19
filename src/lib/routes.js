@@ -47,36 +47,86 @@ export const HAZARD_TH = {
   river: 'กระแสน้ำแรงริมแม่น้ำ', deep: 'โซนน้ำลึกไหลเชี่ยว (ยังไม่สูบน้ำ)', power: 'โซนไฟฟ้ารั่ว (ยังไม่ตัดไฟ)',
 }
 
+/** Sphere route variants offered in the planner (GISTDA Sphere Routing API modes). */
+export const SPHERE_VARIANTS = [
+  { id: 'sphere-c', mode: 'c', th: 'Sphere · เส้นทางเร็วที่สุด', tech: 'GISTDA Sphere · fastest' },
+  { id: 'sphere-d', mode: 'd', th: 'Sphere · เส้นทางสั้นที่สุด', tech: 'GISTDA Sphere · shortest' },
+]
+export const SPHERE_DETOUR = { id: 'sphere-via', th: 'Sphere + จุดแวะเลี่ยงอันตราย', tech: 'GISTDA Sphere · via safe waypoint' }
+
+function buildOption(s, scn, t, ends, { variant, th, tech, source, via }, a, b, back) {
+  const coords = [...a.coords, ...b.coords]
+  const outM = a.distanceM + b.distanceM, backM = back ? back.distanceM : 0
+  const hazards = routeHazards(s, scn, coords, t, ends)
+  return {
+    variant, th, tech, source, via: via || null, coords, back: back?.coords || [],
+    leg1M: a.distanceM, leg2M: b.distanceM, backM, splitAt: a.coords.length,
+    distanceM: outM, totalM: outM + backM,
+    minutes: Math.round((outM / 1000 / BOAT.speedKmh) * 60),
+    fuelL: +(((outM + backM) / 1000) * BOAT.fuelLPerKm).toFixed(1),
+    hazards, safe: hazards.length === 0, steps: [...new Set([...(a.steps || []), ...(b.steps || [])])].slice(0, 4),
+  }
+}
+
 /**
  * Candidate trips camp → point → destination. Each: coords, distances, minutes, fuel, hazards.
- * The optimal option is the shortest one with no hazard.
+ * `sphere` (optional) = legs fetched from the GISTDA Sphere Routing API (lib/sphereRoutes.js):
+ *   { modes: { c: {a, b}, d: {a, b} }, back, detour: {a, b, via} | null }
+ * Sphere routes are road routes that know nothing of the flood, so every option — Sphere or
+ * offline — is checked against the game's own hazards. Sphere options come first; the offline
+ * router (OSM) is always there as the fallback. The optimal option is the shortest safe one.
  */
-export function planTrip(s, scn, camp, point, dest, t) {
+export function planTrip(s, scn, camp, point, dest, t, sphere = null) {
   const blocked = new Set(scn.blockedRoads)
   const from = [camp.lon, camp.lat], at = [point.lon, point.lat], to = dest ? [dest.lon, dest.lat] : from
+  const ends = [from, at, to]
+  const offlineBack = dest ? leg(to, from, 'main', blocked) : null
   const options = []
+  const add = (o) => {
+    const sig = Math.round(o.distanceM / 25)
+    if (options.some((x) => Math.round(x.distanceM / 25) === sig && x.hazards.join() === o.hazards.join())) return
+    options.push(o)
+  }
+  if (sphere) {
+    const back = dest ? (sphere.back || offlineBack) : null
+    for (const v of SPHERE_VARIANTS) {
+      const L = sphere.modes?.[v.mode]
+      if (L?.a && L?.b) add(buildOption(s, scn, t, ends, { ...v, variant: v.id, source: 'sphere' }, L.a, L.b, back))
+    }
+    if (sphere.detour?.a && sphere.detour?.b) add(buildOption(s, scn, t, ends, { ...SPHERE_DETOUR, variant: SPHERE_DETOUR.id, source: 'sphere', via: sphere.detour.via }, sphere.detour.a, sphere.detour.b, back))
+  }
   for (const v of VARIANTS) {
     const a = leg(from, at, v.id, blocked)
     const b = leg(at, to, v.id, blocked)
     if (!a || !b) continue
-    const back = dest ? leg(to, from, 'main', blocked) : null
-    const coords = [...a.coords, ...b.coords]
-    const outM = a.distanceM + b.distanceM, backM = back ? back.distanceM : 0
-    const hazards = routeHazards(s, scn, coords, t, [from, at, to])
-    const sig = Math.round(outM / 25)
-    if (options.some((o) => Math.round(o.distanceM / 25) === sig && o.hazards.join() === hazards.join())) continue
-    options.push({
-      variant: v.id, th: v.th, tech: v.tech, coords, back: back?.coords || [],
-      leg1M: a.distanceM, leg2M: b.distanceM, backM, splitAt: a.coords.length,
-      distanceM: outM, totalM: outM + backM,
-      minutes: Math.round((outM / 1000 / BOAT.speedKmh) * 60),
-      fuelL: +(((outM + backM) / 1000) * BOAT.fuelLPerKm).toFixed(1),
-      hazards, safe: hazards.length === 0, steps: [...new Set([...(a.steps || []), ...(b.steps || [])])].slice(0, 4),
-    })
+    add(buildOption(s, scn, t, ends, { ...v, variant: v.id, source: 'offline' }, a, b, offlineBack))
   }
   const safe = options.filter((o) => o.safe)
   const best = safe.length ? safe.reduce((m, o) => (o.distanceM < m.distanceM ? o : m)) : null
   return { options, best }
+}
+
+/** Where along a route each hazard is met (for map markers), roughly one mark per 150 m of hazard. */
+export function hazardMarks(s, scn, coords, t, ends) {
+  const powerOn = (id) => scn.powerHazards.some((p) => p.id === id && t >= p.at) && !s.powerCut[id]
+  const out = []
+  let last = null
+  for (let i = 1; i < coords.length - 1; i++) {
+    const p = coords[i]
+    if (ends.some((e) => metres(p, e) < 200)) continue
+    let kind = null
+    if (riverM(p) <= ACT2.riverBandM) kind = 'river'
+    const sec = sectionAt(p)
+    if (sec && metres(p, sec.c) < 900) {
+      if (powerOn(sec.id)) kind = 'power'
+      else if (!kind && depthAt(s, sec, t) >= ACT2.deepWaterM) kind = 'deep'
+    }
+    if (!kind) continue
+    if (last && last.kind === kind && metres(last.p, p) < 150) continue
+    last = { p, kind }
+    out.push(last)
+  }
+  return out
 }
 
 /** Grade the player's choice against the optimal option. */

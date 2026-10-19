@@ -45,7 +45,8 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 | `src/lib/scenario.js` | `makeScenario(seed, mode)` — สุ่มต่อเกม: ฉากดินถล่ม 6 sector, ความกว้างลำน้ำ 20–34 ม., รอบโคจร+เมฆพยากรณ์, รอบถ่ายองก์ 2, เมฆลอย, พายุ, ไฟรั่ว, จุดอับ, จุดอพยพ 3 แห่ง, ถนนขาด, หลังคาเยียวยา 8 หลัง |
 | `src/lib/sections.js` | 10 โซนจากหลังคาจริง (k-means) · `sectionDepth` · `GAPS_BY_SECTION` |
 | `src/lib/sim.js` | ฟังก์ชันล้วน: `computeSfvi`, `depthAt`, `arrivalAt`, `zoneOutcome`, `exposureSummary`, `makePoints`, `reliefSummary`, `missionScore` |
-| `src/lib/hydro.js` · `clouds.js` · `routes.js` · `rng.js` · `leaderboard.js` | กราฟน้ำ · เมฆลอย (Boolean model 35–65%) · วางแผนเรือ 3 เส้นทาง + อันตราย · seeded RNG · ตารางอันดับ (localStorage) |
+| `src/lib/hydro.js` · `clouds.js` · `routes.js` · `rng.js` · `leaderboard.js` | กราฟน้ำ · เมฆลอย (Boolean model 35–65%) · วางแผนเรือ (`planTrip`: ตัวเลือก Sphere มาก่อน + ตัวคำนวณในเครื่อง 3 แบบ, ตรวจอันตรายทุกเส้นทาง, `hazardMarks`) · seeded RNG · ตารางอันดับ (localStorage) |
+| `src/lib/sphereRoutes.js` | เส้นทางเรือจาก **GISTDA Sphere Routing API**: `fetchBoatLegs` ขอ 2 โหมด (c เร็วสุด · d สั้นสุด) ทุกขา + ขากลับ · ถ้าทุกเส้น Sphere เจออันตราย → ขอใหม่ผ่านจุดแวะจากเส้นทางในเครื่องที่ปลอดภัย (`sphere-via`) · cache ต่อคู่จุด · ล้มเหลว/ออฟไลน์ = null (ใช้ OSM) · ฟังก์ชัน fetch ฉีดได้สำหรับเทสต์ |
 | `src/lib/buildings.js` · `embankment.js` · `geo.js` · `sphere.js` · `evalLogger.js` | อาคาร GISTDA · แนวตลิ่ง 14 จุด · projection/router ออฟไลน์ · Sphere API · logger CSV |
 | `src/engine/world.js` | state เริ่มต้น, `advanceTo` (เหตุการณ์ตามเวลา + `event()` ที่ทำให้ปุ่ม "เดินเวลา" หยุด), `enterAct2/3`, งานภาคสนาม (jobs), เรือวิ่งรับ-ส่งเอง (shuttle) |
 | `src/engine/actions.js` | ทุกคำสั่งเป็น pure transition และ `spend(CMD_MIN.x)` เดินเวลาตามเวลาสั่งการ |
@@ -54,11 +55,11 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 | `src/map/Cutscene.jsx` | คัตซีน THEOS-2 4 ช็อต: วงโคจร (โลก+บรรยากาศ+โมเดลดาวเทียม) → กล้องสแกน push-broom บนภูมิประเทศ SRTM จริง/ภาพ Sphere + หลังคา GISTDA + เมฆจริง → ดาวน์ลิงก์สถานีภาครับ → ประมวลผล L3 Ortho (AWAGAD) · การ์ดเดินเวลา (หน้าปัดนาฬิกา วันที่ ระดับน้ำ/เรือ) · คลิกเพื่อข้าม |
 | `src/modals/intro.jsx` | **หน้าเปิดเกม (TitleScreen) + หน้าวิธีเล่น (HowToPlay)** — ใช้ตอบกรรมการ: เกมคืออะไร, หน้าจอ/เวลา, 3 องก์, Logic Matrix, ข้อมูล GISTDA, คะแนน/วัดผล |
 | `src/panels/datahub.jsx` · `actions.jsx` · `quest.jsx` · `chrome.jsx` | แผงซ้าย (SFVI/ดาวเทียม/โซน/ทรัพยากร) · แผงขวา (แท็บคำสั่ง) · กล่องภารกิจ + TutorBar · TopBar (เวลาเล่นจริง)/AlertLog/StatusBar/Toast |
-| `src/modals/analysis.jsx` · `planner.jsx` · `modals.jsx` · `guide.jsx` | แปลภาพบนภูมิประเทศ SRTM จริงของ sector (ก่อน=หน้าแล้ง มี.ค. / หลัง=มรสุม ก.ย., รอยดินถล่ม/นา/เงาเมฆ/รอยเก่า แบบสมจริง) + วัดลำน้ำบนภาพ Pan 0.5 ม. (กำแพงกันน้ำ ตลิ่ง หลังคา ต้นไม้ — `data-river` คือผิวน้ำ) · วางแผนเรือบนภาพ Sphere · quiz/veto/สรุปองก์/แผงครู · Leaderboard |
+| `src/modals/analysis.jsx` · `planner.jsx` · `modals.jsx` · `guide.jsx` | แปลภาพบนภูมิประเทศ SRTM จริงของ sector (ก่อน=หน้าแล้ง มี.ค. / หลัง=มรสุม ก.ย., รอยดินถล่ม/นา/เงาเมฆ/รอยเก่า แบบสมจริง) + วัดลำน้ำบนภาพ Pan 0.5 ม. (กำแพงกันน้ำ ตลิ่ง หลังคา ต้นไม้ — `data-river` คือผิวน้ำ) · วางแผนเรือบนภาพ Sphere (สถานะ Sphere สด `data-sphere-status`, กลุ่มเส้นทาง Sphere/OSM, เลือกจำตามเส้นทางไม่ใช่ลำดับ, จุดอันตรายบนเส้นทางเฉพาะ Beginner, ไทม์ไลน์ออก–ถึง–กลับ) · quiz/veto/สรุปองก์/แผงครู · Leaderboard |
 | `src/map/GeoMap.jsx` · `MapCanvas.jsx` | แผนที่ catchment/urban/corridor · สลับมุมมอง |
 | `src/aar/AarShell.jsx` | องก์ 3: ภาพหลังคา Sphere ก่อน/หลัง (โคลนบนพื้น หลังคาสะอาด), ไทม์ซีรีส์เรดาร์, สำรวจภาคพื้น, คะแนน, รายงาน CSV |
 | `scripts/demo-flow.mjs` · `demo-kit.mjs` | ผู้เล่นอัตโนมัติ (คลิก UI จริง ใช้เฉลยจาก `?rec`) · เคอร์เซอร์/คำบรรยาย/ffmpeg |
-| `tests/` | vitest: scenario + engine |
+| `tests/` | vitest: scenario + engine + sphereRoutes (Sphere ปลอมแบบฉีด ไม่ใช้เน็ต) |
 
 **Stack:** React 18 · Vite 5 (+ vite-plugin-singlefile) · Tailwind 3 · lucide-react · recharts · vitest · ไม่มี backend
 
@@ -116,7 +117,7 @@ SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลัก�
 ## 8. Backlog / ข้อจำกัดที่รู้
 
 - ภาพ THEOS-2/เรดาร์จริงยังไม่มี (รอ GISTDA) — ฉากแปลภาพ, ฝั่ง "หลัง" ของหลังคา, เมฆ, จุดผู้ติดค้าง เป็นค่าสถานการณ์
-- Sphere: Routing ✓ · Tiles ✓ · Elevation คืน `null` บางจุด → ใช้ SRTM · ภาพ Sphere เป็นภาพปัจจุบัน
+- Sphere: Routing ✓ (เส้นทางอพยพ + เส้นทางเรือ) · Tiles ✓ · Elevation คืน `null` บางจุด → ใช้ SRTM · ภาพ Sphere เป็นภาพปัจจุบัน
 - `gistda-request/revenge_Final_Mission_Package.docx` เขียนก่อนเปลี่ยนระบบเวลา — ถ้าจะส่งใหม่ต้องปรับข้อความเรื่องเวลา/โหมด
 - ค่าสถานการณ์ (floodStage โซน, ครัวเรือน, ผู้ติดค้าง, หลังคาเยียวยา) รอข้อมูล ปภ./GISTDA
 - รอบชิงชนะเลิศ (กติกา GISTDA): วิดีโอ ≤ 5 นาที Full HD · ส่ง Mission Package ล่วงหน้า ≥ 10 วัน · นำเสนอ + ตอบคำถาม ≤ 15 นาที
@@ -128,4 +129,5 @@ SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลัก�
 - ทุกตัวเลขใหม่บนจอต้องมี `<Src/>` · ข้อความ UI ภาษาไทยใช้คลาส `font-thai` · log สองภาษา (`msg` อังกฤษ + `th` ไทย)
 - ใส่ `data-*` (เช่น `data-tab`, `data-layer`, `data-sector`) ให้ปุ่มสำคัญ — `record-demo.mjs` ใช้ selector เหล่านี้
 - Tailwind arbitrary values + keyframes ใน `index.css` · ระวังเขียน regex แบบ `/[-:T]/` ในโค้ด (Tailwind อ่านเป็นคลาส) ใช้ `/\D/` แทน
+- `tailwind.config.js` เปิด opacity ทุกค่า 0–100 (เดิม `/12` `/88` `/97` ฯลฯ ไม่ถูกสร้าง → พื้นหลัง modal โปร่ง/ขอบสว่าง) · ห้ามใช้ `backdrop-blur` ทับแผนที่ (กินเฟรม — index.css ปิดไว้ ยกเว้นคลาส `keep-blur`)
 - หลังแก้: `npm run build` แล้ว `node record-demo.mjs` (RECORD_OUT=โฟลเดอร์ชั่วคราว) เพื่อทดสอบ 3 องก์อัตโนมัติ

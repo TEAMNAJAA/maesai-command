@@ -12,6 +12,7 @@ import { LAYERS, SHELTER_POOL } from '../config/scenarioData'
 import { makeScenario } from '../lib/scenario'
 import { computeSfvi, exposureSummary, reliefSummary, peakDepth, arrivalAt, evacNeedMin, depthAt, HARM_M } from '../lib/sim'
 import { planTrip } from '../lib/routes'
+import { fetchBoatLegs } from '../lib/sphereRoutes'
 import { routeOffline, metres, isFloodedStreet } from '../lib/geo'
 import { sphereRoute, sphereReady } from '../lib/sphere'
 import { SECTIONS, SECTION_BY_ID, sectionAt } from '../lib/sections'
@@ -209,12 +210,37 @@ export function useEngine() {
   const deployPump = useCallback(wrap(A.deployPump), [commit])
   const cutPower = useCallback(wrap(A.cutPower), [commit])
   const buildTower = useCallback(wrap(A.buildTower), [commit])
-  /** Candidate routes for a boat trip, evaluated against the live state. */
+  /* Boat routes from the GISTDA Sphere Routing API, per trip (base · point · destination).
+     status: loading → ok | error (Sphere did not answer) | off (no key / offline) */
+  const boatRoutes = useRef(new Map())
+  const [boatRouteVer, setBoatRouteVer] = useState(0)
+  const tripKey = (p, pointId, mission, destId) => {
+    const pt = p.points.find((x) => x.id === pointId)     // ids repeat across games — the position does not
+    return `${p.seed}|${p.camp}|${pointId}@${pt ? `${pt.lon.toFixed(5)},${pt.lat.toFixed(5)}` : ''}|${mission === 'supply' ? 'camp' : destId}`
+  }
+  const boatRouteStatus = useCallback((pointId, mission, destId) => boatRoutes.current.get(tripKey(sRef.current, pointId, mission, destId))?.status || 'idle', [])
+  const requestBoatRoutes = useCallback(async (pointId, mission, destId) => {
+    const p = sRef.current, sc = scnRef.current
+    const pt = p.points.find((x) => x.id === pointId)
+    const camp = campOf(p)
+    if (!pt || !camp) return
+    const k = tripKey(p, pointId, mission, destId)
+    const cur = boatRoutes.current.get(k)
+    if (cur && cur.status !== 'error') return
+    if (!sphereReady()) { boatRoutes.current.set(k, { status: 'off' }); setBoatRouteVer((v) => v + 1); return }
+    boatRoutes.current.set(k, { status: 'loading' }); setBoatRouteVer((v) => v + 1)
+    let legs = null
+    try { legs = await fetchBoatLegs({ s: sRef.current, scn: sc, camp, point: pt, dest: mission === 'supply' ? null : destOf(destId) }) } catch { legs = null }
+    boatRoutes.current.set(k, legs ? { status: 'ok', legs } : { status: 'error' })
+    setBoatRouteVer((v) => v + 1)
+  }, [])
+  /** Candidate routes for a boat trip (Sphere options when they have arrived + the offline router), evaluated against the live state. */
   const planFor = useCallback((pointId, mission, destId) => {
     const p = sRef.current, sc = scnRef.current
     const pt = p.points.find((x) => x.id === pointId)
     if (!pt) return null
-    return planTrip(p, sc, campOf(p), pt, mission === 'supply' ? null : destOf(destId), p.clock)
+    const legs = boatRoutes.current.get(tripKey(p, pointId, mission, destId))?.legs || null
+    return planTrip(p, sc, campOf(p), pt, mission === 'supply' ? null : destOf(destId), p.clock, legs)
   }, [])
   const dispatchBoat = useCallback(wrap(A.dispatchBoat), [commit])
 
@@ -262,6 +288,7 @@ export function useEngine() {
       get s() { return sRef.current },
       get scn() { return scnRef.current },
       planFor,
+      boatRouteStatus,
       advance,
       get busy() { return busy.current },
       gapCount: EMBANKMENT_GAPS.length,
@@ -286,7 +313,7 @@ export function useEngine() {
     s, scn, mode, sfvi, world, veto1, situation, exposure, cut, advance, skipCut, realMs, realActs: real.current.acts, start, flash, toast,
     act1Over, act2Over,
     setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, orderZones, toggleLayer, routeZone,
-    orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat,
+    orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat, requestBoatRoutes, boatRouteStatus, boatRouteVer,
     reviewRoof, survey, adjudicate,
     goAct2, goAct3, ackVeto, finishMission, newGame, setMode,
   }

@@ -193,7 +193,7 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
     if (a.point && a.boatFree) {
       const mission = a.point.type === 'hardship' ? 'supply' : 'rescue'
       const dest = a.point.injured ? 'hosp' : a.shelter
-      const idx = await page.evaluate(([id, m, d]) => { const p = window.__maesai.planFor(id, m, d); return p && p.best ? p.options.indexOf(p.best) : -1 }, [a.point.id, mission, dest])
+      let idx = await page.evaluate(([id, m, d]) => { const p = window.__maesai.planFor(id, m, d); return p && p.best ? p.options.indexOf(p.best) : -1 }, [a.point.id, mission, dest])
       if (idx < 0) {
         // every route crosses deep water: pump the zone on the way (or wait for the water to drop)
         const deep = await page.evaluate(([id, m, d]) => { const { s } = window.__maesai; return window.__maesai.deepAlong(id, m, d).filter((z) => !s.pumps[z]) }, [a.point.id, mission, dest])
@@ -215,6 +215,10 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       await click(page, page.locator(`[data-point="${a.point.id}"] button`, { hasText: 'วางแผนเรือ' }), { hold: ms(450), after: ms(1100) })
       await click(page, page.locator(`[data-mission="${mission}"]`), { hold: ms(300), after: ms(400) })
       if (mission === 'rescue') await click(page, page.locator(`[data-dest="${dest}"]`), { hold: ms(300), after: ms(500) })
+      // Sphere routes arrive asynchronously and join the list — re-read the best option once they are in
+      await page.waitForFunction(() => !['loading', 'idle'].includes(document.querySelector('[data-sphere-status]')?.dataset.sphereStatus), null, { timeout: 15000 }).catch(() => {})
+      idx = await page.evaluate(([id, m, d]) => { const p = window.__maesai.planFor(id, m, d); return p && p.best ? p.options.indexOf(p.best) : -1 }, [a.point.id, mission, dest])
+      if (idx < 0) { await click(page, page.locator('[data-modal="planner"] button', { hasText: 'ยกเลิก' }), { hold: ms(200), after: ms(300) }); skip.add(a.point.id); continue }
       await click(page, page.locator(`[data-route-opt="${idx}"]`), { hold: ms(600), after: ms(900) })
       await click(page, page.locator('[data-modal="planner"] button', { hasText: 'ส่งเรือออก' }), { hold: ms(450), after: ms(600) })
       continue
