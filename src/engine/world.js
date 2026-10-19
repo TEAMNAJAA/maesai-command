@@ -13,6 +13,7 @@ import { makePoints, arrivalAt, peakDepth, HARM_M } from '../lib/sim'
 import { clearSections } from '../lib/clouds'
 import { routeOffline } from '../lib/geo'
 import { clockLabel, fmt } from '../lib/format'
+import { resolveBoss } from './boss'
 
 let SEQ = 0
 export const mkLog = (lv, tag, msg, th) => ({ id: ++SEQ, lv, tag, msg, th, stamp: new Date() })
@@ -75,9 +76,11 @@ const clone = (s) => structuredClone(s)
 /* ── Act transitions ──────────────────────────────────────────────────────── */
 
 export function enterAct2(s, scn) {
-  const n = clone(s)
+  const n = clone(resolveBoss(s, scn))            // E: a T0 fight that was not played resolves from the preparation
   const mode = MODES[n.modeId]
   n.act = 2; n.clock = 0; n.act1Done = true; n.toasts = []
+  if (n.boss?.done && !n.boss.won) log(n, 'crit', 'BREACH', `Embankment breached at T0 — ${n.breach.zone} runs ${n.breach.extraM} m deeper.`, `ตลิ่งแตกคืนวิกฤต — โซน ${n.breach.zone} น้ำสูงขึ้น ${n.breach.extraM} ม. ตลอดองก์ 2`)
+  else if (n.boss?.done) log(n, 'good', 'EMBANKMENT', 'The embankment held through the crest.', 'แนวตลิ่งรับยอดน้ำคืนวิกฤตไว้ได้')
   if (!n.camp) {
     n.camp = CAMP_SITES[0].id; n.campAuto = true
     log(n, 'warn', 'CAMP', 'No forward base was chosen — the district office was assigned by default.', 'ไม่ได้ตั้งฐานบัญชาการ — ระบบตั้งที่ที่ว่าการอำเภอให้อัตโนมัติ')

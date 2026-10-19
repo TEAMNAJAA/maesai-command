@@ -137,6 +137,32 @@ export const DURATIONS = {
   surveyDays: 2,
 }
 export const BOAT = { speedKmh: 9, capacity: 10, fuelLPerKm: 1.6 }
+// E: คืนวิกฤต T0 — มวลน้ำ (บอส) ปะทะผู้บัญชาการ ค่าพลังทุกอย่างมาจากการเตรียมตัวในองก์ 1
+export const BOSS = {
+  turns: 4,                       // T0 → T+2 ชม. ช่วงยอดน้ำ ตาละ 30 นาที
+  hpBase: 100, sealCut: 0.45,     // แรงดันมวลน้ำ = 100 × (1 − 0.45 × สัดส่วนจุดฟันหลอที่อุดเสร็จ)
+  attackBase: 4, attackPerGap: 2, // แรงซัด = 4 + 2 × จุดฟันหลอที่ยังเปิด
+  villagersMin: 15,               // ชาวบ้านปลอดภัย = % ครัวเรือนเสี่ยงที่อพยพทัน (ขั้นต่ำ 15)
+  energyBase: 1, energyMax: 4,    // พลังสั่งการต่อตา = 1 + ทีมภาคสนามที่ว่างตอน T0 (สูงสุด 4)
+  breachM: 0.4,                   // แพ้ = ตลิ่งแตก โซนเสี่ยงที่สุดน้ำสูงขึ้น 0.4 ม. ในองก์ 2
+  moves: {
+    surge: { dmg: 'attack' },                 // คลื่นซัดตลิ่ง
+    gap: { mult: 1.4, closed: 3 },            // ทะลักจุดฟันหลอ (ถ้าอุดครบเหลือ 3)
+    power: { dmg: 16 },                       // น้ำท่วมตู้ไฟ
+    rain: { dmg: 6, heal: 10 },               // ฝนหนักซ้ำ — มวลน้ำเพิ่ม
+    dam: { dmg: 30, attackShare: 0.5 },       // ดินถล่มอุดลำน้ำแตก (เฉพาะเมื่อไม่ได้แปลภาพหรือไม่ได้วัด N)
+  },
+  cards: {
+    base: { energy: 0, baht: 0, gain: 1 },                        // ประสานจากฐาน +1 พลัง (ครั้งเดียว · ฐานต้องพ้นน้ำ)
+    bigbag: { energy: 1, baht: 60_000, block: 0.6, hp: 6, max: 2 }, // บิ๊กแบ็ก 40 ใบ
+    pump: { energy: 2, baht: 85_000, hp: 18, max: 2 },
+    power: { energy: 1, baht: 0 },
+    evac: { energy: 1, baht: 30_000, heal: 14 },                  // × ความเชื่อมั่น
+    boat: { energy: 2, baht: 24_000, cut: 0.5 },
+    theos: { energy: 1, baht: 0, cut: 0.8 },                       // ต้องมีภาพ THEOS-2 ที่ใช้ได้
+  },
+}
+
 // B7: a boat sent down a hazardous route has an accident on the way — always (deterministic, no extra randomness)
 export const BOAT_INCIDENT = {
   hazardAt: 0.55,               // ส่วนของขาไปที่เรือไปถึงจุดอันตราย

@@ -47,15 +47,18 @@ export function pumpReliefAt(s, secId, t) {
   const p = s.pumps?.[secId]
   return p && t >= p.readyAt ? ACT2.pumpReliefM : 0
 }
+/** E: a lost T0 fight breaks the embankment — that zone runs this much deeper from T0 on. */
+export const breachAt = (s, secId, t) => (s.breach && s.breach.zone === secId && t >= s.breach.at ? s.breach.extraM : 0)
 export function depthAt(s, sec, t) {
-  return sectionDepth(sec, levelAt(t), openGapsOf(s, sec.id), pumpReliefAt(s, sec.id, t))
+  return sectionDepth(sec, levelAt(t), openGapsOf(s, sec.id), pumpReliefAt(s, sec.id, t)) + breachAt(s, sec.id, t)
 }
 export function peakDepth(s, sec) {
   return sectionDepth(sec, levelAt(PEAK_T), openGapsOf(s, sec.id), 0)
 }
 /** First minute the zone's streets are wet (≥ 0.3 m), with the current sealing. */
 export function arrivalAt(s, sec) {
-  for (let t = T_START; t <= 36 * 60; t += 10) if (depthAt(s, sec, t) >= WET_M) return t
+  // the act-1 forecast the player decided on — a later breach does not rewrite act-1 verdicts
+  for (let t = T_START; t <= 36 * 60; t += 10) if (sectionDepth(sec, levelAt(t), openGapsOf(s, sec.id), pumpReliefAt(s, sec.id, t)) >= WET_M) return t
   return Infinity
 }
 export const evacNeedMin = (sec) => DURATIONS.evacMobilise + sec.floodHH / DURATIONS.evacHHPerMin
@@ -295,6 +298,8 @@ export function decisionLedger(s, scn) {
     })
 
     for (const b of s.bossLog || []) items.push(item(`boss-${b.turn}`, 1, `คืนวิกฤต ตาที่ ${b.turn}: ${b.moveTh}`, b.verdict, b.why))
+    if (s.boss?.done) items.push(item('boss', 1, 'คืนวิกฤต T0 — แนวตลิ่งรับยอดน้ำ', s.boss.won ? 'good' : 'bad',
+      s.boss.won ? `ตลิ่งรับมวลน้ำไว้ได้${s.boss.fought ? ` ใน ${s.boss.turns} ตา` : ' (จากการเตรียมตัว)'}` : `ตลิ่งแตก — โซน ${s.breach?.zone} น้ำสูงขึ้น ${s.breach?.extraM} ม. ตลอดองก์ 2`))
   }
 
   /* ═════ Act 2 ═════ */

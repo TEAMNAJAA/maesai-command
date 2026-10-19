@@ -21,6 +21,7 @@ import { newSeed } from '../lib/rng'
 import { logger } from '../lib/evalLogger'
 import { makeInitial, advanceTo, enterAct2, enterAct3, log, campOf, destOf } from './world'
 import * as A from './actions'
+import { applyBoss, resolveBoss } from './boss'
 import { fx } from '../lib/fx'
 
 const URLQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
@@ -292,6 +293,17 @@ export function useEngine() {
     fx.emit('action', { kind: 'verdict' })
   }, [commit])
 
+  /* ── T0 crisis night (E) ─────────────────────────────────────────────────── */
+  const finishBoss = useCallback((battle) => {
+    const next = commit((p, sc) => (p.boss?.done ? p : applyBoss(p, sc, battle, { fought: true })))
+    logger.meta({ boss: { won: next.boss.won, fought: true, turns: next.boss.turns } })
+  }, [commit])
+  /** Officer mode / a skipped fight: the result follows from the preparation alone. */
+  const autoBoss = useCallback(() => {
+    const next = commit((p, sc) => resolveBoss(p, sc))
+    logger.meta({ boss: { won: next.boss.won, fought: false, turns: 0 } })
+  }, [commit])
+
   /* ── Flow ───────────────────────────────────────────────────────────────── */
   const goAct2 = useCallback(() => {
     markAct(1)
@@ -359,7 +371,7 @@ export function useEngine() {
 
   return {
     s, scn, mode, sfvi, world, veto1, situation, exposure, cut, advance, skipCut, realMs, realActs: real.current.acts, start, flash, toast,
-    act1Over, act2Over,
+    act1Over, act2Over, finishBoss, autoBoss,
     setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, orderZones, toggleLayer, routeZone, revealHint,
     orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat, requestBoatRoutes, boatRouteStatus, boatRouteVer,
     reviewRoof, survey, adjudicate, lockVerdict, lockAll, revealRelief,

@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react'
 import {
-  Shield, Satellite, Ship, Building2, AlertTriangle, Megaphone, CheckCircle2, XCircle, Clock, Database, Download, Trash2, ArrowRight, GraduationCap, Flag, BookOpen, Trophy, Users, HeartPulse, Fuel, Route, Wallet, Lightbulb,
+  Shield, Satellite, Ship, Building2, AlertTriangle, Megaphone, CheckCircle2, XCircle, Clock, Database, Download, Trash2, ArrowRight, GraduationCap, Flag, BookOpen, Trophy, Users, HeartPulse, Fuel, Route, Wallet, Lightbulb, ShieldCheck, ShieldAlert,
 } from 'lucide-react'
 import { Modal, Btn, Src, SrcLegend } from '../ui/atoms'
 import { QUIZ } from '../config/scenarioData'
@@ -243,6 +243,26 @@ function ActDecisions({ eng, act }) {
 
 /* ── End of act 1 (T−0) ─────────────────────────────────────────────────── */
 
+/** E: what happened on the embankment at T0 (the fight, or — in officer mode — the result of the preparation). */
+function EmbankmentSummary({ s }) {
+  const b = s.boss
+  if (!b?.done) return null
+  const hex = b.won ? '#22E36B' : '#FF6B8A'
+  return (
+    <div className="font-thai mt-2.5 flex items-center gap-3 rounded-lg border px-3 py-2" style={{ borderColor: `${hex}55`, background: `${hex}10` }} data-embankment-summary={b.won ? 'held' : 'breached'}>
+      {b.won ? <ShieldCheck size={22} style={{ color: hex }} /> : <ShieldAlert size={22} style={{ color: hex }} />}
+      <div className="min-w-0 flex-1">
+        <div className="text-[13.5px] font-bold text-white">คืนวิกฤต T0 · {b.won ? 'แนวตลิ่งรับยอดน้ำไว้ได้' : `ตลิ่งแตก — โซน ${s.breach?.zone} น้ำสูงขึ้น ${s.breach?.extraM} ม. ตลอดองก์ 2`}</div>
+        <div className="text-[11.5px] text-slate-400">
+          แรงดันมวลน้ำ {b.hpMax}{b.won ? ' → 0' : ` → เหลือ ${b.hpLeft}`} · ชาวบ้านปลอดภัย {b.villagers}/100
+          {b.fought ? ` · รับมือ ${b.turns} ตา · ใช้งบ ฿${fmt(b.spent)}` : ' · ประเมินจากการเตรียมตัว (อุดฟันหลอ อพยพ แปลภาพ วัด N)'}
+        </div>
+      </div>
+      <Src t="scenario" mini />
+    </div>
+  )
+}
+
 export function Act1SummaryModal({ open, eng, onNext }) {
   if (!open) return null
   const { s, scn, sfvi, exposure } = eng
@@ -278,6 +298,7 @@ export function Act1SummaryModal({ open, eng, onNext }) {
           {wasted.length > 0 && <div className="mt-0.5 text-[12px] font-normal text-[#FFE0A3]">สั่งอพยพโซนที่น้ำไม่ถึง {wasted.map((r) => r.sec.id).join(', ')} — งบเสียเปล่า</div>}
           {s.falseAlarms > 0 && <div className="mt-0.5 text-[12px] font-normal text-[#FFB3C2]">เตือนผิด {s.falseAlarms} ครั้ง — คนไม่เชื่อคำเตือนมากขึ้น</div>}
         </div>
+        <EmbankmentSummary s={s} />
         <div className={`mt-3 grid gap-2 ${eng.mode.tutor ? 'grid-cols-5' : 'grid-cols-4'}`}>
           {stat('ครัวเรือนยังติดอยู่', fmt(exposure.exposed), 'scenario', exposure.exposed ? '#FF6B8A' : '#7CFFA0')}
           {stat('โซนที่สั่ง / ที่น้ำถึง', `${ordered.length} / ${wet.length}`, 'scenario', missedZones.length ? '#FFD066' : '#7CFFA0')}

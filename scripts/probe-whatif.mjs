@@ -23,6 +23,14 @@ await tab('zones')
 for (const z of ['Z1', 'Z3']) await page.locator(`[data-pick="${z}"]`).click()
 await page.locator('[data-evac-order]').click(); await page.locator('[data-confirm]').click(); await idle()
 await page.evaluate(() => window.__maesai.advance({ mode: 'end' })); await idle()
+// E: the T0 fight comes first — play it badly on purpose (no measures) and move on
+await page.waitForSelector('[data-boss], [data-whatif-panel="1"]', { timeout: 60000 })
+for (let i = 0; i < 8 && await page.locator('[data-boss]').count() && !(await page.locator('[data-boss-result]').count()); i++) {
+  await page.waitForFunction(() => document.querySelector('[data-boss]')?.dataset.bossBusy === '0', null, { timeout: 30000 })
+  if (await page.locator('[data-boss-result]').count()) break
+  await page.locator('[data-boss-end]').click()
+}
+if (await page.locator('[data-boss-continue]').count()) await page.locator('[data-boss-continue]').click()
 await page.waitForSelector('[data-whatif-panel="1"]', { timeout: 60000 })
 await page.waitForTimeout(600)
 await page.locator('[data-modal="act1-summary"]').screenshot({ path: join(OUT, 'act1-summary.png') })

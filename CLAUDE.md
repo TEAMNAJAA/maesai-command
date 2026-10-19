@@ -26,6 +26,7 @@ node scripts/probe-whatif.mjs <outDir>   # ภาพ "ถ้าคุณเล�
 node scripts/probe-stress-compare.mjs <outDir>   # หน้าเลือก Stress Test + ผลในเกม · แผงครูเทียบรอบ 1→2 (ข้อมูลสังเคราะห์ในโปรไฟล์เบราว์เซอร์ทดสอบ) · การ์ดพัฒนาการผู้เล่น
 RECORD_PARAMS=stress=all node record-demo.mjs   # smoke test 3 องก์ภายใต้ Stress Test ทุกเงื่อนไข
 node scripts/probe-hints.mjs <outDir>    # ภาพหน้าจอคำใบ้แบบบันไดทั้ง 3 องก์ (ต้องเปิด npm run dev) · exit 2 ถ้าขั้นเกินองก์/ไม่ชี้ข้อมูล
+node scripts/probe-boss.mjs <outDir> [baseUrl]    # คืนวิกฤต T0 (บอส): 1920/1280 · Expert ซ่อนท่าถัดไป · ไม่เตรียมตัว → ตลิ่งแตก (ต้องเปิด npm run dev)
 node scripts/probe-perf.mjs <outDir> [baseUrl]    # โหมดประหยัด: ปุ่มในเมนู · ?perf=lite · reduced-motion · จำลองเครื่องช้า → เปิดเอง (ต้องเปิด npm run dev)
 node scripts/probe-chibi.mjs <outDir> [baseUrl]   # chibi ทุกท่า + ไม่บังปุ่มที่ 1920×1080/1280×720
 node scripts/probe-impact.mjs <outDir>   # ภาพหน้าจอการ์ดผลที่จะเกิด/ⓘ/หน้าต่างยืนยัน ทั้ง 2 โหมด (ต้องเปิด npm run dev ไว้) · exit 2 ถ้ามี error หรือ Space/Esc ผิด
@@ -148,6 +149,15 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 - `src/lib/perf.js` `installPerf()` (main.jsx) · `prefs.perf`: `auto` (ค่าเริ่มต้น) / `off` ภาพเต็ม / `on` ประหยัด · `?perf=lite|full` · auto เปิดเองเมื่อเฟรมเรต < 30 ติดกัน 2 ช่วง × 4 วิ (ไม่วัดเมื่อแท็บซ่อน, ปิดการวัดใน `?rec` เพื่อให้คลิปได้ภาพเต็ม) หรือเครื่องตั้ง prefers-reduced-motion
 - เปิดแล้ว `<html class="perf-lite" data-perf="lite-manual|lite-fps|lite-reduced-motion">` → ซ่อน `.fx-heavy` · ปิดเส้นสแกน CRT, glow ของแม่น้ำ, backdrop blur, แอนิเมชันน้ำไหล/ใบพัด · `Weather` ไม่เรนเดอร์ (ไม่มีฟ้าร้อง) · ไม่สั่นจอ/ตัวเลขไม่วิ่ง — **ข้อมูลและคะแนนเหมือนเดิม** (tests/perf.test.js)
 - เมนู 🔊 มีส่วน "โหมดประหยัด" (`data-perf-section`, `data-pref-perf`) · เปิดเองแล้วขึ้น `PerfNotice` (`data-perf-notice`) 7 วิ · `node scripts/probe-perf.mjs <outDir> [baseUrl]` ตรวจปุ่ม, URL, reduced-motion และจำลองเครื่องช้า (exit 2 ถ้าไม่ผ่าน)
+
+### คืนวิกฤต T0 — บอส "มวลน้ำ" (E + D4, 20 ต.ค.)
+- `src/engine/boss.js` ฟังก์ชันล้วน ผลกำหนดจาก seed + การเตรียมตัวองก์ 1 (`BOSS` ใน missionConfig · ข้อความการ์ด/ท่า `BOSS_CARDS`/`BOSS_MOVES` + ⓘ `WHY.boss*` ใน scenarioData)
+  - มวลน้ำ: แรงดัน = 100 × (1 − 0.45 × สัดส่วนฟันหลอที่อุดเสร็จ) · แรงซัด = 4 + 2 × ฟันหลอที่เปิด · ท่า 4 ตา (`moveSchedule(seed)`: คลื่นซัด → สุ่มลำดับ ทะลักฟันหลอ/ตู้ไฟ/ฝนซ้ำ) · "ดินถล่มอุดลำน้ำแตก" มีเฉพาะเมื่อไม่ได้แปลภาพหรือไม่ได้วัด N · เห็นท่าถัดไปเมื่อ Beginner และ SFVI ≥ 0.62 (Expert ไม่เห็นเลย)
+  - ผู้บัญชาการ: ชาวบ้านปลอดภัย = % ครัวเรือนเสี่ยงที่อพยพทัน (ขั้นต่ำ 15) · พลัง/ตา = 1 + ทีมว่าง (≤ 4) · งบจริง · ความเชื่อมั่นจริง (คูณผลการ์ดอพยพ) · การ์ด 7 ใบ: ประสานจากฐาน (ฐานต้องพ้นน้ำ) บิ๊กแบ็ก เครื่องสูบ ตัดไฟ ประกาศอพยพ เรือเตรียมพร้อม ภาพ THEOS-2 (`cardBlock` บอกเหตุผลที่ใช้ไม่ได้)
+  - ผู้บัญชาการลงมือก่อน (ระบายจนหมด = น้ำไม่ได้ซัดตานั้น) · ชนะ = แรงดัน 0 ใน 4 ตา · แพ้ = ตลิ่งแตก `s.breach` โซนเสี่ยงที่สุด +0.4 ม. ตั้งแต่ T0 (`breachAt` ใน `depthAt` — **ไม่แก้คำตัดสินองก์ 1 ย้อนหลัง**: `arrivalAt` ไม่นับ breach) → ผู้ติดค้างองก์ 2 มากขึ้น เกมเล่นต่อได้
+  - ทุกตา = 1 รายการใน decisionLedger (`s.bossLog`) + รายการผล `boss` (ดี/ผิด) · `bossBest` (ค้นทุกชุดการ์ดที่ใช้ได้) ใช้กับโหมดเจ้าหน้าที่/ข้ามฉาก/บอท · `enterAct2` เรียก `resolveBoss` ถ้ายังไม่ได้สู้ (ไม่มีรายการรายตา)
+- `src/modals/BossBattle.jsx` (`data-boss`, `data-boss-card`, `data-boss-end`, `data-boss-busy`, `data-boss-intent`, `data-boss-result`, `data-boss-continue`) เปิดเมื่อ T0 ก่อนสรุปองก์ 1 · มวลน้ำเป็นคลื่นยักษ์ม้วนตัว ไม่มีหน้า (เคารพผู้ประสบภัย) · D4: แสงแดงเรือง ฝนหนัก ฟ้าแลบถี่ + ฟ้าร้อง เพลงระดับ 3 chibi จริงจัง · Enter = จบตา · `window.__maesai.bossBest()` (?rec) ให้บอท · สรุปองก์ 1 มี `EmbankmentSummary` (`data-embankment-summary=held|breached`) · CSV `boss_won/boss_fought/boss_turns`
+- `node scripts/probe-boss.mjs <outDir> [baseUrl]` ภาพทุกช่วงที่ 1920/1280 + Expert ซ่อนท่า + ไม่เตรียมตัว → ตลิ่งแตก → องก์ 2 มี breach · tests/boss.test.js
 
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)

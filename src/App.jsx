@@ -41,6 +41,7 @@ import { ChibiCreator } from './modals/chibiCreator'
 import { Floaters, useJuice, useShake } from './ui/juice'
 import { fx } from './lib/fx'
 import { PerfNotice } from './ui/settings'
+import { BossBattle } from './modals/BossBattle'
 import { THRESHOLDS } from './config/missionConfig'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
@@ -131,7 +132,8 @@ export default function App() {
   }, [s.act])
 
   /* keyboard: Space = advance to the next event · Ctrl+Shift+L teacher log */
-  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen || creator)
+  const bossOn = phase === 'play' && eng.act1Over && !s.boss?.done          // E: the crisis night at T0, before the act-1 summary
+  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen || creator || bossOn)
   useEffect(() => {
     const h = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
@@ -246,7 +248,8 @@ export default function App() {
         <QuizModal open={postOpen} kind="post" preScore={preScore} onDone={finishPost} onSkip={() => setPostOpen(false)} />
         <VetoAlert open={playing && eng.veto1 && s.act === 1 && !s.vetoAck && !eng.act1Over} eng={eng} onAck={eng.ackVeto} onDecide={() => go({ tab: 'zones', view: 'urban', left: 'zones' })} />
         <WaitCompareModal data={wait} onClose={() => setWait(null)} onEvacuate={() => { setWait(null); go({ tab: 'zones' }) }} />
-        <Act1SummaryModal open={playing && eng.act1Over} eng={eng} onNext={eng.goAct2} />
+        {bossOn && <BossBattle eng={eng} player={player} onFinish={eng.finishBoss} />}
+        <Act1SummaryModal open={playing && eng.act1Over && !!s.boss?.done} eng={eng} onNext={eng.goAct2} />
         <Act2SummaryModal open={playing && eng.act2Over} eng={eng} onNext={eng.goAct3} />
         {analyze && <ImageAnalysisModal eng={eng} imageId={analyze} onClose={() => setAnalyze(null)} />}
         {channel && <ChannelModal eng={eng} onClose={() => setChannel(false)} />}

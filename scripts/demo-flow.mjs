@@ -74,7 +74,7 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
   /* ══════════ ACT I ══════════ */
   mark('ACT I · watch')
   for (let guard = 0; guard < 2000; guard++) {
-    if (await has('[data-modal="act1-summary"]')) break
+    if (await has('[data-modal="act1-summary"]') || await has('[data-boss]')) break
     if (await has('[data-modal="veto"]')) {
       await say('Veto 1', 'ระดับน้ำถึง 4.20 ม. — กฎ Veto 1 บังคับให้ตัดสินใจทันที (ทีมสั่งอพยพโซนเสี่ยงไว้แล้ว)')
       await click(page, page.locator('[data-modal="veto"] button', { hasText: 'รับทราบ' }), { hold: ms(900), after: ms(600) })
@@ -168,6 +168,27 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       continue
     }
     if (!(await advance('[data-advance="end"]', 'สั่งการครบแล้ว — ข้ามไป T−0'))) await advance('[data-advance="next"]')
+  }
+  /* E: the crisis night at T0 — answer each move of the water with real measures */
+  await page.waitForSelector('[data-boss], [data-modal="act1-summary"]', { timeout: 30000 })
+  if (await has('[data-boss]')) {
+    const CARD = { base: 'ประสานจากฐาน', bigbag: 'บิ๊กแบ็ก', pump: 'เครื่องสูบน้ำ', power: 'ตัดไฟ', evac: 'ประกาศอพยพ', boat: 'เรือเตรียมพร้อม', theos: 'ภาพ THEOS-2' }
+    mark('T0 · crisis night')
+    await say('คืนวิกฤต', 'ยอดน้ำเข้าเมือง — มวลน้ำมาถึง · ค่าพลังทั้งหมดมาจากสิ่งที่เตรียมในองก์ 1')
+    for (let turn = 0; turn < 8; turn++) {
+      await page.waitForFunction(() => { const b = document.querySelector('[data-boss]'); return !b || b.dataset.bossBusy === '0' }, null, { timeout: 30000 })
+      if (await has('[data-boss-result]') || !(await has('[data-boss]'))) break
+      const picks = await page.evaluate(() => window.__maesai.bossBest?.() || [])
+      const seen = await page.locator('[data-boss-intent]').getAttribute('data-boss-intent').catch(() => null)
+      await say('คืนวิกฤต', `ตา ${turn + 1}${seen && seen !== 'hidden' ? ' · เห็นท่าถัดไปเพราะหลักฐานพอ' : ''}: ${picks.length ? picks.map((x) => CARD[x]).join(' + ') : 'ไม่ต้องใช้การ์ด'}`)
+      for (const id of picks) await click(page, page.locator(`[data-boss-card="${id}"]`), { hold: ms(300), after: ms(250) })
+      await click(page, page.locator('[data-boss-end]'), { hold: ms(400), after: ms(400) })
+    }
+    await page.waitForSelector('[data-boss-result]', { timeout: 30000 })
+    const res = await page.locator('[data-boss-result]').getAttribute('data-boss-result')
+    await say('คืนวิกฤต', res === 'won' ? 'แนวตลิ่งรับมวลน้ำไว้ได้ — ผลจากการอุดฟันหลอ อพยพทัน และหลักฐานจากภาพดาวเทียม' : 'ตลิ่งแตก — โซนเสี่ยงที่สุดน้ำสูงขึ้นในองก์ 2')
+    await wait(ms(2200))
+    await click(page, page.locator('[data-boss-continue]'), { hold: ms(500), after: ms(900) })
   }
   await say('สรุปองก์ 1', 'มวลน้ำถึงตัวเมือง — สรุปผลองก์ 1')
   await wait(ms(3500))

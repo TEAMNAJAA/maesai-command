@@ -106,6 +106,22 @@ body {
 /* game feel (C1) */
 @keyframes floatUp    { 0% { transform: translate(-50%, -30%) scale(.6); opacity: 0 } 12% { transform: translate(-50%, -70%) scale(1.15); opacity: 1 } 24% { transform: translate(-50%, -85%) scale(1) } 72% { opacity: 1 } 100% { transform: translate(-50%, -280%) scale(1); opacity: 0 } }
 .float-num { animation: floatUp 1.75s cubic-bezier(.2,.7,.3,1) forwards; will-change: transform, opacity }
+/* boss — crisis night (E/D4): an imposing faceless wall of water */
+@keyframes bossSwell  { 0%,100% { transform: translateY(0) scaleY(1) } 50% { transform: translateY(-8px) scaleY(1.03) } }
+@keyframes bossFoam   { to { stroke-dashoffset: -100 } }
+@keyframes bossStreak { 0% { opacity: 0; transform: translateX(14px) } 40% { opacity: .9 } 100% { opacity: 0; transform: translateX(-26px) } }
+@keyframes bossDebris { 0%,100% { transform: translate(0, 0) rotate(0) } 50% { transform: translate(-10px, 6px) rotate(-3deg) } }
+@keyframes bossSpray  { 0%,100% { opacity: .15; transform: translateY(0) } 50% { opacity: .4; transform: translateY(-10px) } }
+@keyframes bossHit    { 0% { opacity: .55 } 100% { opacity: 0 } }
+@keyframes redGlow    { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+.boss-swell  { animation: bossSwell 3.2s ease-in-out infinite }
+.boss-foam   { animation: bossFoam 2.2s linear infinite }
+.boss-streak { animation: bossStreak 1.6s ease-in-out infinite }
+.boss-debris { animation: bossDebris 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center }
+.boss-spray  { animation: bossSpray 2.6s ease-in-out infinite }
+.boss-hitflash { animation: bossHit .5s ease-out forwards }
+.boss-redglow { background: radial-gradient(70% 55% at 75% 85%, rgba(255,24,64,.28), transparent 70%), radial-gradient(60% 50% at 10% 100%, rgba(255,24,64,.16), transparent 70%); animation: redGlow 2.8s ease-in-out infinite }
+.perf-lite .boss-swell, .perf-lite .boss-streak, .perf-lite .boss-debris, .perf-lite .boss-spray, .perf-lite .boss-redglow { animation: none !important }
 @keyframes stampIn    { 0% { transform: scale(2.6) rotate(-18deg); opacity: 0 } 60% { opacity: 1 } 100% { transform: scale(1) rotate(-8deg); opacity: 1 } }
 
 /* hint ladder, rung 2 "ชี้ที่ข้อมูล": a ring around the data to read */
