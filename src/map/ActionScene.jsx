@@ -8,7 +8,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Ship, Plane, Zap, Waves, HeartPulse, LifeBuoy, MousePointerClick, BookOpen } from 'lucide-react'
+import { Ship, Plane, Zap, Waves, HeartPulse, LifeBuoy, MousePointerClick, BookOpen, Monitor } from 'lucide-react'
 import { Chibi } from '../ui/chibi'
 import { useProfile } from '../lib/profile'
 import { prefs } from '../lib/prefs'
@@ -18,7 +18,8 @@ import { BOAT_INCIDENT, DURATIONS } from '../config/missionConfig'
 import { SECTION_BY_ID } from '../lib/sections'
 import { BUILDINGS } from '../lib/buildings'
 import { alongRoute } from '../lib/routes'
-import { osmRoads, saiRiver } from '../lib/geo'
+import { osmRoads, saiRiver, makeProjection, boxKm, tilesFor } from '../lib/geo'
+import { sphereReady, sphereTileTemplate } from '../lib/sphere'
 
 const SPEED = typeof window !== 'undefined' ? Math.max(0.2, Number(new URLSearchParams(window.location.search).get('speed')) || 1) : 1
 const W = 720, H = 360
@@ -53,7 +54,8 @@ function useProgress(dur, key) {
   const [p, setP] = useState(0)
   useEffect(() => {
     let raf, t0 = performance.now()
-    const tick = (t) => { const k = Math.min(1, (t - t0) / dur); setP(k); if (k < 1) raf = requestAnimationFrame(tick) }
+    // a frame timestamp can be a hair earlier than t0 — never let progress go negative
+    const tick = (t) => { const k = Math.max(0, Math.min(1, (t - t0) / dur)); setP(k); if (k < 1) raf = requestAnimationFrame(tick) }
     raf = requestAnimationFrame(tick)
     // no frames in a page that is not being drawn — the scene still ends on time
     const done = setTimeout(() => { cancelAnimationFrame(raf); setP(1) }, dur + 400)
@@ -355,6 +357,71 @@ function DroneScene({ ev, officer, onDone }) {
   )
 }
 
+/** B11: the EOC control room — the commander pulls the roof up on the big screen. Footprints only: the result is for the player to read. */
+function ControlRoom({ ev, onDone }) {
+  const p = useProgress(2800 / SPEED, ev.id)
+  useEffect(() => { if (p >= 1) onDone() }, [p >= 1]) // eslint-disable-line react-hooks/exhaustive-deps
+  const scr = { x: 150, y: 54, w: 420, h: 236 }
+  // the same ~260 m view act 3 uses: the real Sphere image when online, GISTDA footprints either way
+  const view = useMemo(() => {
+    const proj = makeProjection(boxKm(ev.c[0], ev.c[1], 0.26, 0.26 * (scr.h / scr.w)), scr.w, scr.h, 0)
+    const ring = (r) => r.map((q, i) => `${i ? 'L' : 'M'}${proj.pt(q).map((v) => v.toFixed(1)).join(' ')}`).join('') + 'Z'
+    const [w0, s0, e0, n0] = proj.bbox
+    let near = ''
+    for (const x of BUILDINGS) if (x.c[0] > w0 && x.c[0] < e0 && x.c[1] > s0 && x.c[1] < n0) near += ring(x.ring)
+    return { tiles: sphereReady() ? tilesFor(proj, sphereTileTemplate(), 16, 0, 18) : [], near, target: ring(ev.ring) }
+  }, [ev.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const wipe = Math.min(1, Math.max(0, (p - 0.35) / 0.5))
+  return (
+    <div className="flex">
+      <div className="relative overflow-hidden" style={{ width: W, height: H }}>
+        <svg width={W} height={H} className="absolute inset-0">
+          <defs>
+            <linearGradient id="cr-room" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#07101f" /><stop offset="1" stopColor="#0b1a2e" /></linearGradient>
+            <clipPath id="cr-big"><rect x={scr.x} y={scr.y} width={scr.w} height={scr.h} rx="6" /></clipPath>
+          </defs>
+          <rect width={W} height={H} fill="url(#cr-room)" />
+          {/* the monitor wall */}
+          {[0, 1, 2, 3].map((i) => [0, 1].map((j) => {
+            const x = i < 2 ? 14 + i * 64 : W - 142 + (i - 2) * 64, y = 40 + j * 74
+            const lab = ['RADARSAT-2', 'SFVI', 'Sphere', 'AWAGAD', 'L3 Ortho', 'GISTDA', 'ปภ.', '14 วัน'][i * 2 + j]
+            return (
+              <g key={`${i}${j}`}>
+                <rect x={x} y={y} width="56" height="62" rx="4" fill="#0c2236" stroke="#1e3a5f" />
+                {[0, 1, 2, 3].map((k) => <rect key={k} x={x + 6} y={y + 10 + k * 9} width={20 + ((i * 7 + j * 5 + k * 11) % 26)} height="4" fill={k % 2 ? '#38BDF8' : '#22E36B'} opacity={0.25 + ((Math.floor(p * 12) + k + i) % 3) * 0.2} />)}
+                <text x={x + 28} y={y + 56} textAnchor="middle" fontSize="7.5" fill="#94a3b8" className="font-mono">{lab}</text>
+              </g>
+            )
+          }))}
+          {/* the big screen: before | after footprints with a wipe — no mud drawn here */}
+          <rect x={scr.x - 6} y={scr.y - 6} width={scr.w + 12} height={scr.h + 12} rx="10" fill="#0a1a2c" stroke="#38bdf8" strokeOpacity="0.5" />
+          <g clipPath="url(#cr-big)">
+            <rect x={scr.x} y={scr.y} width={scr.w} height={scr.h} fill="#123024" />
+            {Array.from({ length: 12 }, (_, i) => <line key={`v${i}`} x1={scr.x + (i + 1) * scr.w / 13} y1={scr.y} x2={scr.x + (i + 1) * scr.w / 13} y2={scr.y + scr.h} stroke="#38bdf8" strokeOpacity="0.07" />)}
+            {Array.from({ length: 7 }, (_, i) => <line key={`h${i}`} x1={scr.x} y1={scr.y + (i + 1) * scr.h / 8} x2={scr.x + scr.w} y2={scr.y + (i + 1) * scr.h / 8} stroke="#38bdf8" strokeOpacity="0.07" />)}
+            <g transform={`translate(${scr.x} ${scr.y})`}>
+              {view.tiles.map((t) => <image key={t.key} href={t.href} x={t.x} y={t.y} width={t.w + 0.6} height={t.h + 0.6} preserveAspectRatio="none" />)}
+              <path d={view.near} fill={view.tiles.length ? 'none' : '#7b8b7e'} fillOpacity="0.75" stroke="#e2e8f0" strokeOpacity={view.tiles.length ? 0.35 : 0.25} strokeWidth="0.6" />
+              {/* "after": a general post-flood grade only — whether this house has mud is for the player to read in act 3 */}
+              <rect x={scr.w * wipe} y="0" width={scr.w * (1 - wipe)} height={scr.h} fill="#6b5536" opacity="0.38" style={{ mixBlendMode: 'multiply' }} />
+              <path d={view.target} fill="#FFD066" fillOpacity="0.2" stroke="#FFD066" strokeWidth="2" strokeDasharray="5 3" />
+            </g>
+            <line x1={scr.x + scr.w * wipe} y1={scr.y} x2={scr.x + scr.w * wipe} y2={scr.y + scr.h} stroke="#38BDF8" strokeWidth="2" />
+            <text x={scr.x + 10} y={scr.y + 18} fontSize="11" fontWeight="700" fill="#e0f2fe" className="font-thai">ก่อน · Sphere</text>
+            <text x={scr.x + scr.w - 10} y={scr.y + 18} textAnchor="end" fontSize="11" fontWeight="700" fill="#e0f2fe" className="font-thai">หลัง · THEOS-2 L3</text>
+            <rect x={scr.x + 10} y={scr.y + scr.h - 22} width={(scr.w - 20) * Math.min(1, p / 0.8)} height="5" rx="2" fill="#22E36B" opacity="0.8" />
+            <text x={scr.x + 10} y={scr.y + scr.h - 28} fontSize="10" fill="#bbf7d0" className="font-thai">{p < 0.35 ? 'ดาวน์โหลดภาพ L3 Ortho…' : p < 0.85 ? 'ซ้อนภาพก่อน/หลังน้ำ…' : 'พร้อมตรวจหลักฐาน'}</text>
+          </g>
+          {/* the desk */}
+          <path d={`M0 ${H - 46} L${W} ${H - 46} L${W} ${H} L0 ${H} Z`} fill="#0e2033" />
+          {Array.from({ length: 18 }, (_, i) => <circle key={i} cx={40 + i * 36} cy={H - 24} r="2.6" fill={['#22E36B', '#FFD066', '#38BDF8'][i % 3]} opacity={(Math.floor(p * 10 + i) % 4) ? 0.9 : 0.2} />)}
+        </svg>
+      </div>
+      <SceneAside pose="monitor" say={p < 0.5 ? `เปิดภาพหลังคา ${ev.roof} บนจอใหญ่` : 'ดูโคลนรอบบ้าน + นับวันท่วมขังจากเรดาร์'} />
+    </div>
+  )
+}
+
 const KNOW = {
   shock: { icon: Zap, hex: '#FDE047', title: 'น้ำท่วมที่มีไฟรั่ว อันตรายถึงชีวิต', body: 'กระแสไฟจากสายไฟ/ตู้ไฟที่จมน้ำแผ่ไปทั้งผืนน้ำ เรือและผู้ที่สัมผัสน้ำได้รับอันตรายถึงชีวิต — ต้องประสาน กฟภ. ตัดไฟในโซนก่อนส่งเรือหรือทีมเข้าพื้นที่ทุกครั้ง หรือเลือกเส้นทางที่ไม่ผ่านโซนนั้น', source: 'แนวปฏิบัติความปลอดภัยไฟฟ้าช่วงอุทกภัย (กฟภ. / ปภ.)' },
   capsize: { icon: Waves, hex: '#7DD3FC', title: 'กระแสน้ำเชี่ยว พลิกเรือขนาดเล็กได้', body: 'ริมแม่น้ำและโซนที่น้ำลึกเกิน 1.6 ม. มีกระแสแรงกว่าที่เห็นจากด้านบน เรือท้องแบนบรรทุกคนเสี่ยงล่ม — ดูความลึกจากเรดาร์ (เช็คน้ำ) ก่อนเลือกเส้นทาง หรือสูบน้ำให้ระดับลดก่อน', source: 'ข้อมูลความลึกน้ำจากเรดาร์ RADARSAT-2 (GISTDA)' },
@@ -391,6 +458,7 @@ export function ActionScenes() {
     const officer = prefs.get().officer
     if (officer && ev.kind === 'drone') return                        // officer mode: no show, just the log
     if (officer && ev.kind === 'boat' && ev.outcome === 'ok') return
+    if (officer && ev.kind === 'control') return
     setQueue((q) => [...q, { ...ev, id: `${Date.now()}-${Math.random()}` }])
   }), [])
   const ev = queue[0]
@@ -432,6 +500,20 @@ export function ActionScenes() {
     return (
       <div className="fixed inset-0 z-[86] grid place-items-center bg-black/55" data-action-scene="knowledge" onClick={() => setCard(null)}>
         <KnowledgeCard kind={card} onClose={() => setCard(null)} />
+      </div>
+    )
+  }
+  if (ev.kind === 'control') {
+    return (
+      <div className="fixed inset-0 z-[76] grid cursor-pointer place-items-center bg-black/55" data-action-scene="control" onClick={done} title="คลิกเพื่อข้าม">
+        <div className="overflow-hidden rounded-xl border border-sky-400/45 bg-[#040a14] shadow-[0_0_80px_-12px_rgba(56,189,248,.75)]" style={{ transform: `scale(${fitScale})` }}>
+          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2">
+            <Monitor size={15} className="text-sky-300" />
+            <span className="font-thai text-[13px] font-bold text-white">ศูนย์ควบคุม EOC · เปิดภาพหลังคา {ev.roof}</span>
+            <span className="font-thai ml-auto flex items-center gap-1 text-[11px] text-slate-400"><MousePointerClick size={12} />คลิกเพื่อข้าม</span>
+          </div>
+          <ControlRoom ev={ev} onDone={done} />
+        </div>
       </div>
     )
   }

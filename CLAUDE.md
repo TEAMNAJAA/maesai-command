@@ -26,6 +26,7 @@ node scripts/probe-whatif.mjs <outDir>   # ภาพ "ถ้าคุณเล�
 node scripts/probe-stress-compare.mjs <outDir>   # หน้าเลือก Stress Test + ผลในเกม · แผงครูเทียบรอบ 1→2 (ข้อมูลสังเคราะห์ในโปรไฟล์เบราว์เซอร์ทดสอบ) · การ์ดพัฒนาการผู้เล่น
 RECORD_PARAMS=stress=all node record-demo.mjs   # smoke test 3 องก์ภายใต้ Stress Test ทุกเงื่อนไข
 node scripts/probe-hints.mjs <outDir>    # ภาพหน้าจอคำใบ้แบบบันไดทั้ง 3 องก์ (ต้องเปิด npm run dev) · exit 2 ถ้าขั้นเกินองก์/ไม่ชี้ข้อมูล
+node scripts/probe-relief.mjs <outDir> [baseUrl]  # องก์ 3: ฉากศูนย์ควบคุม + ภาพหลังคาทุกหลัง (โคลนชัด/ลานสะอาด) (ต้องเปิด npm run dev)
 node scripts/probe-officer.mjs <outDir> [baseUrl] # โหมดฝึกเจ้าหน้าที่: ปุ่ม/เมนู/?officer · ไม่มี chibi/บอส · สรุปตลิ่งจากการเตรียมตัว (ต้องเปิด npm run dev)
 node scripts/probe-boss.mjs <outDir> [baseUrl]    # คืนวิกฤต T0 (บอส): 1920/1280 · Expert ซ่อนท่าถัดไป · ไม่เตรียมตัว → ตลิ่งแตก (ต้องเปิด npm run dev)
 node scripts/probe-perf.mjs <outDir> [baseUrl]    # โหมดประหยัด: ปุ่มในเมนู · ?perf=lite · reduced-motion · จำลองเครื่องช้า → เปิดเอง (ต้องเปิด npm run dev)
@@ -177,6 +178,11 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 ### เกรด S/A/B/C ท้ายองก์ (C4, 20 ต.ค.)
 - `actGrade(s, scn, act)` (sim.js) จากรายการตัดสินใจขององก์นั้นใน decisionLedger: สัดส่วนดี (+พอใช้ ×0.5) และจำนวนผิดร้ายแรง → `ACT_GRADES` ใน missionConfig (S ≥ 90% ☠️0 · A ≥ 75% ☠️0 · B ≥ 60% ☠️≤1 · C) · null จนกว่าองก์จะจบ
 - `src/ui/gradeStamp.jsx` `GradeStamp` ตราประทับกระแทก (`stampIn`) + เสียง `stamp` + สั่นเบา · หัวสรุปองก์ 1/2 และแถว 3 องก์ในหน้าสรุปภารกิจ (`data-grade`, `data-grade-act`, `data-act-grades`) · CSV `act_grades` เช่น "SAB" · tests/grade.test.js
+
+### ศูนย์ควบคุม + โคลนชัด (B11, 20 ต.ค.)
+- เข้าองก์ 3 (หลังคาแรกเปิดอัตโนมัติ) → ฉากศูนย์ควบคุม EOC (`ControlRoom` ใน ActionScene.jsx, `data-action-scene="control"`, `sceneOf('review')` เฉพาะหลังคาแรก) — chibi ใส่แว่นหน้าจอ ผนังจอข้อมูล และจอใหญ่แสดงภาพ Sphere จริงของพื้นที่ + กรอบหลังคา + เส้นปาดก่อน/หลัง (ฝั่ง "หลัง" ปรับโทนทั่วไปเท่านั้น **ไม่วาดโคลน** — ให้ผู้เล่นอ่านหลักฐานเอง) · คลิกข้าม · โหมดเจ้าหน้าที่ไม่แสดง
+- ภาพ "หลัง" ใน RoofScene: โคลนเฉพาะ `mudLevel ≥ RELIEF.mudVisibleLevel` (0.4 = บ้านที่มีโคลนจริงทุกหลัง) → ตะกอนน้ำตาลหนาราว 30 ม. รอบบ้าน + รอยไหล + คราบน้ำบนผนัง (เส้นเข้มรอบหลังคา) + แอ่งน้ำขัง + เศษขยะ (`MudDetail`, `data-mud-detail`) · บ้านที่ไม่มีโคลน: ลานบ้านสะอาด (ตัดตะกอนทั่วย่าน + แอ่งน้ำรอบบ้านออก) · filter `blob` ใช้ userSpaceOnUse (เดิมถูกตัดเป็นสี่เหลี่ยมเล็ก)
+- `node scripts/probe-relief.mjs <outDir> [baseUrl]` ฉากศูนย์ควบคุม + ภาพทุกหลัง ตรวจว่ามีโคลน ⇔ `r.mud` · tests/mud.test.js
 
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)

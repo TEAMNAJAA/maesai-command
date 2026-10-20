@@ -118,7 +118,7 @@ export function Tween({ value, format = (v) => v, ms = 650 }) {
     const a = cur.current, t0 = performance.now()
     let raf
     const tick = (t) => {
-      const k = Math.min(1, (t - t0) / ms), e = 1 - (1 - k) ** 3
+      const k = Math.max(0, Math.min(1, (t - t0) / ms)), e = 1 - (1 - k) ** 3
       cur.current = a + (value - a) * e
       setShown(cur.current)
       if (k < 1) raf = requestAnimationFrame(tick)

@@ -31,7 +31,11 @@ const REC = URLQ.has('rec')                                         // recorder 
 const URL_STRESS = parseStress(URLQ.get('stress'))                  // ?stress=data,roads,time | all — Stress Test from a link
 
 /** B7: the short scene that goes with a boat or drone order. The outcome comes from the engine — the scene only shows it. */
-export function sceneOf(kind, before, after) {
+export function sceneOf(kind, before, after, scn = null) {
+  if (kind === 'review' && (before.reviewed || []).length === 0 && (after.reviewed || []).length === 1) {
+    const roof = scn?.roofs?.find((r) => r.id === after.reviewed[0])
+    return roof ? { kind: 'control', roof: roof.id, ring: roof.ring, c: roof.c } : null
+  }
   if (kind === 'boat') {
     const inc = (after.incidents || []).length > (before.incidents || []).length ? after.incidents[after.incidents.length - 1] : null
     if (inc) return { kind: 'boat', outcome: inc.kind, boat: inc.boat, point: inc.point, coords: inc.coords, splitAt: inc.splitAt }
@@ -184,7 +188,7 @@ export function useEngine() {
     const after = commit((p, sc) => fn(p, sc, ...args))
     if (kind && after !== before) {
       fx.emit('action', { kind })                                             // chibi pose, sounds, effects
-      const scene = sceneOf(kind, before, after)
+      const scene = sceneOf(kind, before, after, scnRef.current)
       if (scene) fx.emit('scene', scene)                                      // B7: boat / drone scene (ActionScene.jsx)
     }
     return after

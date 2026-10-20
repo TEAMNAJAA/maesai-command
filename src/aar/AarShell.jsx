@@ -88,10 +88,13 @@ function useRoofView(roof) {
  */
 const RoofScene = React.memo(function RoofScene({ roof, after, view, pan }) {
   const id = `r${roof.fid}${after ? 'a' : 'b'}`
-  const mud = after ? roof.mudLevel : 0
+  // B11: a house with mud must read as muddy at a glance; one without must be truly clean (no faint traces)
+  const dirty = after && roof.mudLevel >= RELIEF.mudVisibleLevel
+  const clean = after && !dirty
+  const mud = dirty ? roof.mudLevel : 0
   const wet = after ? Math.min(1, roof.days / 12) : 0
   const wash = 0.1 + 0.16 * wet                                 // neighbourhood silt, same for every house in the area
-  const halo = (5 + mud * 12) * view.upm                        // deposit around the compound (m → svg units)
+  const halo = (12 + mud * 22) * view.upm                       // deposit around the compound and the lane in front (m → svg units)
   const tone = pan ? 'grayscale(1) contrast(1.15) brightness(1.05)' : undefined
   const roofsD = view.neighbours + view.target
   return (
@@ -101,7 +104,7 @@ const RoofScene = React.memo(function RoofScene({ roof, after, view, pan }) {
           {/* soaked ground reads flatter and warmer than the dry-season basemap */}
           <feColorMatrix type="matrix" values={`${0.78 - 0.08 * wet} 0.16 0.04 0 0.01  0.1 ${0.76 - 0.08 * wet} 0.06 0 0  0.06 0.12 ${0.62 - 0.06 * wet} 0 -0.01  0 0 0 1 0`} />
         </filter>
-        <filter id={`${id}-blob`} x="-20%" y="-20%" width="140%" height="140%">
+        <filter id={`${id}-blob`} filterUnits="userSpaceOnUse" x="0" y="0" width="640" height="360">
           <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="3" seed={view.seed} result="n" />
           <feDisplacementMap in="SourceGraphic" in2="n" scale={22 + mud * 18} xChannelSelector="R" yChannelSelector="G" result="d" />
           <feGaussianBlur in="d" stdDeviation="2.2" />
@@ -118,13 +121,20 @@ const RoofScene = React.memo(function RoofScene({ roof, after, view, pan }) {
         <filter id={`${id}-soft`}><feGaussianBlur stdDeviation="1.6" /></filter>
         <mask id={`${id}-ground`} maskUnits="userSpaceOnUse" x="0" y="0" width="640" height="360">
           <rect width="640" height="360" fill="#fff" opacity={wash} />
-          {mud > 0.05 && <path d={view.target} fill="#fff" stroke="#fff" strokeWidth={halo * 2} strokeLinejoin="round" opacity={0.35 + mud * 0.65} filter={`url(#${id}-blob)`} />}
+          {dirty && <path d={view.target} fill="#fff" stroke="#fff" strokeWidth={halo * 2} strokeLinejoin="round" opacity={0.55 + mud * 0.45} filter={`url(#${id}-blob)`} />}
+          {clean && <path d={view.target} fill="#000" stroke="#000" strokeWidth={14 * view.upm * 2} strokeLinejoin="round" filter={`url(#${id}-blob)`} />}
           <path d={roofsD} fill="#000" filter={`url(#${id}-soft)`} />
+        </mask>
+        {/* the deposit itself (for the flow marks, puddles and debris that only sit on the mud) */}
+        <mask id={`${id}-dep`} maskUnits="userSpaceOnUse" x="0" y="0" width="640" height="360">
+          {dirty && <path d={view.target} fill="#fff" stroke="#fff" strokeWidth={halo * 2} strokeLinejoin="round" filter={`url(#${id}-blob)`} />}
+          <path d={roofsD} fill="#000" />
         </mask>
         <mask id={`${id}-water`} maskUnits="userSpaceOnUse" x="0" y="0" width="640" height="360">
           {Array.from({ length: 5 }, (_, i) => (
             <ellipse key={i} cx={(view.seed * 37 + i * 131) % 640} cy={(view.seed * 53 + i * 79) % 360} rx={28 + ((i * 29) % 36)} ry={14 + ((i * 17) % 16)} fill="#fff" filter={`url(#${id}-pool)`} />
           ))}
+          {clean && <path d={view.target} fill="#000" stroke="#000" strokeWidth={14 * view.upm * 2} strokeLinejoin="round" />}
           <path d={roofsD} fill="#000" filter={`url(#${id}-soft)`} />
         </mask>
         <filter id={`${id}-cloud`} x="-30%" y="-30%" width="160%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="4" seed={view.seed + 3} /><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 -1.4 1.25" /></filter>
@@ -138,10 +148,11 @@ const RoofScene = React.memo(function RoofScene({ roof, after, view, pan }) {
       {!view.tiles.length && <path d={view.neighbours} fill={after ? '#8a7a62' : '#9a5a45'} opacity="0.85" />}
       {after && (
         <g mask={`url(#${id}-ground)`}>
-          <rect width="640" height="360" fill="#9c7f58" opacity="0.62" />
-          <rect width="640" height="360" filter={`url(#${id}-silt)`} opacity="0.45" />
+          <rect width="640" height="360" fill={dirty ? '#7a5530' : '#9c7f58'} opacity={dirty ? 0.86 : 0.62} />
+          <rect width="640" height="360" filter={`url(#${id}-silt)`} opacity={dirty ? 0.55 : 0.45} />
         </g>
       )}
+      {dirty && <MudDetail id={id} view={view} mud={mud} halo={halo} />}
       {after && wet > 0.75 && (
         <g mask={`url(#${id}-water)`} opacity={0.25 + wet * 0.3}>
           <rect width="640" height="360" fill="#3d4b45" />
@@ -153,6 +164,43 @@ const RoofScene = React.memo(function RoofScene({ roof, after, view, pan }) {
     </svg>
   )
 })
+
+/** B11: what thick flood mud looks like from above — flow marks, a stain line on the walls, puddles, debris. */
+function MudDetail({ id, view, mud, halo }) {
+  const [cx, cy] = view.centre
+  const r = (k) => { const x = Math.sin(view.seed * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x) }
+  const ang = r(1) * Math.PI
+  const reach = halo + 18 * view.upm
+  const streaks = Array.from({ length: 16 }, (_, i) => {
+    const off = (i - 7.5) * (reach / 7)
+    const x0 = cx - Math.cos(ang) * reach + Math.sin(ang) * off, y0 = cy - Math.sin(ang) * reach - Math.cos(ang) * off
+    const x1 = cx + Math.cos(ang) * reach + Math.sin(ang) * off, y1 = cy + Math.sin(ang) * reach - Math.cos(ang) * off
+    const bend = (r(i + 5) - 0.5) * 18
+    return `M${x0.toFixed(1)} ${y0.toFixed(1)} Q ${((x0 + x1) / 2 + bend).toFixed(1)} ${((y0 + y1) / 2 - bend).toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`
+  })
+  const around = (k, d) => { const a = r(k) * Math.PI * 2, dd = d * (0.55 + r(k + 40) * 0.45); return [cx + Math.cos(a) * dd, cy + Math.sin(a) * dd] }
+  return (
+    <g data-mud-detail>
+      <g mask={`url(#${id}-dep)`}>
+        {streaks.map((d, i) => <path key={i} d={d} fill="none" stroke={i % 3 ? '#5b3c1d' : '#a07a4c'} strokeWidth={i % 3 ? 2.6 : 1.3} strokeOpacity={i % 3 ? 0.55 : 0.4} strokeLinecap="round" />)}
+        {[0, 1, 2].map((k) => { const [x, y] = around(k + 10, halo * 0.9); return (
+          <g key={k}><ellipse cx={x} cy={y} rx={(9 + r(k + 20) * 10) * (0.6 + mud * 0.6)} ry={(5 + r(k + 30) * 6) * (0.6 + mud * 0.6)} fill="#38443a" opacity="0.85" />
+            <ellipse cx={x - 2} cy={y - 1.5} rx={(4 + r(k + 20) * 4)} ry={1.6} fill="#a9bdb3" opacity="0.4" /></g>) })}
+        {Array.from({ length: 10 }, (_, k) => {
+          const [x, y] = around(k + 50, halo * 1.05), rot = r(k + 60) * 180
+          const kind = k % 4
+          return kind === 0 ? <rect key={k} x={x - 7} y={y - 1.5} width="14" height="3" rx="1" fill="#6b4a2a" transform={`rotate(${rot} ${x} ${y})`} />
+            : kind === 1 ? <circle key={k} cx={x} cy={y} r="2.6" fill={k % 2 ? '#e5e7eb' : '#60a5fa'} opacity="0.85" />
+              : kind === 2 ? <path key={k} d={`M${x - 6} ${y} l4 -2 l3 3 l5 -1`} stroke="#3f2a17" strokeWidth="1.4" fill="none" transform={`rotate(${rot} ${x} ${y})`} />
+                : <rect key={k} x={x - 3} y={y - 3} width="6" height="5" fill="#94a3b8" opacity="0.8" transform={`rotate(${rot} ${x} ${y})`} />
+        })}
+      </g>
+      {/* the stain line where the water stood against the walls */}
+      <path d={view.target} fill="none" stroke="#3b2814" strokeWidth={2.2 + mud * 2.2} strokeOpacity="0.9" strokeLinejoin="round" />
+      <path d={view.target} fill="none" stroke="#c7a676" strokeWidth="0.9" strokeOpacity="0.7" strokeLinejoin="round" strokeDasharray="3 2" transform={`translate(${(1.2 * Math.cos(ang)).toFixed(2)} ${(1.2 * Math.sin(ang)).toFixed(2)})`} />
+    </g>
+  )
+}
 
 function RoofCompare({ roof, eng, pan, setPan }) {
   const { pos, box, start, grab } = useDragSlider(55)

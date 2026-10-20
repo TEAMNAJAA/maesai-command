@@ -317,6 +317,7 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
   const vth = { flat: 'เหมาจ่าย ฿9,000', both: '฿9,000 + ค่าล้างโคลน ฿10,000', reject: 'ปฏิเสธ (ท่วมขังไม่ถึง 7 วัน)' }
   for (const [i, r] of roofs.entries()) {
     await click(page, page.locator(`[data-roof="${r.id}"]`), { hold: ms(250), after: ms(1200) })
+    await scenes()                                                   // B11: the first roof opens in the control room
     if (i < 2) {
       await say('เยียวยา', 'ลากสไลเดอร์เทียบภาพก่อน/หลัง (โคลนรอบบ้าน) + นับวันท่วมขังจากไทม์ซีรีส์เรดาร์')
       const h = page.locator('[data-slider-handle]').first()
