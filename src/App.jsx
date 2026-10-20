@@ -47,6 +47,7 @@ import { CareerFile } from './modals/careerFile'
 import { DexBook, DexToast } from './modals/dexBook'
 import { dex, dexUnlocks } from './lib/dex'
 import { career, medalsFor } from './lib/career'
+import { newsFor } from './lib/news'
 import { THRESHOLDS } from './config/missionConfig'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
@@ -198,6 +199,14 @@ export default function App() {
   const officer = prefsNow.officer                // F4: officer-training mode
   useEffect(() => { logger.meta({ officer }) }, [officer])
   useEffect(() => { if (bossOn && officer) eng.autoBoss() }, [bossOn, officer]) // eslint-disable-line react-hooks/exhaustive-deps
+  /* D2: headlines and social posts follow the decisions (real state changes only) */
+  const newsPrev = useRef(s)
+  useEffect(() => {
+    const p = newsPrev.current
+    newsPrev.current = s
+    if (phase !== 'play') return
+    for (const n of newsFor(p, s, eng.scn)) fx.emit('news', n)
+  }, [s]) // eslint-disable-line react-hooks/exhaustive-deps
   /* C1 game feel: floats from real state changes, a light shake when things go badly */
   const shakeRef = useRef(null)
   useJuice(s)

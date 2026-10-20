@@ -26,6 +26,7 @@ node scripts/probe-whatif.mjs <outDir>   # ภาพ "ถ้าคุณเล�
 node scripts/probe-stress-compare.mjs <outDir>   # หน้าเลือก Stress Test + ผลในเกม · แผงครูเทียบรอบ 1→2 (ข้อมูลสังเคราะห์ในโปรไฟล์เบราว์เซอร์ทดสอบ) · การ์ดพัฒนาการผู้เล่น
 RECORD_PARAMS=stress=all node record-demo.mjs   # smoke test 3 องก์ภายใต้ Stress Test ทุกเงื่อนไข
 node scripts/probe-hints.mjs <outDir>    # ภาพหน้าจอคำใบ้แบบบันไดทั้ง 3 องก์ (ต้องเปิด npm run dev) · exit 2 ถ้าขั้นเกินองก์/ไม่ชี้ข้อมูล
+node scripts/probe-news.mjs <outDir> [baseUrl]    # ข่าว/โซเชียล: ขึ้นเมื่อตัดสินใจ · ไม่บังปุ่มแผนที่ (ต้องเปิด npm run dev)
 node scripts/probe-dex.mjs <outDir> [baseUrl]     # สมุดการ์ดความรู้: ปลดล็อก → ป้ายแจ้ง → เปิดสมุด (ต้องเปิด npm run dev)
 node scripts/probe-career.mjs <outDir> [baseUrl]  # ยศ/ล็อก Expert+Stress/ครูปลดล็อก/แฟ้มประวัติ ที่ 1920 และ 1280 (ต้องเปิด npm run dev)
 node scripts/probe-relief.mjs <outDir> [baseUrl]  # องก์ 3: ฉากศูนย์ควบคุม + ภาพหลังคาทุกหลัง (โคลนชัด/ลานสะอาด) (ต้องเปิด npm run dev)
@@ -197,6 +198,11 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 - `KNOWLEDGE` (14 ใบ, scenarioData) — THEOS-2 · L3 Ortho/AWAGAD · ดินถล่มใหม่ · เงาเมฆ · รอยเก่า · ค่า N · SFVI · แนวตลิ่ง · RADARSAT-2 · โดรน · ไฟรั่ว · น้ำเชี่ยว · GISTDA Sphere · มติ ครม. เยียวยา (เนื้อหา + "ในเกม" + ที่มา + `how` วิธีปลดล็อก) · การ์ดความรู้หลังเรืออุบัติเหตุใช้เนื้อหาเดียวกัน
 - `src/lib/dex.js` `dexUnlocks(s, scn)` (ฟังก์ชันล้วน, เฉพาะสิ่งที่เกิดบนจอจริง) + `dex.see()` สะสมใน localStorage `maesai-command.dex.v1` · App ตรวจทุกครั้งที่ state เปลี่ยน → `DexToast` (`data-dex-toast`, คลิกเปิดสมุด) · ปุ่มสมุดบน TopBar (`data-dex` + จำนวนที่สะสม) → `DexBook` (`data-dex-book`, `data-dex-card`, `data-dex-detail`, ล้างสมุด `data-dex-reset`)
 - `node scripts/probe-dex.mjs <outDir> [baseUrl]` · tests/dex.test.js
+
+### พาดหัวข่าว / โซเชียลจำลอง (D2, 20 ต.ค.)
+- `src/lib/news.js` `newsFor(prev, next, scn)` ฟังก์ชันล้วนจากผลต่างของ state จริง: สั่งอพยพ (ข่าวดี) · **เตือนผิด** (ข่าวร้าย + โพสต์ชาวบ้านไม่เชื่อ) · อุดตลิ่งครบ/ไม่อุด/กระสอบทรายพัง · ผลคืนวิกฤต · ความเชื่อมั่นข้ามเกณฑ์ (โพสต์ #แม่สายไม่ทิ้งกัน / ไม่เชื่อ EOC) · เรือพาคนปลอดภัย (ชื่อชุมชน) · เสบียงถึง · เรือล่ม/ไฟช็อต · ตัดไฟ · พายุ · ความสูญเสีย **เฉพาะกลุ่มที่ผู้เล่นพบแล้ว** (ไม่เผยจุดที่ไม่รู้) · เริ่มเยียวยา — น้ำเสียงให้เกียรติผู้ประสบภัย
+- App ส่ง `fx.emit('news')` → `src/ui/newsFeed.jsx` `NewsFeed` มุมล่างขวาของแผนที่ (มุมมองตลิ่งยกเหนือแถบฟันหลอ) การ์ดข่าว/โพสต์ 6.5 วิ (`data-news-card`) + รายการย้อนหลัง (`data-news-open`, `data-news-list`)
+- `node scripts/probe-news.mjs <outDir> [baseUrl]` ตรวจว่าไม่บังปุ่มแผนที่ทั้ง 2 มุมมอง/2 ขนาดจอ · tests/news.test.js
 
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)

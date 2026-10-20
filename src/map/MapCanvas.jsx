@@ -8,6 +8,7 @@ import React, { useState, useRef, useCallback, useSyncExternalStore } from 'reac
 import { AlertTriangle, CheckCircle2, X, Plus, Minus, MousePointer2, Hand, Maximize2, ShieldCheck, Satellite, Cloud, Ruler } from 'lucide-react'
 import { GeoMap, EXTENTS } from './GeoMap'
 import { Weather } from './Weather'
+import { NewsFeed } from '../ui/newsFeed'
 import { Panel, Corners, Src, SrcLegend, Btn } from '../ui/atoms'
 import { clamp, fmt, clockLabel } from '../lib/format'
 import { THRESHOLDS, EMBANKMENT, COSTS, DURATIONS } from '../config/missionConfig'
@@ -61,6 +62,7 @@ export function MapCanvas({ eng, view, setView, onPoint, onChannel, beaconView, 
       </div>
       <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(110% 80% at 50% 40%, transparent 62%, rgba(2,6,15,.6) 100%)' }} />
       <Weather eng={eng} />
+      <NewsFeed view={view} />
 
       <div className="absolute left-1/2 top-3 z-20 flex -translate-x-1/2 gap-1 rounded-md border border-sky-400/20 bg-[#070D1C]/88 p-1 backdrop-blur-md">
         {viewsForAct(s.act).map((id) => (
