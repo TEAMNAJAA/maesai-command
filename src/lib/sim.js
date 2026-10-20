@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import {
-  SFVI, THRESHOLDS, CLOUD_RULE, HYDRO, RELIEF, SCORE, DURATIONS, RESCUE, ACT2, EVAL, HINTS, DECISION, SANDBAG,
+  SFVI, THRESHOLDS, CLOUD_RULE, HYDRO, RELIEF, SCORE, DURATIONS, RESCUE, ACT2, EVAL, HINTS, DECISION, SANDBAG, ACT_GRADES,
 } from '../config/missionConfig'
 import { CAMP_SITES } from '../config/scenarioData'
 import { SECTIONS, SECTION_BY_ID, sectionDepth, GAPS_BY_SECTION } from './sections'
@@ -273,6 +273,17 @@ function sealItem(s, scn) {
   if (!s.sealed.length) return item('seal', 1, th, 'skip', 'ไม่ได้อุดจุดฟันหลอ — น้ำเข้าโซนหลังตลิ่งเร็วขึ้น')
   const share = needed.length ? neededFirm / needed.length : firm / nGaps
   return item('seal', 1, th, share >= 0.5 ? 'fair' : 'bad', `อุดหน้าโซนที่น้ำถึงได้ ${neededFirm}/${needed.length || nGaps} จุด — ที่เหลือยังรั่ว`)
+}
+
+/** C4: the grade of one act from its own decisions — S / A / B / C (ACT_GRADES). null until the act is over. */
+export function actGrade(s, scn, act) {
+  const items = decisionLedger(s, scn).items.filter((x) => x.act === act)
+  if (!items.length) return null
+  const n = (v) => items.filter((x) => x.verdict === v).length
+  const ratio = (n('good') + n('fair') * DECISION.fairWeight) / items.length
+  const critical = n('critical')
+  const g = ACT_GRADES.find((x) => ratio >= x.minRatio && critical <= x.maxCritical) || ACT_GRADES[ACT_GRADES.length - 1]
+  return { ...g, ratio, critical, total: items.length }
 }
 
 export function decisionLedger(s, scn) {

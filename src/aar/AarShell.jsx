@@ -16,6 +16,7 @@ import { useMode } from '../ui/label'
 import { ImpactHover, WhyButton, ConfirmImpact } from '../ui/impact'
 import { HintLadder } from '../ui/hints'
 import { DecisionHeadline, DecisionList, TIER_HEX } from '../ui/decision'
+import { GradeStamp } from '../ui/gradeStamp'
 import { WhatIfPanel } from '../ui/whatif'
 import { DeltaChip, fmtVal } from '../modals/teacherCompare'
 import { sessionMetrics, previousRound, METRICS } from '../lib/compare'
@@ -27,7 +28,7 @@ import { BUILDINGS } from '../lib/buildings'
 import { SECTION_BY_ID } from '../lib/sections'
 import { makeProjection, boxKm, tilesFor } from '../lib/geo'
 import { sphereReady, sphereTileTemplate } from '../lib/sphere'
-import { evaluateRoof, reliefSummary, missionScore } from '../lib/sim'
+import { evaluateRoof, reliefSummary, missionScore, actGrade } from '../lib/sim'
 import { leaderboard } from '../lib/leaderboard'
 import { clamp, fmt, baht, clockLabel, clockToDate, mmss } from '../lib/format'
 import { logger } from '../lib/evalLogger'
@@ -542,7 +543,12 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
         <Panel data-panel="decisions">
           <PanelHead title="DECISIONS · รายการตัดสินใจทั้งหมด" icon={Scale} right={<Src t="scenario" mini />} />
           <div className="grid grid-cols-[300px_1fr] gap-3 p-3">
-            <div className="self-start"><DecisionHeadline decision={score.decision} compact /></div>
+            <div className="self-start">
+              <DecisionHeadline decision={score.decision} compact />
+              <div className="mt-3 flex items-center justify-around rounded-lg border border-white/10 bg-black/20 py-2" data-act-grades>
+                {[1, 2, 3].map((a) => <div key={a} className="text-center"><GradeStamp grade={actGrade(eng.s, eng.scn, a)} act={a} size={64} quiet={a !== 3} /><div className="font-thai mt-1 text-[11px] text-slate-400">องก์ {a}</div></div>)}
+              </div>
+            </div>
             <DecisionList decision={score.decision} limit={6} />
           </div>
         </Panel>

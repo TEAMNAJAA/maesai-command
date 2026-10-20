@@ -174,6 +174,10 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
   - **ไม่อุด** เก็บงบไว้อพยพ (`s.sealPlan = 'none'`)
 - `openGapsOf(s, sec, t)` นับกระสอบทรายที่พังเป็นช่องเปิด · `bigbagSealed(s)` ใช้ในบอส · ledger `sealItem`: บิ๊กแบ็กครบ หรือครบทุกจุดหน้าโซนที่น้ำถึงจริง = ดี · กระสอบทราย = พอใช้ · ไม่อุด = พอใช้ถ้าอพยพทัน ≥ 90% ไม่งั้นผิด · what-if เทียบกับบิ๊กแบ็กทั้งแนว · คำใบ้ a1.seal ใหม่ · tests/seal.test.js
 
+### เกรด S/A/B/C ท้ายองก์ (C4, 20 ต.ค.)
+- `actGrade(s, scn, act)` (sim.js) จากรายการตัดสินใจขององก์นั้นใน decisionLedger: สัดส่วนดี (+พอใช้ ×0.5) และจำนวนผิดร้ายแรง → `ACT_GRADES` ใน missionConfig (S ≥ 90% ☠️0 · A ≥ 75% ☠️0 · B ≥ 60% ☠️≤1 · C) · null จนกว่าองก์จะจบ
+- `src/ui/gradeStamp.jsx` `GradeStamp` ตราประทับกระแทก (`stampIn`) + เสียง `stamp` + สั่นเบา · หัวสรุปองก์ 1/2 และแถว 3 องก์ในหน้าสรุปภารกิจ (`data-grade`, `data-grade-act`, `data-act-grades`) · CSV `act_grades` เช่น "SAB" · tests/grade.test.js
+
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)
 - **คะแนนรวม (เต็ม 1000) = คะแนนผลงาน × ตัวคูณการตัดสินใจ − คำใบ้** (`missionScore` ใน sim.js → `points`, `perf`, `partPoints` เทียบ `max` เช่น "อพยพ 140 / 200", `decision`, `hintPts`) · ผลงาน: THEOS-2 200 · อพยพ 200 · ผู้ติดค้าง 200 · เยียวยา 200 · โลจิสติกส์ 100 · ความเชื่อมั่น 100 · คำใบ้ 10 แต้ม/คะแนนเดิม (≤ 100)

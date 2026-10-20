@@ -11,8 +11,9 @@ import { Modal, Btn, Src, SrcLegend } from '../ui/atoms'
 import { QUIZ } from '../config/scenarioData'
 import { SFVI, THRESHOLDS, RELIEF, TRUST, EVAL, MODES } from '../config/missionConfig'
 import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
-import { hintPenalty, decisionLedger } from '../lib/sim'
+import { hintPenalty, decisionLedger, actGrade } from '../lib/sim'
 import { DecisionCounts, VERDICT } from '../ui/decision'
+import { GradeStamp } from '../ui/gradeStamp'
 import { questFor } from '../panels/quest'
 import { WhatIfPanel } from '../ui/whatif'
 import { RoundCompare } from './teacherCompare'
@@ -292,6 +293,7 @@ export function Act1SummaryModal({ open, eng, onNext }) {
             <div className="hud-label">ACT I COMPLETE · T−0 · {clockToDate(0)}</div>
             <h2 className="font-thai text-[20px] font-bold leading-tight text-white">มวลน้ำถึงตัวเมือง — สรุปผลองก์ 1</h2>
           </div>
+          <div className="ml-auto -my-3"><GradeStamp grade={actGrade(s, scn, 1)} act={1} size={84} /></div>
         </div>
         <div className="font-thai mt-3 rounded-lg border px-3 py-2.5 text-[13.5px] font-semibold leading-snug" style={{ borderColor: `${vhex}55`, background: `${vhex}12`, color: verdict[0] === 'good' ? '#C8FFD9' : verdict[0] === 'crit' ? '#FFC2CE' : '#FFE0A3' }}>
           {verdict[1]}
@@ -358,6 +360,7 @@ export function Act2SummaryModal({ open, eng, onNext }) {
             <div className="hud-label">ACT II COMPLETE · T+36 · {clockToDate(36 * 60)}</div>
             <h2 className="font-thai text-[20px] font-bold leading-tight text-white">น้ำเริ่มลด — สรุปผลการช่วยเหลือ</h2>
           </div>
+          <div className="ml-auto -my-3"><GradeStamp grade={actGrade(eng.s, eng.scn, 2)} act={2} size={84} /></div>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           {stat(Users, 'ผู้ที่ต้องการความช่วยเหลือ', fmt(need))}

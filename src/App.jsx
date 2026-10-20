@@ -33,7 +33,7 @@ import { ActionScenes } from './map/ActionScene'
 import { ModeContext } from './ui/label'
 import { logger } from './lib/evalLogger'
 import { leaderboard } from './lib/leaderboard'
-import { waitComparison } from './lib/sim'
+import { waitComparison, actGrade } from './lib/sim'
 import { sessionMetrics } from './lib/compare'
 import { audio, installUiSounds } from './lib/audio'
 import { ChibiDock, useChibiPose } from './ui/chibiDock'
@@ -170,7 +170,7 @@ export default function App() {
     const top = leaderboard.top(s.modeId, 999)
     setSaved({ rank, at: top[rank - 1]?.at, score: score.points })
     eng.finishMission()
-    logger.finish({ trust: Math.round(s.trust), score: score.points, scoreVersion: score.version, decisionTier: score.decision.tier.id, decisionRatio: +score.decision.ratio.toFixed(3), points: score.points,
+    logger.finish({ grades: [1, 2, 3].map((a) => actGrade(s, eng.scn, a)?.id || '-').join(''), trust: Math.round(s.trust), score: score.points, scoreVersion: score.version, decisionTier: score.decision.tier.id, decisionRatio: +score.decision.ratio.toFixed(3), points: score.points,
       exposed: eng.exposure.exposed, metrics: sessionMetrics(s, eng.scn, eng.realMs() / 1000) })
     setBoard(true)
   }

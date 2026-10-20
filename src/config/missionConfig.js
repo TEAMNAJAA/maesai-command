@@ -280,6 +280,14 @@ export const EMBANKMENT = {
   rulerAt: 0.36,                 // ตำแหน่งไม้บรรทัดวัดลำน้ำตามแนวแม่น้ำ (0–1)
 }
 
+/* ── 10b · เกรดท้ายองก์ (C4) — จากรายการตัดสินใจขององก์นั้น ────────────────── */
+export const ACT_GRADES = [
+  { id: 'S', minRatio: 0.9, maxCritical: 0, hex: '#FFD066' },
+  { id: 'A', minRatio: 0.75, maxCritical: 0, hex: '#22E36B' },
+  { id: 'B', minRatio: 0.6, maxCritical: 1, hex: '#38BDF8' },
+  { id: 'C', minRatio: 0, maxCritical: Infinity, hex: '#FF6B8A' },
+]
+
 /* ── 10c · กลยุทธ์แนวตลิ่ง (B4) — ทุกทางเลือกมีข้อดีข้อเสียจริง ─────────────── */
 export const SEAL_PLANS = {
   risk: { bag: 'bigbag', scope: 'risk' },        // บิ๊กแบ็กเฉพาะจุดหน้าโซนที่หลักฐาน (SFVI) บอกว่าเสี่ยง — ถูก เร็ว แต่จุดอื่นยังรั่ว
