@@ -13,7 +13,7 @@ import { BOSS, MODES, SFVI } from '../config/missionConfig'
 import { BOSS_MOVES, BOSS_CARDS, CAMP_SITES } from '../config/scenarioData'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
 import { SECTIONS } from '../lib/sections'
-import { computeSfvi, exposureSummary, campFloods, peakDepth, HARM_M } from '../lib/sim'
+import { computeSfvi, exposureSummary, campFloods, peakDepth, HARM_M, bigbagSealed } from '../lib/sim'
 import { substream } from '../lib/rng'
 
 const CARD_IDS = ['base', 'bigbag', 'pump', 'power', 'evac', 'boat', 'theos']
@@ -21,7 +21,7 @@ const CARD_IDS = ['base', 'bigbag', 'pump', 'power', 'evac', 'boat', 'theos']
 /** The fight as the player prepared it at T0. */
 export function bossSetup(s, scn) {
   const nGaps = EMBANKMENT_GAPS.length || 1
-  const sealed = Math.min(nGaps, s.sealed.length)
+  const sealed = Math.min(nGaps, bigbagSealed(s).length)          // sandbags give way before the crest
   const open = nGaps - sealed
   const hp = Math.round(BOSS.hpBase * (1 - BOSS.sealCut * (sealed / nGaps)))
   const attack = BOSS.attackBase + BOSS.attackPerGap * open

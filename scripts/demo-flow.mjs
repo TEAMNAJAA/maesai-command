@@ -88,11 +88,12 @@ export async function playMission(page, { say = async () => {}, mark = () => {},
       continue
     }
     if (s.queued < s.gapsTotal) {
-      await say('ตลิ่ง', 'แนวตลิ่งเมือง: ส่งทีมบิ๊กแบ็กอุดจุดฟันหลอทั้งหมด — ทีมทยอยอุดระหว่างที่เวลาเดิน')
+      await say('ตลิ่ง', 'แนวตลิ่งเมือง: งบยังพอ — เลือกแผน "บิ๊กแบ็กทั้งแนว" กันได้มากที่สุดถึงยอดน้ำ · ทีมทยอยอุดระหว่างที่เวลาเดิน')
       await openTab('bank'); await ensureView('corridor')
-      await wait(ms(1200))
-      const b = page.locator('[data-panel="bank"] button', { hasText: 'ส่งทีมอุด' })
-      if (await b.count()) await click(page, b.first(), { hold: ms(600), after: ms(900) })
+      await wait(ms(800))
+      await click(page, page.locator('[data-seal-plan="full"]'), { hold: ms(500), after: ms(700) })
+      await point(page, page.locator('[data-seal-plans] [data-impact]').first(), { hold: ms(1200) }).catch(() => {})
+      await click(page, page.locator('[data-seal-go]'), { hold: ms(500), after: ms(900) })
       if ((await st()).queued < s.gapsTotal) throw new Error('could not queue every embankment gap (budget?)')
       continue
     }

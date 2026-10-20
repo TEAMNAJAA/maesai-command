@@ -34,7 +34,8 @@ export function questFor(eng) {
       { id: 'task', title: 'วางแผนถ่ายภาพ THEOS-2 ตามรอบโคจร', done: usable.length >= 3 || !next, detail: `ภาพใช้ได้ ${usable.length} ภาพ${next ? ` · รอบถัดไป ${next.id} อีก ${hm(next.t - s.clock)}` : ' · หมดรอบโคจรแล้ว'}`, go: { tab: 'theos', view: 'catchment' } },
       { id: 'read', title: 'แปลภาพหารอยดินถล่มใหม่ (ค่า L)', done: ready.length > 0 && toRead.length === 0, detail: `แปลแล้ว ${ready.filter((i) => i.analyzed).length} · รอแปล ${toRead.length} ภาพ`, go: { tab: 'theos', view: 'catchment' } },
       { id: 'channel', title: 'คำนวณความกว้างลำน้ำ (ค่า N)', done: s.channel.measured, detail: s.channel.measured ? `N = ${sfvi.N.toFixed(2)}` : riverImg ? 'มีภาพลำน้ำแล้ว — เปิดเครื่องมือวัด' : 'ต้องมีภาพ THEOS-2 ของ Sector D/E หรือตัวเมือง', go: { tab: 'bank', view: 'corridor' } },
-      { id: 'seal', title: 'อุดจุดฟันหลอของแนวตลิ่ง', done: s.sealed.length === EMBANKMENT_GAPS.length, detail: `อุดแล้ว ${s.sealed.length}/${EMBANKMENT_GAPS.length} · อยู่ในคิว ${sealedOrQueued - s.sealed.length}`, go: { tab: 'bank', view: 'corridor' } },
+      { id: 'seal', title: 'เลือกกลยุทธ์แนวตลิ่ง', done: s.sealed.length === EMBANKMENT_GAPS.length || s.sealPlan === 'none' || (!!s.sealPlan && queued.size === 0 && s.sealed.length > 0),
+        detail: s.sealPlan === 'none' ? 'ไม่อุด — เก็บงบไว้อพยพ' : `อุดแล้ว ${s.sealed.length}/${EMBANKMENT_GAPS.length}${(s.sandbagged || []).length ? ` (กระสอบทราย ${(s.sandbagged || []).length})` : ''} · อยู่ในคิว ${sealedOrQueued - s.sealed.length}`, go: { tab: 'bank', view: 'corridor' } },
       { id: 'evac', title: 'สั่งอพยพรายโซนตามหลักฐาน', done: ordered > 0 && hot.length === 0, detail: `สั่งแล้ว ${ordered} โซน · โซนที่ SFVI ≥ ${SFVI.decisionBand} ยังไม่สั่ง ${hot.length}`, go: { tab: 'zones', view: 'urban' } },
     ]
     let hint

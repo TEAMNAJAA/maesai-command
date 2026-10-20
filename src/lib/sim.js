@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import {
-  SFVI, THRESHOLDS, CLOUD_RULE, HYDRO, RELIEF, SCORE, DURATIONS, RESCUE, ACT2, EVAL, HINTS, DECISION,
+  SFVI, THRESHOLDS, CLOUD_RULE, HYDRO, RELIEF, SCORE, DURATIONS, RESCUE, ACT2, EVAL, HINTS, DECISION, SANDBAG,
 } from '../config/missionConfig'
 import { CAMP_SITES } from '../config/scenarioData'
 import { SECTIONS, SECTION_BY_ID, sectionDepth, GAPS_BY_SECTION } from './sections'
@@ -40,9 +40,21 @@ export function scarStats(s, scn) {
 }
 
 /** Zone water depth at minute t given the player's sealing / pumping. */
-export function openGapsOf(s, secId) {
-  return GAPS_BY_SECTION[secId].filter((g) => !s.sealed.includes(g)).length
+/** B4: the first minute the river reaches the sandbag limit — temporary bags give way then and do not come back. */
+let failMemo = null
+export function sandbagFailAt() {
+  if (failMemo !== null) return failMemo
+  failMemo = Infinity
+  for (let t = T_START; t <= 36 * 60; t += 5) if (levelAt(t) >= SANDBAG.failLevel) { failMemo = t; break }
+  return failMemo
 }
+/** Open gaps in front of a zone at time t (sandbags count as open once they have failed; t = null → as built). */
+export function openGapsOf(s, secId, t = null) {
+  const failed = t !== null && (s.sandbagged || []).length && t >= sandbagFailAt()
+  return GAPS_BY_SECTION[secId].filter((g) => !s.sealed.includes(g) || (failed && s.sandbagged.includes(g))).length
+}
+/** Gaps sealed with big bags (sandbags excluded) — what still stands at the crest. */
+export const bigbagSealed = (s) => s.sealed.filter((g) => !(s.sandbagged || []).includes(g))
 export function pumpReliefAt(s, secId, t) {
   const p = s.pumps?.[secId]
   return p && t >= p.readyAt ? ACT2.pumpReliefM : 0
@@ -50,15 +62,15 @@ export function pumpReliefAt(s, secId, t) {
 /** E: a lost T0 fight breaks the embankment — that zone runs this much deeper from T0 on. */
 export const breachAt = (s, secId, t) => (s.breach && s.breach.zone === secId && t >= s.breach.at ? s.breach.extraM : 0)
 export function depthAt(s, sec, t) {
-  return sectionDepth(sec, levelAt(t), openGapsOf(s, sec.id), pumpReliefAt(s, sec.id, t)) + breachAt(s, sec.id, t)
+  return sectionDepth(sec, levelAt(t), openGapsOf(s, sec.id, t), pumpReliefAt(s, sec.id, t)) + breachAt(s, sec.id, t)
 }
 export function peakDepth(s, sec) {
-  return sectionDepth(sec, levelAt(PEAK_T), openGapsOf(s, sec.id), 0)
+  return sectionDepth(sec, levelAt(PEAK_T), openGapsOf(s, sec.id, PEAK_T), 0)
 }
 /** First minute the zone's streets are wet (≥ 0.3 m), with the current sealing. */
 export function arrivalAt(s, sec) {
   // the act-1 forecast the player decided on — a later breach does not rewrite act-1 verdicts
-  for (let t = T_START; t <= 36 * 60; t += 10) if (sectionDepth(sec, levelAt(t), openGapsOf(s, sec.id), pumpReliefAt(s, sec.id, t)) >= WET_M) return t
+  for (let t = T_START; t <= 36 * 60; t += 10) if (sectionDepth(sec, levelAt(t), openGapsOf(s, sec.id, t), pumpReliefAt(s, sec.id, t)) >= WET_M) return t
   return Infinity
 }
 export const evacNeedMin = (sec) => DURATIONS.evacMobilise + sec.floodHH / DURATIONS.evacHHPerMin
@@ -242,6 +254,27 @@ export function campFloods(s, site) {
   return close && peakDepth(s, near) >= HARM_M
 }
 
+/** B4: the embankment decision — the plan the player chose and what it did. */
+function sealItem(s, scn) {
+  const nGaps = Object.keys(GAPS_BY_SECTION).reduce((a, k) => a + GAPS_BY_SECTION[k].length, 0) || 1
+  const firm = bigbagSealed(s).length, bags = (s.sandbagged || []).filter((g) => s.sealed.includes(g)).length
+  // gaps that matter: in front of zones that flood at all with the embankment open
+  const bare = { ...s, sealed: [], sandbagged: [] }
+  const needed = SECTIONS.filter((z) => peakDepth(bare, z) >= HARM_M).flatMap((z) => GAPS_BY_SECTION[z.id])
+  const neededFirm = needed.filter((g) => bigbagSealed(s).includes(g)).length
+  const th = 'แนวตลิ่ง: ' + ({ risk: 'บิ๊กแบ็กเฉพาะจุดเสี่ยง', full: 'บิ๊กแบ็กทั้งแนว', sandbag: 'กระสอบทรายชั่วคราว', none: 'ไม่อุด เก็บงบไว้อพยพ' }[s.sealPlan] || 'อุดจุดฟันหลอ')
+  if (s.sealPlan === 'none' && !s.sealed.length) {
+    const ex = exposureSummary(s, scn)
+    return item('seal', 1, th, ex.safeShare >= 0.9 ? 'fair' : 'bad', ex.safeShare >= 0.9 ? `ไม่อุด แต่ใช้งบอพยพทัน ${Math.round(ex.safeShare * 100)}% — น้ำเข้าโซนหลังตลิ่งเร็วและลึกกว่า` : `ไม่อุด และอพยพทันเพียง ${Math.round(ex.safeShare * 100)}% — เสียทั้งตลิ่งและคน`)
+  }
+  if (firm >= nGaps) return item('seal', 1, th, 'good', `บิ๊กแบ็กครบ ${firm}/${nGaps} จุดก่อนน้ำถึง`)
+  if (needed.length && neededFirm >= needed.length) return item('seal', 1, th, 'good', `อุดครบทุกจุดหน้าโซนที่น้ำถึง (${neededFirm} จุด) ประหยัดงบ — จุดที่เหลือไม่ทำให้ใครเสี่ยงเพิ่ม`)
+  if (bags) return item('seal', 1, th, 'fair', `กระสอบทราย ${bags} จุดพังเมื่อน้ำถึง ${SANDBAG.failLevel.toFixed(2)} ม. — ช่วยได้แค่ช่วงแรก${firm ? ` · บิ๊กแบ็ก ${firm} จุด` : ''}`)
+  if (!s.sealed.length) return item('seal', 1, th, 'skip', 'ไม่ได้อุดจุดฟันหลอ — น้ำเข้าโซนหลังตลิ่งเร็วขึ้น')
+  const share = needed.length ? neededFirm / needed.length : firm / nGaps
+  return item('seal', 1, th, share >= 0.5 ? 'fair' : 'bad', `อุดหน้าโซนที่น้ำถึงได้ ${neededFirm}/${needed.length || nGaps} จุด — ที่เหลือยังรั่ว`)
+}
+
 export function decisionLedger(s, scn) {
   const items = []
   const t0 = s.t0 ?? T_START
@@ -278,10 +311,7 @@ export function decisionLedger(s, scn) {
     if (s.channel.measured) items.push(item('channel', 1, 'วัดความกว้างลำน้ำ (ค่า N)', s.channel.attempts <= 1 ? 'good' : 'fair', s.channel.attempts <= 1 ? 'คำนวณถูกตั้งแต่ครั้งแรก' : `คำนวณถูกในครั้งที่ ${s.channel.attempts}`))
     else items.push(item('channel', 1, 'วัดความกว้างลำน้ำ (ค่า N)', 'skip', 'ไม่ได้วัดค่า N — เกณฑ์เตือนภัยไม่ได้ปรับตามลำน้ำที่แคบลง'))
 
-    const nGaps = Object.keys(GAPS_BY_SECTION).reduce((a, k) => a + GAPS_BY_SECTION[k].length, 0) || 1
-    const sealed = s.sealed.length
-    const sealVerdict = sealed >= nGaps ? 'good' : sealed >= nGaps / 2 ? 'fair' : sealed > 0 ? 'bad' : 'skip'
-    items.push(item('seal', 1, 'อุดจุดฟันหลอแนวตลิ่ง', sealVerdict, sealed ? `อุดเสร็จก่อนน้ำถึง ${sealed}/${nGaps} จุด` : 'ไม่ได้อุดจุดฟันหลอ — น้ำเข้าโซนหลังตลิ่งเร็วขึ้น'))
+    items.push(sealItem(s, scn))
 
     for (const r of exposureSummary(s, scn).rows) {
       const th = `อพยพ ${r.sec.id} ${r.sec.name}`

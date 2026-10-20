@@ -12,14 +12,14 @@
 import * as A from './actions'
 import { destOf } from './world'
 import { gradeChoice } from '../lib/routes'
-import { zoneOutcome, peakDepth, arrivalAt, depthAt, computeSfvi, HARM_M } from '../lib/sim'
+import { zoneOutcome, peakDepth, arrivalAt, depthAt, computeSfvi, HARM_M, exposureSummary, sandbagFailAt } from '../lib/sim'
 import { levelAt } from '../lib/hydro'
 import { cloudCover } from '../lib/clouds'
 import { SECTIONS, SECTION_BY_ID, GAPS_BY_SECTION } from '../lib/sections'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
 import { metres } from '../lib/geo'
 import { CAMP_SITES } from '../config/scenarioData'
-import { THEOS2, THRESHOLDS, COSTS, DURATIONS, ACT2, MISSION, CMD_MIN, SFVI, EMBANKMENT, RELIEF, BOAT, MODES, RESCUE } from '../config/missionConfig'
+import { THEOS2, THRESHOLDS, COSTS, DURATIONS, ACT2, MISSION, CMD_MIN, SFVI, EMBANKMENT, RELIEF, BOAT, MODES, RESCUE, SANDBAG, SEAL_PLANS } from '../config/missionConfig'
 import { clockLabel, fmt, clamp, baht } from '../lib/format'
 
 const hrs = (m) => (Math.abs(m) >= 60 ? `${(m / 60).toFixed(Math.round(m) % 60 ? 1 : 0)} ชม.` : `${Math.round(m)} นาที`)
@@ -103,6 +103,49 @@ export function previewCapture(s, scn, passId) {
   if (l0 < THRESHOLDS.criticalLevel && l1 >= THRESHOLDS.criticalLevel) rows.push(row('risk', 'bad', `น้ำจะถึงเกณฑ์วิกฤต ${THRESHOLDS.criticalLevel.toFixed(2)} ม. ระหว่างรอ — คิดเรื่องอพยพก่อนกดไหม?`))
   else if (l0 < THRESHOLDS.prepLevel && l1 >= THRESHOLDS.prepLevel) rows.push(row('risk', 'warn', `น้ำจะถึงเกณฑ์เตรียมพร้อม ${THRESHOLDS.prepLevel.toFixed(2)} ม. ระหว่างรอ`))
   return { title: `ให้ THEOS-2 ถ่ายรอบ ${passId}`, rows, verdict: { tone: worst, judge: true, th: worst === 'good' ? 'คาดว่าได้ภาพใช้ได้' : worst === 'warn' ? 'ลุ้นเมฆ — บางเป้าอาจใช้ไม่ได้' : 'มีเป้าที่เมฆหนาเกินไป' } }
+}
+
+const PLAN_TH = { risk: 'บิ๊กแบ็กเฉพาะจุดเสี่ยง', full: 'บิ๊กแบ็กทั้งแนว', sandbag: 'กระสอบทรายชั่วคราวทั้งแนว', none: 'ไม่อุด — เก็บงบไว้อพยพ' }
+
+/** B4: what an embankment plan costs, when it is done, what it buys — and what it leaves open. */
+export function previewSealPlan(s, scn, plan) {
+  if (s.act !== 1 || !SEAL_PLANS[plan]) return null
+  const title = PLAN_TH[plan]
+  const after = A.sealPlan(s, scn, plan)
+  const ids = A.sealTargets(s, scn, plan)
+  const open = (st) => EMBANKMENT_GAPS.filter((g) => !st.sealed.includes(g.id) || (st.sandbagged || []).includes(g.id)).length
+  // the embankment as it would stand when the crews finish (the model, not the future)
+  const done = { ...after, sealed: [...new Set([...after.sealed, ...after.jobs.filter((j) => j.kind === 'seal').map((j) => j.gap)])],
+    sandbagged: [...new Set([...(after.sandbagged || []), ...after.jobs.filter((j) => j.kind === 'seal' && j.bag === 'sandbag').map((j) => j.gap)])] }
+  const exNow = exposureSummary(s, scn), exDone = exposureSummary(done, scn)
+  const rows = []
+  if (plan === 'none') {
+    const bags = EMBANKMENT_GAPS.filter((g) => !s.sealed.includes(g.id)).reduce((a, g) => a + g.len * EMBANKMENT.bagsPerMetre, 0)
+    rows.push(row('use', 'info', `ไม่ใช้งบตลิ่ง · ประหยัด ${baht(bags * COSTS.bigbag)} ไว้สั่งอพยพ`))
+    rows.push(row('use', 'info', `เวลาสั่งการ ${cmd(scn, CMD_MIN.seal)} นาที · ทีมว่างไว้ทำงานอื่น`))
+    rows.push(row('risk', 'bad', `ช่องเปิด ${open(s)} จุด — น้ำเข้าโซนหลังตลิ่งเร็วและลึกที่สุด`, true))
+    return { title, rows, verdict: { tone: 'warn', judge: true, th: 'ได้งบอพยพเพิ่ม แต่ต้องอพยพให้ทันทุกโซน' } }
+  }
+  if (!ids.length) return { title, rows: [row('get', 'info', 'จุดที่แผนนี้ครอบคลุมอุดแล้วหรืออยู่ในคิวแล้ว')], verdict: { tone: 'info', th: 'ไม่มีงานเพิ่ม' } }
+  if (after === s) return { title, rows: [row('risk', 'bad', 'งบไม่พอแม้แต่จุดเดียว')], verdict: { tone: 'bad', th: 'ทำไม่ได้ — งบไม่พอ' } }
+  const jobs = after.jobs.filter((j) => j.kind === 'seal' && ids.includes(j.gap))
+  const finish = jobs.length ? Math.max(...jobs.map((j) => j.at)) : s.clock
+  rows.push(row('use', 'info', `${plan === 'sandbag' ? 'กระสอบทราย' : 'บิ๊กแบ็ก'} ${jobs.length} จุด · ${baht(after.budget.spent - s.budget.spent)}`))
+  rows.push(row('use', 'info', `ทีม ${s.crews.length} ชุดทำตามคิวถึง ${clockLabel(finish)}`))
+  if (jobs.length < ids.length) rows.push(row('risk', 'bad', `งบพอสำหรับ ${jobs.length} จาก ${ids.length} จุด`))
+  const gain = Math.max(0, exNow.exposed - exDone.exposed)
+  rows.push(row('get', gain ? 'good' : 'info', gain ? `ครัวเรือนที่ยังเสี่ยงลดลง ${fmt(gain)} (ตามแบบจำลอง)` : 'น้ำเข้าโซนหลังตลิ่งช้าลงและตื้นขึ้น', true))
+  if (plan === 'risk') rows.push(row('risk', 'warn', `ยังเปิดอีก ${open(done)} จุด หน้าโซนที่ SFVI ต่ำ — ถ้าหลักฐานยังไม่พอ อาจเลือกพลาด`, true))
+  if (plan === 'sandbag') {
+    const tf = sandbagFailAt()
+    rows.push(row('risk', 'bad', `พังเมื่อน้ำถึง ${SANDBAG.failLevel.toFixed(2)} ม.${Number.isFinite(tf) ? ` (แบบจำลอง: ราว ${clockLabel(tf)})` : ''} — ช่วยได้แค่ช่วงแรก`, true))
+  }
+  const wet = SECTIONS.filter((z) => peakDepth(s, z) >= HARM_M)
+  const first = wet.length ? Math.min(...wet.map((z) => arrivalAt(s, z))) : Infinity
+  if (Number.isFinite(first) && finish > first) rows.push(row('risk', 'warn', `เสร็จ ${clockLabel(finish)} หลังน้ำเริ่มถึงบางโซน (${clockLabel(first)})`, true))
+  const tone = plan === 'full' ? 'good' : plan === 'risk' ? 'good' : 'warn'
+  const th = { full: 'กันได้มากที่สุด แต่แพงและช้าที่สุด', risk: 'ถูกและเร็ว — ดีเท่าที่หลักฐานบอก', sandbag: 'ถูกและเร็วที่สุด แต่พังตอนยอดน้ำ' }[plan]
+  return { title, rows, verdict: { tone, judge: true, th } }
 }
 
 export function previewSeal(s, scn, ids) {

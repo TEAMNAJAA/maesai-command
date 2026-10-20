@@ -16,7 +16,7 @@ import { cloudCover } from '../lib/clouds'
 import { SECTIONS } from '../lib/sections'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
 import { CAMP_SITES } from '../config/scenarioData'
-import { THEOS2, THRESHOLDS, SFVI, HINTS, MODES, ACT2, DURATIONS, RELIEF, COSTS } from '../config/missionConfig'
+import { THEOS2, THRESHOLDS, SFVI, HINTS, MODES, ACT2, DURATIONS, RELIEF, COSTS, SANDBAG } from '../config/missionConfig'
 import { clockLabel, fmt } from '../lib/format'
 
 const RIVER = ['D', 'E', 'TOWN']
@@ -116,11 +116,11 @@ const TOPICS = {
       const wet = SECTIONS.filter((z) => peakDepth(s, z) >= HARM_M)
       const first = wet.length ? Math.min(...wet.map((z) => arrivalAt(s, z))) : Infinity
       return [
-        { th: 'ช่องโหว่ของแนวกั้นน้ำปล่อยให้น้ำเข้าเมืองก่อนระดับน้ำจะล้นตลิ่ง — ทีมมีจำกัดและทำตามคิว ต้องอุดเสร็จก่อนหรือหลังน้ำเริ่มเข้าโซนแรก?' },
+        { th: 'แต่ละแผนแลกอะไรกับอะไร — เงิน เวลา ความทนน้ำ หรืองบที่เหลือไว้อพยพ? และหลักฐานที่คุณมีตอนนี้พอบอกไหมว่าจุดไหนเสี่ยงจริง?' },
         { th: `มุมมอง "แนวตลิ่งเมือง" แสดงจุดฟันหลอเป็นหมุดแดง · ตารางโซนคอลัมน์ "ลึก" และ "น้ำถึง" บอกว่าโซนหลังตลิ่งเสี่ยงแค่ไหน · ทีมใช้ ~${DURATIONS.bigbagPerMetre} นาที/เมตร`,
-          go: { tab: 'bank', view: 'corridor' }, spot: '[data-panel="bank"] [data-impact], [data-panel="bank"] .grid' },
+          go: { tab: 'bank', view: 'corridor' }, spot: '[data-seal-plans]' },
         { th: open.length
-          ? `ถ้าส่งทีมอุดที่เหลือ ${open.length} จุดตอนนี้ จะเสร็จ ${clockLabel(finish)} — น้ำเริ่มเข้าโซนแรก ${Number.isFinite(first) ? clockLabel(first) : '—'}${Number.isFinite(first) ? (finish <= first ? ' (ทัน)' : ' (บางจุดไม่ทัน — ยิ่งสั่งช้ายิ่งเสียเปรียบ)') : ''}`
+          ? `บิ๊กแบ็กทั้งแนว ${open.length} จุดถ้าสั่งตอนนี้จะเสร็จ ${clockLabel(finish)} — น้ำเริ่มเข้าโซนแรก ${Number.isFinite(first) ? clockLabel(first) : '—'}${Number.isFinite(first) ? (finish <= first ? ' (ทัน)' : ' (ไม่ทัน — ลองอุดเฉพาะจุดเสี่ยงที่หลักฐานชี้)') : ''} · กระสอบทรายพังเมื่อน้ำ ≥ ${SANDBAG.failLevel.toFixed(2)} ม.`
           : 'ส่งทีมครบทุกจุดแล้ว — รอทีมทำงานตามคิว' },
       ]
     },

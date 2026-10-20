@@ -5,11 +5,11 @@
    ทุกฟังก์ชันเป็น pure: รับ state เดิม คืน state ใหม่ (log อยู่ใน state.logs)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { THEOS2, MODES, MISSION, BOAT, FUEL_FACTOR, ACT2, DURATIONS, THRESHOLDS, TIME, STRESS } from '../config/missionConfig'
+import { THEOS2, MODES, MISSION, BOAT, FUEL_FACTOR, ACT2, DURATIONS, THRESHOLDS, TIME, STRESS, SANDBAG } from '../config/missionConfig'
 import { CAMP_SITES, HOSPITAL, SHELTER_POOL } from '../config/scenarioData'
 import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
 import { T_START, levelAt } from '../lib/hydro'
-import { makePoints, arrivalAt, peakDepth, HARM_M } from '../lib/sim'
+import { makePoints, arrivalAt, peakDepth, HARM_M, sandbagFailAt } from '../lib/sim'
 import { clearSections } from '../lib/clouds'
 import { routeOffline } from '../lib/geo'
 import { clockLabel, fmt } from '../lib/format'
@@ -155,6 +155,12 @@ export function advanceTo(s, scn, to) {
   n.clock = to
   const crossed = (t) => t > from && t <= to
 
+  if (n.act === 1 && (n.sandbagged || []).some((g) => n.sealed.includes(g)) && crossed(sandbagFailAt())) {
+    const k = n.sandbagged.filter((g) => n.sealed.includes(g)).length
+    log(n, 'crit', 'SANDBAG', `Temporary sandbags gave way at ${SANDBAG.failLevel} m (${k} gaps).`, `กระสอบทรายชั่วคราว ${k} จุดพังเมื่อน้ำถึง ${SANDBAG.failLevel.toFixed(2)} ม. — ช่องเปิดอีกครั้ง น้ำเข้าโซนหลังตลิ่งเร็วขึ้น`)
+    toast(n, 'crit', `กระสอบทรายพัง ${k} จุด`)
+    event(n, 'sandbag', `กระสอบทรายชั่วคราว ${k} จุดพัง — น้ำทะลักเข้าโซนหลังตลิ่ง`)
+  }
   if (n.act === 1) {
     for (const pass of scn.passes) {
       if (crossed(pass.t - TIME.prePassWarnMin) && !(n.taskings[pass.id] || []).length) {
@@ -266,7 +272,9 @@ function finishJob(n, scn, j) {
   switch (j.kind) {
     case 'seal':
       if (!n.sealed.includes(j.gap)) n.sealed.push(j.gap)
-      log(n, 'good', 'EMBANKMENT', `${j.crew} sealed ${j.gap}.`, `ทีม ${j.crew} อุดจุดฟันหลอ ${j.gap} เสร็จ — น้ำหลังแนวกั้นลดลง`)
+      if (j.bag === 'sandbag') n.sandbagged = [...new Set([...(n.sandbagged || []), j.gap])]
+      else n.sandbagged = (n.sandbagged || []).filter((g) => g !== j.gap)
+      log(n, 'good', 'EMBANKMENT', `${j.crew} sealed ${j.gap}${j.bag === 'sandbag' ? ' with sandbags' : ''}.`, `ทีม ${j.crew} ${j.bag === 'sandbag' ? 'วางกระสอบทราย' : 'อุดบิ๊กแบ็ก'} ${j.gap} เสร็จ — น้ำหลังแนวกั้นลดลง${j.bag === 'sandbag' ? ' (ชั่วคราว)' : ''}`)
       break
     case 'pump':
       log(n, 'good', 'PUMP', `Pump running in ${j.section}.`, `เครื่องสูบน้ำโซน ${j.section} ทำงานแล้ว — น้ำลด ${ACT2.pumpReliefM} ม. เปิดทางให้เรือ/รถ`)

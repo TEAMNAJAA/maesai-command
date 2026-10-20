@@ -94,9 +94,9 @@ function act1(s, scn) {
   } else if (s.decisions.some((d) => d.kind === 'EVACUATE')) good.push('ไม่มีเตือนผิด — ประกาศเมื่อมีหลักฐานรองรับ')
 
   /* embankment gaps */
-  const open = EMBANKMENT_GAPS.filter((g) => !s.sealed.includes(g.id))
+  const open = EMBANKMENT_GAPS.filter((g) => !s.sealed.includes(g.id) || (s.sandbagged || []).includes(g.id))
   if (open.length) {
-    const alt = { ...s, sealed: EMBANKMENT_GAPS.map((g) => g.id) }
+    const alt = { ...s, sealed: EMBANKMENT_GAPS.map((g) => g.id), sandbagged: [] }
     const gain = Math.max(0, exp.exposed - exposureSummary(alt, scn).exposed)
     let best = null
     for (const sec of SECTIONS) {
@@ -110,8 +110,8 @@ function act1(s, scn) {
       const bags = open.reduce((a, g) => a + g.len * EMBANKMENT.bagsPerMetre, 0)
       cards.push(card({
         id: 'seal', act: 1, icon: 'seal',
-        title: `ถ้าอุดจุดฟันหลอครบ ${EMBANKMENT_GAPS.length} จุด`,
-        you: `อุดได้ ${s.sealed.length}/${EMBANKMENT_GAPS.length} จุด — เหลือช่องเปิด ${open.length} จุด`,
+        title: `ถ้าใช้บิ๊กแบ็กอุดครบ ${EMBANKMENT_GAPS.length} จุด`,
+        you: s.sealPlan === 'none' ? 'เลือกไม่อุด เก็บงบไว้อพยพ' : (s.sandbagged || []).length ? `กระสอบทราย ${(s.sandbagged || []).length} จุด (พังตอนน้ำสูง) · บิ๊กแบ็ก ${s.sealed.length - (s.sandbagged || []).length} จุด` : `อุดได้ ${s.sealed.length}/${EMBANKMENT_GAPS.length} จุด — เหลือช่องเปิด ${open.length} จุด`,
         alt: `ส่งทีมบิ๊กแบ็กอุดที่เหลือตั้งแต่ต้นองก์ (อีก ${fmt(bags)} ใบ · ${baht(bags * COSTS.bigbag)})`,
         delta: gain ? { v: `+${fmt(gain)}`, unit: 'ครัวเรือนพ้นน้ำ' } : { v: `+${hrs(best.d)}`, unit: `เวลาก่อนน้ำถึง ${best.sec.id}` },
         lesson: `น้ำถึง ${best.sec.id} ช้าลง ${hrs(best.d)} และลึกสุด ${best.p0.toFixed(1)} → ${best.p1.toFixed(1)} ม. — มีเวลาอพยพและเรือเข้าได้ง่ายขึ้น`,

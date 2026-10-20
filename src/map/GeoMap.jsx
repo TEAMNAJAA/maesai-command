@@ -15,7 +15,7 @@ import { SECTORS, CAMP_SITES, HOSPITAL, SHELTER_POOL } from '../config/scenarioD
 import {
   makeProjection, geomPath, linePath, boxKm, aoiFeature, aoiStations, aoiRiver, osmRivers, osmRoads, saiRiver, roadWeight, tilesFor, elevationAt, metres,
 } from '../lib/geo'
-import { depthAt } from '../lib/sim'
+import { depthAt, sandbagFailAt } from '../lib/sim'
 import { sphereTileTemplate } from '../lib/sphere'
 import { BUILDINGS, COMMUNITIES_LIVE } from '../lib/buildings'
 import { SECTIONS } from '../lib/sections'
@@ -449,7 +449,8 @@ function Corridor({ eng, proj, roofs, gapSel, onGap, onChannel, beacon }) {
           const span = EMBANKMENT_WALL.spans[g.id]
           if (!span || span.length < 2) return null
           const sealed = s.sealed.includes(g.id), q = queued.has(g.id)
-          const hex = sealed ? '#22E36B' : q ? '#FFB300' : '#FF003C'
+          const sb = (s.sandbagged || []).includes(g.id), broke = sb && s.clock >= sandbagFailAt()
+          const hex = broke ? '#FF003C' : sb ? '#D9A55B' : sealed ? '#22E36B' : q ? '#FFB300' : '#FF003C'
           return <path key={g.id} d={linePath(span, proj)} fill="none" stroke={hex} strokeWidth="4.5" strokeDasharray={sealed ? undefined : '3 3'} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${hex})` }} />
         })}
       </g>
@@ -473,9 +474,10 @@ function Corridor({ eng, proj, roofs, gapSel, onGap, onChannel, beacon }) {
       })}
       {EMBANKMENT_GAPS.map((g, i) => {
         const [x, y] = proj.pt([g.lon, g.lat])
-        const sealed = s.sealed.includes(g.id), q = queued.has(g.id)
+        const sb = (s.sandbagged || []).includes(g.id), broke = sb && s.clock >= sandbagFailAt()
+        const sealed = s.sealed.includes(g.id) && !broke, q = queued.has(g.id)
         const on = gapSel === g.id
-        const hex = sealed ? '#22E36B' : q ? '#FFB300' : '#FF003C'
+        const hex = sb && !broke ? '#D9A55B' : sealed ? '#22E36B' : q ? '#FFB300' : '#FF003C'
         return (
           <g key={g.id} className="cursor-pointer" data-gap={g.id} data-sealed={sealed ? '1' : q ? 'q' : '0'} onClick={(e) => { e.stopPropagation(); onGap?.(on ? null : g, e) }}>
             <circle cx={x} cy={y} r="16" fill="transparent" />

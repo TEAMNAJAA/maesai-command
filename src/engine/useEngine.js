@@ -194,6 +194,7 @@ export function useEngine() {
   const submitAnalysis = useCallback(wrap(A.submitAnalysis, 'analysis'), [commit])
   const submitChannel = useCallback(wrap(A.submitChannel, 'channel'), [commit])
   const sealGaps = useCallback(wrap(A.sealGaps, 'seal'), [commit])
+  const sealPlan = useCallback(wrap(A.sealPlan, 'seal'), [commit])
 
   /** Hint ladder: open the next rung of a topic (no game time) and log the request. */
   const revealHint = useCallback((topic, rung) => {
@@ -372,7 +373,7 @@ export function useEngine() {
   return {
     s, scn, mode, sfvi, world, veto1, situation, exposure, cut, advance, skipCut, realMs, realActs: real.current.acts, start, flash, toast,
     act1Over, act2Over, finishBoss, autoBoss,
-    setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, orderZones, toggleLayer, routeZone, revealHint,
+    setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, sealPlan, orderZones, toggleLayer, routeZone, revealHint,
     orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat, requestBoatRoutes, boatRouteStatus, boatRouteVer,
     reviewRoof, survey, adjudicate, lockVerdict, lockAll, revealRelief,
     goAct2, goAct3, ackVeto, finishMission, newGame, setMode, setStress,

@@ -7,12 +7,12 @@
 
 import React, { useState, useMemo } from 'react'
 import {
-  ChevronRight, Satellite, ScanSearch, Ruler, ShieldCheck, Megaphone, Clock, Building2, Layers, Check, Cloud, Lock, Ship, Plane, Zap, RadioTower, Droplets, Users, HeartPulse, AlertTriangle, Loader2,
+  ChevronRight, Satellite, ScanSearch, Ruler, ShieldCheck, Megaphone, Clock, Building2, Layers, Check, Cloud, Lock, Ship, Plane, Zap, RadioTower, Droplets, Users, HeartPulse, AlertTriangle, Loader2, Target, Package, Wallet,
 } from 'lucide-react'
 import { Panel, Btn, Src, Divider } from '../ui/atoms'
 import { Lbl, useMode } from '../ui/label'
 import { QuestBox } from './quest'
-import { THEOS2, COSTS, SFVI, EMBANKMENT, DURATIONS, ACT2 } from '../config/missionConfig'
+import { THEOS2, COSTS, SFVI, EMBANKMENT, DURATIONS, ACT2, SANDBAG } from '../config/missionConfig'
 import { CAMP_SITES, LAYERS, EQUIPMENT } from '../config/scenarioData'
 import { SECTIONS, SECTION_BY_ID } from '../lib/sections'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
@@ -147,13 +147,55 @@ function TheosPlanner({ eng, onAnalyze }) {
 
 /* ── ② Embankment crews + channel width (N) ─────────────────────────────── */
 
+const PLAN_UI = [
+  { id: 'risk', th: 'เฉพาะจุดเสี่ยง', sub: 'ถูก · เร็ว · ที่เหลือยังรั่ว', icon: Target, hex: '#38BDF8' },
+  { id: 'full', th: 'บิ๊กแบ็กทั้งแนว', sub: 'แพง · ช้า · กันได้มากสุด', icon: ShieldCheck, hex: '#22E36B' },
+  { id: 'sandbag', th: 'กระสอบทราย', sub: `ถูกสุด · พังเมื่อน้ำ ≥ ${SANDBAG.failLevel} ม.`, icon: Package, hex: '#D9A55B' },
+  { id: 'none', th: 'ไม่อุด', sub: 'เก็บงบไว้อพยพ', icon: Wallet, hex: '#94A3B8' },
+]
+
+/** B4: four embankment plans, each with a real trade-off — pick one, read its card, then order it. */
+function SealPlans({ eng }) {
+  const { s, scn } = eng
+  const [pick, setPick] = useState(null)
+  const queuedN = s.jobs.filter((j) => j.kind === 'seal').length
+  const card = useMemo(() => (pick ? I.previewSealPlan(s, scn, pick) : null), [pick, s.clock, s.budget.spent, s.crews, s.sealed, queuedN, scn]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (s.act !== 1) return null
+  const allFirm = EMBANKMENT_GAPS.every((g) => s.sealed.includes(g.id) && !(s.sandbagged || []).includes(g.id))
+  if (allFirm) return null
+  const go = () => { eng.sealPlan(pick); setPick(null) }
+  return (
+    <div className="mt-2" data-seal-plans data-seal-current={s.sealPlan || ''}>
+      <div className="grid grid-cols-2 gap-1.5">
+        {PLAN_UI.map((p) => (
+          <div key={p.id} className="relative">
+            <button type="button" onClick={() => setPick(pick === p.id ? null : p.id)} data-seal-plan={p.id} data-on={pick === p.id ? 1 : 0}
+              className={`flex w-full items-start gap-2 rounded-lg border-2 px-2 py-1.5 text-left transition ${pick === p.id ? 'bg-white/[0.07]' : 'border-white/10 hover:border-white/25'}`}
+              style={pick === p.id ? { borderColor: p.hex } : undefined}>
+              <p.icon size={15} className="mt-0.5 shrink-0" style={{ color: p.hex }} />
+              <span className="min-w-0">
+                <span className="font-thai block text-[12px] font-bold text-white">{p.th}{s.sealPlan === p.id && <span className="ml-1 text-[10px] font-normal text-[#7CFFA0]">· ใช้อยู่</span>}</span>
+                <span className="font-thai block text-[10px] leading-tight text-slate-400">{p.sub}</span>
+              </span>
+            </button>
+            <span className="absolute right-1 top-1"><WhyButton id={`seal_${p.id}`} size={11} /></span>
+          </div>
+        ))}
+      </div>
+      {card && <ImpactCard card={card} compact className="mt-2" />}
+      {pick && (
+        <Btn variant={pick === 'none' ? 'warn' : 'go'} className="mt-2 w-full" icon={PLAN_UI.find((p) => p.id === pick).icon} onClick={go} data-seal-go>
+          <span className="font-thai normal-case tracking-normal">{pick === 'none' ? 'ยืนยัน: ไม่อุด เก็บงบไว้อพยพ' : `สั่งแผน "${PLAN_UI.find((p) => p.id === pick).th}"`}</span>
+        </Btn>
+      )}
+    </div>
+  )
+}
+
 function BankTab({ eng, onChannel }) {
   const { s, scn } = eng
   const queued = s.jobs.filter((j) => j.kind === 'seal')
   const open = EMBANKMENT_GAPS.filter((g) => !s.sealed.includes(g.id) && !queued.some((j) => j.gap === g.id))
-  const openKey = open.map((g) => g.id).join()
-  const sealCard = useMemo(() => (open.length ? I.previewSeal(s, scn, open.map((g) => g.id)) : null), [s.clock, s.budget.spent, s.crews, openKey, scn])
-  const cost = open.reduce((a, g) => a + g.len * EMBANKMENT.bagsPerMetre * COSTS.bigbag, 0)
   const riverImg = s.images.find((i) => i.usable && i.readyAt <= s.clock && ['D', 'E', TOWN_TARGET].includes(i.target))
   return (
     <div className="space-y-2.5" data-panel="bank">
@@ -193,13 +235,8 @@ function BankTab({ eng, onChannel }) {
         <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
           <div className="h-full rounded-full bg-[#22E36B]" style={{ width: `${(s.sealed.length / EMBANKMENT_GAPS.length) * 100}%` }} />
         </div>
-        {sealCard && <ImpactCard card={sealCard} compact className="mt-2" />}
-        {open.length > 0 && (
-          <Btn variant="go" className="mt-2 w-full" icon={ShieldCheck} onClick={() => eng.sealGaps(open.map((g) => g.id))}>
-            <span className="font-thai normal-case tracking-normal">ส่งทีมอุดที่เหลือ {open.length} จุด · ฿{fmt(cost)}</span>
-          </Btn>
-        )}
-        <div className="font-thai mt-1 text-[9.5px] leading-snug text-slate-500">ทีมใช้เวลา ~{DURATIONS.bigbagPerMetre} นาที/เมตร ทำตามคิว · จุดที่ยังเปิดทำให้น้ำเข้าโซนหลังตลิ่งเร็วและลึกขึ้น (ดูคอลัมน์ "ลึก" ในตารางโซน) · คลิกหมุดบนแผนที่แนวตลิ่งเพื่ออุดทีละจุด</div>
+        <SealPlans eng={eng} />
+        <div className="font-thai mt-1 text-[9.5px] leading-snug text-slate-500">ทีมใช้เวลา ~{DURATIONS.bigbagPerMetre} นาที/เมตร (กระสอบทราย ×{SANDBAG.timeFactor}) ทำตามคิว · จุดที่ยังเปิดทำให้น้ำเข้าโซนหลังตลิ่งเร็วและลึกขึ้น · คลิกหมุดบนแผนที่แนวตลิ่งเพื่ออุดทีละจุด</div>
       </div>
     </div>
   )

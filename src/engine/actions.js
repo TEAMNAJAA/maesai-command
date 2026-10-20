@@ -3,9 +3,9 @@
    ไม่มีแต้ม AP: คำสั่งใช้ "เวลา" (งานของทีมใช้เวลาจริงในเกม) และ "งบประมาณ" (บาท)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { THEOS2, COSTS, DURATIONS, MODES, TRUST, SFVI, RELIEF, BOAT, THRESHOLDS, EMBANKMENT, CMD_MIN, HINTS, BOAT_INCIDENT } from '../config/missionConfig'
+import { THEOS2, COSTS, DURATIONS, MODES, TRUST, SFVI, RELIEF, BOAT, THRESHOLDS, EMBANKMENT, CMD_MIN, HINTS, BOAT_INCIDENT, SEAL_PLANS, SANDBAG, SEAL_RISK } from '../config/missionConfig'
 import { CAMP_SITES, HOSPITAL } from '../config/scenarioData'
-import { SECTION_BY_ID } from '../lib/sections'
+import { SECTION_BY_ID, GAPS_BY_SECTION } from '../lib/sections'
 import { EMBANKMENT_GAPS } from '../lib/embankment'
 import { computeSfvi, scarStats } from '../lib/sim'
 import { levelAt } from '../lib/hydro'
@@ -101,29 +101,61 @@ export function submitChannel(s, scn, valueN) {
 
 /* ── Act 1 · embankment crews ─────────────────────────────────────────────── */
 
-export function sealGaps(s, scn, ids) {
+/** Queue gaps for the crews. bag 'bigbag' (lasts) or 'sandbag' (cheap, fast, gives way above SANDBAG.failLevel). */
+export function sealGaps(s, scn, ids, bag = 'bigbag') {
   if (s.act !== 1) return s
   const n = clone(s)
   const queued = new Set(n.jobs.filter((j) => j.kind === 'seal').map((j) => j.gap))
-  const todo = ids.filter((id) => !n.sealed.includes(id) && !queued.has(id))
+  // a sandbagged gap can still be upgraded to big bags
+  const todo = ids.filter((id) => !queued.has(id) && (!n.sealed.includes(id) || (bag === 'bigbag' && (n.sandbagged || []).includes(id))))
+  const sb = bag === 'sandbag'
   let started = 0
   for (const id of todo) {
     const g = EMBANKMENT_GAPS.find((x) => x.id === id)
     if (!g) continue
     const bags = g.len * EMBANKMENT.bagsPerMetre
-    if (!afford(n, bags * COSTS.bigbag, `บิ๊กแบ็ก ${g.id}`)) break
+    if (!afford(n, Math.round(bags * COSTS.bigbag * (sb ? SANDBAG.costFactor : 1)), `${sb ? 'กระสอบทราย' : 'บิ๊กแบ็ก'} ${g.id}`)) break
     const crew = n.crews.reduce((m, c) => (c.busyUntil < m.busyUntil ? c : m))
     const start = Math.max(n.clock, crew.busyUntil)
-    crew.busyUntil = start + Math.round(g.len * DURATIONS.bigbagPerMetre)
-    n.jobs.push({ kind: 'seal', gap: id, crew: crew.id, start, at: crew.busyUntil })
+    crew.busyUntil = start + Math.round(g.len * DURATIONS.bigbagPerMetre * (sb ? SANDBAG.timeFactor : 1))
+    n.jobs.push({ kind: 'seal', gap: id, crew: crew.id, start, at: crew.busyUntil, bag })
     started++
   }
   if (started) {
-    log(n, 'info', 'EMBANKMENT', `${started} gap(s) queued for big-bag crews.`, `สั่งทีมวางบิ๊กแบ็ก ${started} จุด — ทีมมี ${n.crews.length} ชุด ทำตามคิว`)
-    toast(n, 'ok', `ทีมบิ๊กแบ็กรับงาน ${started} จุด`)
+    log(n, 'info', 'EMBANKMENT', `${started} gap(s) queued for ${sb ? 'sandbag' : 'big-bag'} crews.`, `สั่งทีมวาง${sb ? 'กระสอบทราย' : 'บิ๊กแบ็ก'} ${started} จุด — ทีมมี ${n.crews.length} ชุด ทำตามคิว`)
+    toast(n, 'ok', `ทีม${sb ? 'กระสอบทราย' : 'บิ๊กแบ็ก'}รับงาน ${started} จุด`)
     return spend(n, scn, CMD_MIN.seal)
   }
   return n
+}
+
+/** B4: which gaps a plan covers. 'risk' reads the evidence on screen (SFVI per zone), so weak evidence picks badly. */
+export function sealTargets(s, scn, plan) {
+  const P = SEAL_PLANS[plan]
+  if (!P || P.scope === 'none') return []
+  const firm = new Set(s.sealed.filter((g) => !(s.sandbagged || []).includes(g)))
+  const all = EMBANKMENT_GAPS.map((g) => g.id).filter((id) => !firm.has(id) && (P.bag === 'bigbag' || !s.sealed.includes(id)))
+  if (P.scope === 'all') return all
+  const ranked = computeSfvi(s, scn).ranked
+  let zones = ranked.filter((z) => z.score >= SFVI.decisionBand).map((z) => z.id)
+  if (zones.length < SEAL_RISK.minZones) zones = ranked.slice(0, SEAL_RISK.minZones).map((z) => z.id)
+  const want = new Set(zones.flatMap((id) => GAPS_BY_SECTION[id]))
+  return all.filter((id) => want.has(id))
+}
+
+/** B4: choose an embankment plan (records the choice; 'none' keeps the money for evacuation). */
+export function sealPlan(s, scn, plan) {
+  if (s.act !== 1 || !SEAL_PLANS[plan]) return s
+  if (plan === 'none') {
+    const n = clone(s)
+    n.sealPlan = 'none'
+    log(n, 'warn', 'EMBANKMENT', 'No sealing — budget kept for evacuation.', 'ตัดสินใจไม่อุดจุดฟันหลอ — เก็บงบไว้ใช้อพยพ (น้ำจะเข้าโซนหลังตลิ่งเร็วและลึกขึ้น)')
+    toast(n, 'warn', 'ไม่อุดตลิ่ง — เก็บงบไว้อพยพ')
+    return spend(n, scn, CMD_MIN.seal)
+  }
+  const ids = sealTargets(s, scn, plan)
+  const n = sealGaps({ ...s, sealPlan: plan }, scn, ids, SEAL_PLANS[plan].bag)
+  return n.jobs.length === s.jobs.length && n.clock === s.clock ? s : n
 }
 
 /* ── Act 1 · evacuation orders per zone ───────────────────────────────────── */

@@ -19,7 +19,7 @@ async function toT0(page, prepared) {
   if (prepared) {
     await page.locator('[data-rail="command"] [data-tab="base"]').click(); await page.locator('[data-camp="cmp-amp"]').click()
     await page.locator('[data-rail="command"] [data-tab="bank"]').click()
-    await page.locator('[data-panel="bank"] button', { hasText: 'ส่งทีมอุด' }).first().click()
+    await page.locator('[data-seal-plan="full"]').click(); await page.locator('[data-seal-go]').click()
   }
   for (let i = 0; i < 30 && !(await page.locator('[data-boss]').count()); i++) {
     await idle(page)
