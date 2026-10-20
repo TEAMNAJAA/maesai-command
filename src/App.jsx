@@ -44,6 +44,8 @@ import { PerfNotice } from './ui/settings'
 import { prefs, usePrefs } from './lib/prefs'
 import { BossBattle } from './modals/BossBattle'
 import { CareerFile } from './modals/careerFile'
+import { DexBook, DexToast } from './modals/dexBook'
+import { dex, dexUnlocks } from './lib/dex'
 import { career, medalsFor } from './lib/career'
 import { THRESHOLDS } from './config/missionConfig'
 
@@ -137,7 +139,15 @@ export default function App() {
   /* keyboard: Space = advance to the next event · Ctrl+Shift+L teacher log */
   const bossOn = phase === 'play' && eng.act1Over && !s.boss?.done          // E: the crisis night at T0, before the act-1 summary
   const [careerOpen, setCareerOpen] = useState(false)
-  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen || creator || bossOn || careerOpen)
+  const [dexOpen, setDexOpen] = useState(false)
+  const [dexNew, setDexNew] = useState([])
+  // D1: cards unlock when the player meets the thing in the game (only real play counts)
+  useEffect(() => {
+    if (phase !== 'play') return
+    const fresh = dex.see(dexUnlocks(s, eng.scn))
+    if (fresh.length) setDexNew((x) => [...new Set([...x, ...fresh])])
+  }, [s.clock, s.act, s.images.length, s.sealed.length, s.trips, s.decisions.length, (s.incidents || []).length, Object.keys(s.locked || {}).length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen || creator || bossOn || careerOpen || dexOpen)
   useEffect(() => {
     const h = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
@@ -210,7 +220,7 @@ export default function App() {
     <ModeContext.Provider value={eng.mode}>
       <div ref={shakeRef} className="crt grid-bg flex h-screen w-screen flex-col overflow-hidden bg-[#050912]">
         <div className="pointer-events-none fixed inset-0 z-0 transition-all duration-700" style={{ background: `radial-gradient(120% 70% at 50% 0%, ${act.hex}0F, transparent 62%)` }} />
-        <TopBar eng={eng} onGuide={() => setGuide(true)} onBoard={() => setBoard(true)} onTeacher={() => setTeacher(true)} tutorOn={tutorOn} setTutorOn={setTutorOn}
+        <TopBar eng={eng} onDex={() => setDexOpen(true)} onGuide={() => setGuide(true)} onBoard={() => setBoard(true)} onTeacher={() => setTeacher(true)} tutorOn={tutorOn} setTutorOn={setTutorOn}
           onReset={() => eng.newGame()} />
         <ActStepper eng={eng} />
 
@@ -254,6 +264,8 @@ export default function App() {
         <Floaters />
         <PerfNotice />
         <ChibiCreator open={creator} onClose={() => setCreator(false)} player={player} setPlayer={setPlayer} />
+        <DexBook open={dexOpen} onClose={() => setDexOpen(false)} />
+        <DexToast items={dexNew} onOpen={() => { setDexOpen(true); setDexNew([]) }} onDone={() => setDexNew([])} />
         <CareerFile open={careerOpen} onClose={() => setCareerOpen(false)} player={player} unlockAll={prefsNow.unlockAll} />
         <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} officer={officer} setOfficer={(v) => prefs.set({ officer: v })} player={player} setPlayer={setPlayer}
           onCareer={() => setCareerOpen(true)} unlockAll={prefsNow.unlockAll} setUnlockAll={(v) => prefs.set({ unlockAll: v })} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}

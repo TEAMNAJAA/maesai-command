@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react'
 import {
-  AlertTriangle, Timer, ChevronRight, ChevronUp, ChevronDown, RotateCcw, BookOpen, Database, Lightbulb, Check, ScrollText, Trophy, Wallet, Fuel, CalendarClock,
+  AlertTriangle, Timer, ChevronRight, ChevronUp, ChevronDown, RotateCcw, BookOpen, Database, Lightbulb, Check, ScrollText, Trophy, Wallet, Fuel, CalendarClock, BookMarked,
 } from 'lucide-react'
 import { Panel } from '../ui/atoms'
 import { SPHERE, MISSION, TIME, STRESS } from '../config/missionConfig'
@@ -14,6 +14,8 @@ import { sphereReady } from '../lib/sphere'
 import { SettingsMenu } from '../ui/settings'
 import { Tween } from '../ui/juice'
 import { usePrefs } from '../lib/prefs'
+import { useDex } from '../lib/dex'
+import { KNOWLEDGE } from '../config/scenarioData'
 
 export const ACTS = [
   { n: 1, roman: 'I', th: 'เฝ้าระวัง', code: 'T−48', long: 'มองต้นน้ำที่มองไม่เห็น', en: 'SEEING THE UNSEEN UPSTREAM', hex: '#22E36B' },
@@ -68,7 +70,19 @@ function PlayTimer({ eng }) {
   )
 }
 
-export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, onReset }) {
+/** D1: the knowledge book, with how many cards are collected. */
+function DexButton({ onDex }) {
+  const found = useDex()
+  const n = KNOWLEDGE.filter((k) => found[k.id]).length
+  return (
+    <button onClick={onDex} title={`สมุดการ์ดความรู้ (${n}/${KNOWLEDGE.length})`} data-dex className="relative grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white">
+      <BookMarked size={15} />
+      <span className="num absolute -right-0.5 -top-0.5 rounded-full bg-sky-500 px-1 text-[8.5px] font-bold leading-[13px] text-white">{n}</span>
+    </button>
+  )
+}
+
+export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, onReset, onDex }) {
   const { s, mode, situation, veto1 } = eng
   const officer = usePrefs().officer
   const act = ACTS[s.act - 1]
@@ -132,6 +146,7 @@ export function TopBar({ eng, onGuide, onBoard, onTeacher, tutorOn, setTutorOn, 
           </button>
         )}
         <SettingsMenu />
+        {onDex && <DexButton onDex={onDex} />}
         <button onClick={onGuide} title="คู่มือการเล่น" data-guide className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white"><BookOpen size={15} /></button>
         <button onClick={onBoard} title="Leaderboard" data-board className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white"><Trophy size={15} /></button>
         <button onClick={onReset} title="เริ่มภารกิจใหม่" className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white"><RotateCcw size={15} /></button>

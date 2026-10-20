@@ -18,6 +18,7 @@ import { BOAT_INCIDENT, DURATIONS } from '../config/missionConfig'
 import { SECTION_BY_ID } from '../lib/sections'
 import { BUILDINGS } from '../lib/buildings'
 import { alongRoute } from '../lib/routes'
+import { KNOWLEDGE } from '../config/scenarioData'
 import { osmRoads, saiRiver, makeProjection, boxKm, tilesFor } from '../lib/geo'
 import { sphereReady, sphereTileTemplate } from '../lib/sphere'
 
@@ -422,9 +423,10 @@ function ControlRoom({ ev, onDone }) {
   )
 }
 
+const card = (id, icon, title) => { const k = KNOWLEDGE.find((x) => x.id === id); return { icon, hex: k.hex, title, body: k.body, source: k.source } }
 const KNOW = {
-  shock: { icon: Zap, hex: '#FDE047', title: 'น้ำท่วมที่มีไฟรั่ว อันตรายถึงชีวิต', body: 'กระแสไฟจากสายไฟ/ตู้ไฟที่จมน้ำแผ่ไปทั้งผืนน้ำ เรือและผู้ที่สัมผัสน้ำได้รับอันตรายถึงชีวิต — ต้องประสาน กฟภ. ตัดไฟในโซนก่อนส่งเรือหรือทีมเข้าพื้นที่ทุกครั้ง หรือเลือกเส้นทางที่ไม่ผ่านโซนนั้น', source: 'แนวปฏิบัติความปลอดภัยไฟฟ้าช่วงอุทกภัย (กฟภ. / ปภ.)' },
-  capsize: { icon: Waves, hex: '#7DD3FC', title: 'กระแสน้ำเชี่ยว พลิกเรือขนาดเล็กได้', body: 'ริมแม่น้ำและโซนที่น้ำลึกเกิน 1.6 ม. มีกระแสแรงกว่าที่เห็นจากด้านบน เรือท้องแบนบรรทุกคนเสี่ยงล่ม — ดูความลึกจากเรดาร์ (เช็คน้ำ) ก่อนเลือกเส้นทาง หรือสูบน้ำให้ระดับลดก่อน', source: 'ข้อมูลความลึกน้ำจากเรดาร์ RADARSAT-2 (GISTDA)' },
+  shock: card('power', Zap, 'น้ำท่วมที่มีไฟรั่ว อันตรายถึงชีวิต'),
+  capsize: card('current', Waves, 'กระแสน้ำเชี่ยว พลิกเรือขนาดเล็กได้'),
 }
 
 function KnowledgeCard({ kind, onClose }) {
