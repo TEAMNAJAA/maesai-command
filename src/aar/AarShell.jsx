@@ -8,7 +8,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
-  ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb, Scale, Lock, PenLine, LifeBuoy,
+  Medal, ChevronRight, Clock, ClipboardList, Target, Activity, AlertTriangle, Building2, Wrench, ScrollText, Download, Satellite, CheckCircle2, XCircle, Waves, Search, FileText, Users, GraduationCap, Trophy, HeartPulse, Route, Flag, Eye, Lightbulb, Scale, Lock, PenLine, LifeBuoy,
 } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts'
 import { Panel, PanelHead, Src, Btn, ArcGauge, Spark, StatLine, Corners } from '../ui/atoms'
@@ -17,6 +17,8 @@ import { ImpactHover, WhyButton, ConfirmImpact } from '../ui/impact'
 import { HintLadder } from '../ui/hints'
 import { DecisionHeadline, DecisionList, TIER_HEX } from '../ui/decision'
 import { GradeStamp } from '../ui/gradeStamp'
+import { MEDALS, medalsFor, fileOf } from '../lib/career'
+import { MedalBadge, RankBadge } from '../modals/careerFile'
 import { WhatIfPanel } from '../ui/whatif'
 import { DeltaChip, fmtVal } from '../modals/teacherCompare'
 import { sessionMetrics, previousRound, METRICS } from '../lib/compare'
@@ -555,6 +557,27 @@ function WhatIfTabs({ eng, relDone }) {
   )
 }
 
+/** A1/A2: medals earned in this mission, and the rank once it is filed. */
+function RunMedals({ eng, player, saved }) {
+  const { s, scn } = eng
+  const got = medalsFor(s, scn, { realSec: eng.realMs() / 1000 })
+  const file = fileOf(player)
+  return (
+    <Panel className="p-3" data-run-medals>
+      <div className="flex items-center gap-2">
+        <Medal size={16} className="text-[#FFD066]" />
+        <span className="font-thai text-[14px] font-bold text-white">เหรียญในภารกิจนี้ {got.length} / {MEDALS.length}</span>
+        {player.trim() && <span className="ml-2"><RankBadge rank={file.rank} /></span>}
+        <span className="font-thai ml-auto text-[11.5px] text-slate-400">{!player.trim() ? 'ใส่ชื่อที่หน้าเปิดเกมเพื่อสะสมแต้มและยศ' : saved ? `สะสมแล้ว ${fmt(file.total)} แต้ม${file.rank.next ? ` · อีก ${fmt(file.rank.toNext)} ถึง${file.rank.next.th}` : ''}` : 'กดบันทึกคะแนนเพื่อเก็บเข้าแฟ้มประวัติ'}</span>
+      </div>
+      {saved?.rankUp && <div className="font-thai mt-2 rounded-lg border border-[#FFD066]/60 bg-[#FFD066]/12 px-3 py-2 text-[14px] font-bold text-[#FFE0A3] animate-[riseIn_.4s_ease-out]" data-rank-up={saved.rankUp.id}>เลื่อนยศเป็น {saved.rankUp.th}!</div>}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {MEDALS.map((m) => <MedalBadge key={m.id} id={m.id} earned={got.includes(m.id)} size={42} fresh={!!saved?.newMedals?.includes(m.id)} />)}
+      </div>
+    </Panel>
+  )
+}
+
 function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }) {
   const { s } = eng
   const rel = score.relief
@@ -586,6 +609,7 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
           ))}
         </div>
       </Panel>
+      {allDone && <RunMedals eng={eng} player={player} saved={saved} />}
       {allDone && <PrevRound eng={eng} player={player} />}
       {allDone && (
         <Panel data-panel="decisions">

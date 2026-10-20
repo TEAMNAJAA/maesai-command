@@ -26,6 +26,7 @@ node scripts/probe-whatif.mjs <outDir>   # ภาพ "ถ้าคุณเล�
 node scripts/probe-stress-compare.mjs <outDir>   # หน้าเลือก Stress Test + ผลในเกม · แผงครูเทียบรอบ 1→2 (ข้อมูลสังเคราะห์ในโปรไฟล์เบราว์เซอร์ทดสอบ) · การ์ดพัฒนาการผู้เล่น
 RECORD_PARAMS=stress=all node record-demo.mjs   # smoke test 3 องก์ภายใต้ Stress Test ทุกเงื่อนไข
 node scripts/probe-hints.mjs <outDir>    # ภาพหน้าจอคำใบ้แบบบันไดทั้ง 3 องก์ (ต้องเปิด npm run dev) · exit 2 ถ้าขั้นเกินองก์/ไม่ชี้ข้อมูล
+node scripts/probe-career.mjs <outDir> [baseUrl]  # ยศ/ล็อก Expert+Stress/ครูปลดล็อก/แฟ้มประวัติ ที่ 1920 และ 1280 (ต้องเปิด npm run dev)
 node scripts/probe-relief.mjs <outDir> [baseUrl]  # องก์ 3: ฉากศูนย์ควบคุม + ภาพหลังคาทุกหลัง (โคลนชัด/ลานสะอาด) (ต้องเปิด npm run dev)
 node scripts/probe-officer.mjs <outDir> [baseUrl] # โหมดฝึกเจ้าหน้าที่: ปุ่ม/เมนู/?officer · ไม่มี chibi/บอส · สรุปตลิ่งจากการเตรียมตัว (ต้องเปิด npm run dev)
 node scripts/probe-boss.mjs <outDir> [baseUrl]    # คืนวิกฤต T0 (บอส): 1920/1280 · Expert ซ่อนท่าถัดไป · ไม่เตรียมตัว → ตลิ่งแตก (ต้องเปิด npm run dev)
@@ -37,7 +38,7 @@ node scripts/extract-buildings.mjs <BD_footprintTH.shp> <BD_footprintTH.dbf> [--
 python scripts/build-final-mission-package.py   # สร้าง gistda-request/revenge_Final_Mission_Package.docx
 ```
 
-- **URL params:** `?officer` โหมดฝึกเจ้าหน้าที่ · `?perf=lite|full` โหมดประหยัด · `?mute` ปิดเสียง · `?chibilab` ดูท่า chibi · `?demo` ข้ามหน้าเปิดเกม/pre-test (ไม่นับสถิติ) · `?seed=N` สถานการณ์ตายตัว · `?mode=expert` · `?stress=data,roads,time` หรือ `?stress=all` (Stress Test) · `?speed=N` เร่งคัตซีน (ใช้ตอนอัดคลิป) · `?rec` เปิด `window.__maesai` ให้สคริปต์อัดคลิปอ่านเฉลย (ห้ามใช้ตอนเล่นจริง)
+- **URL params:** `?officer` โหมดฝึกเจ้าหน้าที่ · `?unlock` ครูปลดล็อก Expert/Stress ทั้งหมด · `?perf=lite|full` โหมดประหยัด · `?mute` ปิดเสียง · `?chibilab` ดูท่า chibi · `?demo` ข้ามหน้าเปิดเกม/pre-test (ไม่นับสถิติ) · `?seed=N` สถานการณ์ตายตัว · `?mode=expert` · `?stress=data,roads,time` หรือ `?stress=all` (Stress Test) · `?speed=N` เร่งคัตซีน (ใช้ตอนอัดคลิป) · `?rec` เปิด `window.__maesai` ให้สคริปต์อัดคลิปอ่านเฉลย (ห้ามใช้ตอนเล่นจริง)
 - **ห้ามดับเบิลคลิก `index.html` ที่ root** — เป็น entry ของ Vite
 - คีย์ลัด: `Space` = เดินเวลาไปเหตุการณ์ถัดไป · `Ctrl+Shift+L` แผงครู
 - **Sphere API key อยู่ใน `missionConfig.js` (SPHERE.apiKey)** ตามที่ผู้ใช้สั่ง — ตั้งทับได้ด้วย `.env.local` → `VITE_SPHERE_API_KEY` · ออฟไลน์/คีย์ใช้ไม่ได้ = fallback ข้อมูลในเครื่อง
@@ -183,6 +184,13 @@ python scripts/build-final-mission-package.py   # สร้าง gistda-request
 - เข้าองก์ 3 (หลังคาแรกเปิดอัตโนมัติ) → ฉากศูนย์ควบคุม EOC (`ControlRoom` ใน ActionScene.jsx, `data-action-scene="control"`, `sceneOf('review')` เฉพาะหลังคาแรก) — chibi ใส่แว่นหน้าจอ ผนังจอข้อมูล และจอใหญ่แสดงภาพ Sphere จริงของพื้นที่ + กรอบหลังคา + เส้นปาดก่อน/หลัง (ฝั่ง "หลัง" ปรับโทนทั่วไปเท่านั้น **ไม่วาดโคลน** — ให้ผู้เล่นอ่านหลักฐานเอง) · คลิกข้าม · โหมดเจ้าหน้าที่ไม่แสดง
 - ภาพ "หลัง" ใน RoofScene: โคลนเฉพาะ `mudLevel ≥ RELIEF.mudVisibleLevel` (0.4 = บ้านที่มีโคลนจริงทุกหลัง) → ตะกอนน้ำตาลหนาราว 30 ม. รอบบ้าน + รอยไหล + คราบน้ำบนผนัง (เส้นเข้มรอบหลังคา) + แอ่งน้ำขัง + เศษขยะ (`MudDetail`, `data-mud-detail`) · บ้านที่ไม่มีโคลน: ลานบ้านสะอาด (ตัดตะกอนทั่วย่าน + แอ่งน้ำรอบบ้านออก) · filter `blob` ใช้ userSpaceOnUse (เดิมถูกตัดเป็นสี่เหลี่ยมเล็ก)
 - `node scripts/probe-relief.mjs <outDir> [baseUrl]` ฉากศูนย์ควบคุม + ภาพทุกหลัง ตรวจว่ามีโคลน ⇔ `r.mud` · tests/mud.test.js
+
+### ยศ · เหรียญ · ปลดล็อก · แฟ้มประวัติ (A1–A4, 20 ต.ค.)
+- `src/lib/career.js` · `CAREER` ใน missionConfig: ยศตามแต้มสะสม (คะแนนภารกิจที่กดบันทึก) อาสาสมัคร 0 → หัวหน้าชุด 1,500 → ผอ.ศูนย์ 4,000 → ผู้บัญชาการ EOC 8,000 (`rankFor`)
+- เหรียญ 8 แบบผูกกับนิสัยที่อยากสอน (`MEDALS`, `medalsFor(s, scn, {realSec})` ฟังก์ชันล้วน, ต้องลงมือจริงจึงได้): ไม่เตือนผิดเลย · พบผู้ติดค้างครบ (ต้องส่งเรือด้วย) · ไม่ใช้คำใบ้ (Beginner, ภารกิจไม่ล้มเหลว) · จบใน ~7 นาที · ตัดไฟก่อนส่งเรือทุกครั้ง · แปลภาพไม่ผิดเลย · ตลิ่งรับยอดน้ำ · เยียวยาถูกทุกหลัง
+- ปลดล็อก (`CAREER.unlocks`, `unlocked(rankIndex, unlockAll)`): Expert + Stress "ข้อมูลหาย" ที่หัวหน้าชุด · "ถนนขาด" ที่ ผอ.ศูนย์ · "เวลาลดลง" ที่ผู้บัญชาการ EOC · **ครูปลดล็อกทั้งหมด** ปุ่ม `data-unlock-all` บน Stress Picker (`prefs.unlockAll`, `?unlock`) · `?mode=expert` / `?stress=` ใช้ได้เสมอ
+- แฟ้มประวัติ (localStorage `maesai-command.career.v1`, ชื่อเล่น + ผลรอบ — ไม่มีรูป/ข้อมูลส่วนตัวอื่น): บันทึกเมื่อกด "บันทึกคะแนน" (ไม่บันทึกใน `?demo`/`?rec` หรือไม่มีชื่อ) · `src/modals/careerFile.jsx` `CareerFile` (`data-career-file`) เปิดจากหน้าเปิดเกม (`data-career`) · ยศ (`RankBadge`, `data-title-rank`) ใต้ช่องชื่อ · หน้าสรุปภารกิจมีแผงเหรียญรอบนี้ + "เลื่อนยศ" (`data-run-medals`, `data-rank-up`) · CSV `medals`
+- `node scripts/probe-career.mjs <outDir> [baseUrl]` · tests/career.test.js
 
 ### SFVI และคะแนน (score v2 — 19 ต.ค. B5+B14)
 SFVI = 0.30·W + 0.25·R + 0.20·L + 0.15·N + 0.10·P (≥ 0.62 = หลักฐานพอ)

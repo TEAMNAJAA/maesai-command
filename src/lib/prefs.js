@@ -12,12 +12,14 @@ const DEFAULTS = {
   musicVol: 0.32, sfxVol: 0.55,        // quiet by default — ambient, not in the way
   perf: 'auto',                        // 'auto' (switch on when the frame rate drops) · 'on' (lite) · 'off' (full)
   officer: false,                      // โหมดฝึกเจ้าหน้าที่: no chibi, boss, music or comic effects
+  unlockAll: false,                    // A3: ครูปลดล็อก Expert + Stress Test ทุกเงื่อนไขโดยไม่ต้องมียศ
 }
 const URLQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
 const OVERRIDE = {
   ...(URLQ.has('mute') || URLQ.has('rec') ? { music: false, sfx: false } : {}),
   ...(URLQ.get('perf') === 'lite' ? { perf: 'on' } : URLQ.get('perf') === 'full' ? { perf: 'off' } : {}),
   ...(URLQ.has('officer') ? { officer: URLQ.get('officer') !== '0' } : {}),
+  ...(URLQ.has('unlock') ? { unlockAll: URLQ.get('unlock') !== '0' } : {}),
 }
 
 let stored = { ...DEFAULTS }

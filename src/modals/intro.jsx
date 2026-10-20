@@ -8,10 +8,12 @@
 import React, { useRef } from 'react'
 import {
   Play, BookOpen, Trophy, Satellite, Ship, Building2, Target, Users, Map, Clock, FastForward, Database, GraduationCap, Scale,
-  CheckCircle2, X, ArrowRight, Layers, Timer, Zap, Lightbulb, HelpCircle, MousePointerClick, KeyRound, FlaskConical, CloudOff, Construction, Hourglass, ShieldCheck,
+  CheckCircle2, X, ArrowRight, Layers, Timer, Zap, Lightbulb, HelpCircle, MousePointerClick, KeyRound, FlaskConical, CloudOff, Construction, Hourglass, ShieldCheck, Lock, Unlock, FolderOpen,
 } from 'lucide-react'
+import { useCareer, unlocked } from '../lib/career'
+import { RankBadge } from './careerFile'
 import { SrcLegend } from '../ui/atoms'
-import { SFVI, THRESHOLDS, THEOS2, RELIEF, ACT2, MODES, SCORE, TIME, HINTS, STRESS, STRESS_KEYS } from '../config/missionConfig'
+import { SFVI, THRESHOLDS, THEOS2, RELIEF, ACT2, MODES, SCORE, TIME, HINTS, STRESS, STRESS_KEYS, CAREER } from '../config/missionConfig'
 import { leaderboard } from '../lib/leaderboard'
 import { Chibi } from '../ui/chibi'
 import { useProfile } from '../lib/profile'
@@ -271,7 +273,7 @@ export function HowToPlay({ open, onClose, onStart }) {
 const STRESS_ICON = { data: CloudOff, roads: Construction, time: Hourglass }
 
 /** Teacher's Stress Test picker — special conditions that test the decision rules. */
-export function StressPicker({ stress = [], setStress }) {
+export function StressPicker({ stress = [], setStress, locked = {}, lockTh = {}, unlockAll, setUnlockAll }) {
   const toggle = (k) => setStress(STRESS_KEYS.filter((x) => (x === k ? !stress.includes(k) : stress.includes(x))))
   return (
     <div className="mt-3 rounded-lg border border-[#FF8A3D]/30 bg-[#FF8A3D]/[0.05] px-3 py-2.5" data-stress-picker>
@@ -279,18 +281,22 @@ export function StressPicker({ stress = [], setStress }) {
         <FlaskConical size={14} className="text-[#FFB27A]" />
         <span className="font-thai text-[12.5px] font-bold text-[#FFD2B0]">Stress Test · ครูเลือกเงื่อนไขพิเศษ</span>
         <span className="font-thai hidden text-[11px] text-slate-400 lg:inline">ทดสอบว่ากฎการตัดสินใจยังใช้ได้เมื่อสถานการณ์แย่ลง</span>
-        {stress.length > 0 && <button onClick={() => setStress([])} className="font-thai ml-auto rounded px-1.5 text-[11px] text-slate-400 hover:bg-white/10 hover:text-white">ปิดทั้งหมด</button>}
+        <span className="ml-auto flex items-center gap-1">
+          {stress.length > 0 && <button onClick={() => setStress([])} className="font-thai rounded px-1.5 text-[11px] text-slate-400 hover:bg-white/10 hover:text-white">ปิดทั้งหมด</button>}
+          {setUnlockAll && <button onClick={() => setUnlockAll(!unlockAll)} data-unlock-all data-on={unlockAll ? 1 : 0} title="ให้ทุกคนเลือก Expert และ Stress Test ได้โดยไม่ต้องมียศ (ใช้ตอนสอน/สาธิต)"
+            className={`font-thai flex items-center gap-1 rounded border px-1.5 text-[11px] ${unlockAll ? 'border-[#FFD066]/60 text-[#FFE0A3]' : 'border-white/10 text-slate-400 hover:text-white'}`}>{unlockAll ? <Unlock size={11} /> : <Lock size={11} />}{unlockAll ? 'ครูปลดล็อกแล้ว' : 'ครู: ปลดล็อกทั้งหมด'}</button>}
+        </span>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-1.5">
         {STRESS_KEYS.map((k) => {
-          const on = stress.includes(k), Icon = STRESS_ICON[k]
+          const on = stress.includes(k), Icon = STRESS_ICON[k], lock = !!locked[k] && !on
           return (
-            <button key={k} onClick={() => toggle(k)} data-stress={k} data-on={on ? 1 : 0} title={STRESS[k].desc}
+            <button key={k} onClick={() => !lock && toggle(k)} disabled={lock} data-stress={k} data-on={on ? 1 : 0} data-locked={lock ? 1 : 0} title={lock ? `ปลดล็อกเมื่อเป็น${lockTh[k]}` : STRESS[k].desc}
               className={`flex items-start gap-2 rounded-lg border-2 px-2.5 py-1.5 text-left transition ${on ? 'border-[#FF8A3D] bg-[#FF8A3D]/15' : 'border-white/10 hover:border-[#FF8A3D]/40'}`}>
               <Icon size={15} className={`mt-0.5 shrink-0 ${on ? 'text-[#FFB27A]' : 'text-slate-500'}`} />
               <span className="min-w-0">
                 <span className={`font-thai block text-[12.5px] font-bold ${on ? 'text-white' : 'text-slate-300'}`}>{STRESS[k].th}</span>
-                <span className="font-thai block text-[10.5px] leading-snug text-slate-400">{STRESS[k].short}</span>
+                <span className="font-thai block text-[10.5px] leading-snug text-slate-400">{lock ? <span className="inline-flex items-center gap-1 text-slate-500"><Lock size={10} />ยศ{lockTh[k]}</span> : STRESS[k].short}</span>
               </span>
             </button>
           )
@@ -311,8 +317,13 @@ function TitleChibi({ onChibi }) {
   )
 }
 
-export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, setStress, onStart, onHowTo, onBoard, onChibi, officer = false, setOfficer }) {
+export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, setStress, onStart, onHowTo, onBoard, onChibi, officer = false, setOfficer, onCareer, unlockAll = false, setUnlockAll }) {
+  const file = useCareer(player)
   if (!open) return null
+  const un = unlocked(file.rank.index, unlockAll)
+  const rankTh = (k) => CAREER.ranks[CAREER.unlocks[k]]?.th
+  const lockedStress = Object.fromEntries(Object.entries(un.stress).map(([k, v]) => [k, !v]))
+  const lockTh = Object.fromEntries(Object.keys(un.stress).map((k) => [k, rankTh(`stress:${k}`)]))
   const top = leaderboard.top(modeId, 3)
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[radial-gradient(120%_90%_at_50%_10%,rgba(14,40,70,.92),rgba(3,6,14,.97))] backdrop-blur-[3px] keep-blur" data-modal="briefing">
@@ -343,18 +354,23 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
                 <span className="font-thai text-[12px] text-slate-400">ชื่อผู้เล่น / ทีม</span>
                 <input value={player} onChange={(e) => setPlayer(e.target.value)} maxLength={24} placeholder="เช่น ม.6/2-05" data-player
                   className="font-thai mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 text-[15px] text-white outline-none focus:border-sky-400/60" />
+                <span className="mt-1 flex items-center gap-2" data-title-rank={file.rank.id}>
+                  <RankBadge rank={file.rank} />
+                  <span className="font-thai text-[11px] text-slate-400">{player.trim() ? (file.rank.next ? `สะสม ${fmt(file.total)} · อีก ${fmt(file.rank.toNext)} แต้มถึง${file.rank.next.th}` : `สะสม ${fmt(file.total)} แต้ม · ยศสูงสุด`) : 'ใส่ชื่อเพื่อสะสมแต้มและยศ'}</span>
+                </span>
               </label>
               <div className="flex gap-1.5">
                 {Object.entries(MODES).map(([id, m]) => (
-                  <button key={id} onClick={() => setMode(id)} data-mode-pick={id}
+                  <button key={id} onClick={() => (id !== 'expert' || un.expert) && setMode(id)} data-mode-pick={id} disabled={id === 'expert' && !un.expert && modeId !== 'expert'} data-locked={id === 'expert' && !un.expert ? 1 : 0}
+                    title={id === 'expert' && !un.expert ? `ปลดล็อกเมื่อเป็น${rankTh('expert')} (สะสม ${fmt(CAREER.ranks[CAREER.unlocks.expert].min)} แต้ม)` : undefined}
                     className={`font-thai rounded-lg border-2 px-3 py-2 text-left ${modeId === id ? (id === 'expert' ? 'border-[#FF6B8A] bg-[#FF003C]/12' : 'border-[#22E36B] bg-[#22E36B]/12') : 'border-white/10 hover:border-white/25'}`}>
                     <div className="text-[13.5px] font-bold text-white">{m.th}</div>
-                    <div className="text-[10.5px] text-slate-400">{id === 'beginner' ? 'ผู้ช่วยสอน + คำใบ้แบบบันได' : 'ไม่มีตัวช่วย'}</div>
+                    <div className="text-[10.5px] text-slate-400">{id === 'beginner' ? 'ผู้ช่วยสอน + คำใบ้แบบบันได' : !un.expert && modeId !== 'expert' ? <span className="inline-flex items-center gap-1"><Lock size={10} />ยศ{rankTh('expert')}</span> : 'ไม่มีตัวช่วย'}</div>
                   </button>
                 ))}
               </div>
             </div>
-            {setStress && <StressPicker stress={stress} setStress={setStress} />}
+            {setStress && <StressPicker stress={stress} setStress={setStress} locked={lockedStress} lockTh={lockTh} unlockAll={unlockAll} setUnlockAll={setUnlockAll} />}
             <div className="mt-4 flex gap-2.5">
               <button onClick={onStart} data-start className="btn flex flex-1 items-center justify-center gap-2 border-[#22E36B]/70 bg-[#22E36B]/20 py-3.5 text-white hover:bg-[#22E36B]/30 shadow-[0_0_30px_-8px_#22E36B]">
                 <Play size={18} fill="currentColor" /><span className="font-thai normal-case tracking-normal text-[18px] font-bold">เริ่มภารกิจ</span>
@@ -373,7 +389,8 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
             </div>
             <div className="font-thai mt-2.5 text-center text-[12px] text-slate-500">ใช้เวลา ~7 นาทีสำหรับผู้เล่นเก่ง · ครั้งแรก 12–15 นาที · ไม่ต้องรอ เวลาเดินเมื่อคุณสั่งการ</div>
           </div>
-          <button onClick={onBoard} className="rounded-xl border border-[#FFD066]/30 bg-[#FFD066]/[0.06] p-4 text-left hover:bg-[#FFD066]/[0.1]">
+          <div className="flex flex-col gap-2">
+          <button onClick={onBoard} className="flex-1 rounded-xl border border-[#FFD066]/30 bg-[#FFD066]/[0.06] p-4 text-left hover:bg-[#FFD066]/[0.1]">
             <div className="font-thai flex items-center gap-2 text-[14px] font-bold text-[#FFE0A3]"><Trophy size={15} /> อันดับสูงสุด · {MODES[modeId].th}</div>
             {top.length === 0
               ? <div className="font-thai mt-2 text-[12.5px] text-slate-500">ยังไม่มีคะแนน — เป็นคนแรก!</div>
@@ -385,6 +402,12 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
               ))}
             <div className="font-thai mt-2 flex items-center gap-1 text-[11.5px] text-slate-400">ดูทั้งหมด <ArrowRight size={11} /></div>
           </button>
+          {onCareer && (
+            <button onClick={onCareer} data-career className="font-thai flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-4 py-2.5 text-left text-[13.5px] font-bold text-slate-100 hover:bg-white/[0.08]">
+              <FolderOpen size={16} className="text-[#FFD066]" />แฟ้มประวัติ · เหรียญ · ยศ<ArrowRight size={13} className="ml-auto text-slate-400" />
+            </button>
+          )}
+          </div>
         </div>
         <div className="font-mono mt-5 text-center text-[10.5px] tracking-[0.12em] text-slate-500">DATA · THEOS-2 · SPHERE · เช็คน้ำ (RADARSAT-2) · BD_FOOTPRINT · AWAGAD — ทีม REVENGE · โรงเรียนสิงห์บุรี</div>
       </div>

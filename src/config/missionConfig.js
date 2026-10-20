@@ -281,6 +281,18 @@ export const EMBANKMENT = {
   rulerAt: 0.36,                 // ตำแหน่งไม้บรรทัดวัดลำน้ำตามแนวแม่น้ำ (0–1)
 }
 
+/* ── 10a · อาชีพผู้บัญชาการ (A1–A3): ยศตามแต้มสะสม และสิ่งที่ยศปลดล็อก ──────── */
+export const CAREER = {
+  ranks: [
+    { id: 'volunteer', th: 'อาสาสมัคร', min: 0 },
+    { id: 'lead', th: 'หัวหน้าชุด', min: 1500 },
+    { id: 'director', th: 'ผอ.ศูนย์', min: 4000 },
+    { id: 'commander', th: 'ผู้บัญชาการ EOC', min: 8000 },
+  ],
+  // ยศ (index ใน ranks) ที่ต้องมีก่อนเลือกได้ — ครูปลดล็อกทั้งหมดได้ · URL param ใช้ได้เสมอ
+  unlocks: { expert: 1, 'stress:data': 1, 'stress:roads': 2, 'stress:time': 3 },
+}
+
 /* ── 10b · เกรดท้ายองก์ (C4) — จากรายการตัดสินใจขององก์นั้น ────────────────── */
 export const ACT_GRADES = [
   { id: 'S', minRatio: 0.9, maxCritical: 0, hex: '#FFD066' },

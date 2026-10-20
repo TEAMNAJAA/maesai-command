@@ -43,6 +43,8 @@ import { fx } from './lib/fx'
 import { PerfNotice } from './ui/settings'
 import { prefs, usePrefs } from './lib/prefs'
 import { BossBattle } from './modals/BossBattle'
+import { CareerFile } from './modals/careerFile'
+import { career, medalsFor } from './lib/career'
 import { THRESHOLDS } from './config/missionConfig'
 
 const DEMO = typeof window !== 'undefined' && /[?&#](demo|skipIntro)\b/.test(window.location.href)
@@ -134,7 +136,8 @@ export default function App() {
 
   /* keyboard: Space = advance to the next event · Ctrl+Shift+L teacher log */
   const bossOn = phase === 'play' && eng.act1Over && !s.boss?.done          // E: the crisis night at T0, before the act-1 summary
-  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen || creator || bossOn)
+  const [careerOpen, setCareerOpen] = useState(false)
+  const modalOpen = !!(analyze || channel || plan || wait || guide || board || teacher || postOpen || creator || bossOn || careerOpen)
   useEffect(() => {
     const h = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
@@ -170,13 +173,19 @@ export default function App() {
     const top = leaderboard.top(s.modeId, 999)
     setSaved({ rank, at: top[rank - 1]?.at, score: score.points })
     eng.finishMission()
-    logger.finish({ grades: [1, 2, 3].map((a) => actGrade(s, eng.scn, a)?.id || '-').join(''), trust: Math.round(s.trust), score: score.points, scoreVersion: score.version, decisionTier: score.decision.tier.id, decisionRatio: +score.decision.ratio.toFixed(3), points: score.points,
+    const grades = [1, 2, 3].map((a) => actGrade(s, eng.scn, a)?.id || '-').join('')
+    const medals = medalsFor(s, eng.scn, { realSec: eng.realMs() / 1000 })
+    // A4: the commander's file (not for demo / recording runs, and only with a name to file it under)
+    const rec = !DEMO && player.trim() ? career.recordRun(player, { points: score.points, tier: score.decision.tier.id, grades, medals, mode: s.modeId, stress: s.stress || [], sec: Math.round(eng.realMs() / 1000), seed: s.seed }) : null
+    setSaved((x) => ({ ...x, medals, newMedals: rec?.newMedals || [], rankUp: rec?.rankUp || null }))
+    logger.finish({ grades, medals: medals.join(' '), trust: Math.round(s.trust), score: score.points, scoreVersion: score.version, decisionTier: score.decision.tier.id, decisionRatio: +score.decision.ratio.toFixed(3), points: score.points,
       exposed: eng.exposure.exposed, metrics: sessionMetrics(s, eng.scn, eng.realMs() / 1000) })
     setBoard(true)
   }
 
   const playing = phase === 'play'
-  const officer = usePrefs().officer              // F4: officer-training mode
+  const prefsNow = usePrefs()
+  const officer = prefsNow.officer                // F4: officer-training mode
   useEffect(() => { logger.meta({ officer }) }, [officer])
   useEffect(() => { if (bossOn && officer) eng.autoBoss() }, [bossOn, officer]) // eslint-disable-line react-hooks/exhaustive-deps
   /* C1 game feel: floats from real state changes, a light shake when things go badly */
@@ -245,7 +254,9 @@ export default function App() {
         <Floaters />
         <PerfNotice />
         <ChibiCreator open={creator} onClose={() => setCreator(false)} player={player} setPlayer={setPlayer} />
-        <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} officer={officer} setOfficer={(v) => prefs.set({ officer: v })} player={player} setPlayer={setPlayer} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
+        <CareerFile open={careerOpen} onClose={() => setCareerOpen(false)} player={player} unlockAll={prefsNow.unlockAll} />
+        <TitleScreen open={phase === 'title' && !guide && !creator} onChibi={() => setCreator(true)} officer={officer} setOfficer={(v) => prefs.set({ officer: v })} player={player} setPlayer={setPlayer}
+          onCareer={() => setCareerOpen(true)} unlockAll={prefsNow.unlockAll} setUnlockAll={(v) => prefs.set({ unlockAll: v })} modeId={s.modeId} setMode={eng.setMode} stress={s.stress} setStress={eng.setStress}
           onHowTo={() => setGuide(true)} onBoard={() => setBoard(true)}
           onStart={() => { logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') }} />
         <QuizModal open={phase === 'pretest'} kind="pre" onDone={(score) => { setPreScore(score); setPhase('play'); eng.start() }} onSkip={() => { setPhase('play'); eng.start() }} />
