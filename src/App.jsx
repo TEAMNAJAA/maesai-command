@@ -37,6 +37,7 @@ import { waitComparison, actGrade } from './lib/sim'
 import { sessionMetrics } from './lib/compare'
 import { audio, installUiSounds } from './lib/audio'
 import { ChibiDock, useChibiPose } from './ui/chibiDock'
+import { ChibiGuide } from './ui/chibiGuide'
 import { ChibiCreator } from './modals/chibiCreator'
 import { Floaters, useJuice, useShake } from './ui/juice'
 import { fx } from './lib/fx'
@@ -265,6 +266,7 @@ export default function App() {
         )}
 
         {quest && <TutorBar eng={eng} onGo={go} onHide={() => setTutorOn(false)} />}
+        {quest && !officer && <ChibiGuide hint={quest.hint} hidden={!!(analyze || channel || plan || bossOn || eng.act1Over || eng.act2Over || wait || guide || board || teacher || dexOpen || careerOpen || eng.cut)} />}
         <StatusBar eng={eng} />
         <Toast flash={eng.flash} />
 
