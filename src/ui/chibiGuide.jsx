@@ -61,8 +61,11 @@ export function ChibiGuide({ hint, hidden }) {
   if (!spot) return null
   const { rect } = spot
   const W = 236, C = 66
-  // stand to the left of the target (the command rail is on the right); to its right when there is no room
-  const left = rect.left - W - C - 18 > 8 ? rect.left - W - C - 18 : Math.min(innerWidth - W - C - 8, rect.right + 14)
+  // stand outside the panel that holds the target (over the map), so no other button is ever covered
+  const rail = document.querySelector('[data-rail="command"]')?.getBoundingClientRect()
+  const inRail = rail && rect.left >= rail.left - 1 && rect.right <= rail.right + 1
+  const edge = inRail ? rail.left : rect.left
+  const left = edge - W - C - 18 > 8 ? edge - W - C - 18 : Math.min(innerWidth - W - C - 8, rect.right + 14)
   const top = Math.max(60, Math.min(innerHeight - 150, rect.top + rect.height / 2 - 52))
   const onLeft = left < rect.left
   return createPortal(
@@ -70,8 +73,8 @@ export function ChibiGuide({ hint, hidden }) {
       <div className="pointer-events-none fixed z-[70] rounded-lg border-2 border-[#FFD066] shadow-[0_0_0_4px_rgba(255,208,102,.18),0_0_22px_rgba(255,208,102,.55)] animate-pulse"
         style={{ left: rect.left - 4, top: rect.top - 4, width: rect.width + 8, height: rect.height + 8 }} data-chibi-guide-target />
       <div className={`pointer-events-none fixed z-[71] flex items-end gap-1 ${onLeft ? '' : 'flex-row-reverse'}`} style={{ left, top, width: W + C + 8 }} data-chibi-guide={topic}>
-        <div className="font-thai pointer-events-auto relative rounded-xl border border-[#FFD066]/70 bg-[#0b1426]/95 px-3 py-2 text-[12.5px] leading-snug text-[#FFF3CC] shadow-[0_10px_30px_-8px_#000]" style={{ width: W }}>
-          <button onClick={() => setClosed(topic)} className="absolute right-1 top-1 rounded p-0.5 text-slate-500 hover:bg-white/10 hover:text-white" title="ซ่อนขั้นนี้" data-chibi-guide-close><X size={12} /></button>
+        <div className="font-thai relative rounded-xl border border-[#FFD066]/70 bg-[#0b1426]/95 px-3 py-2 text-[12.5px] leading-snug text-[#FFF3CC] shadow-[0_10px_30px_-8px_#000]" style={{ width: W }}>
+          <button onClick={() => setClosed(topic)} className="pointer-events-auto absolute right-1 top-1 rounded p-0.5 text-slate-500 hover:bg-white/10 hover:text-white" title="ซ่อนขั้นนี้" data-chibi-guide-close><X size={12} /></button>
           <div className="pr-4 text-[10.5px] font-bold tracking-wide text-[#FFD066]">{spot.tab ? 'ไปที่แท็บนี้' : 'ทำตรงนี้'}</div>
           <div>{spot.th}</div>
         </div>

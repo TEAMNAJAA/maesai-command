@@ -22,6 +22,11 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
     return g.right > t.left + 6 && g.left < t.right - 6 && g.bottom > t.top + 6 && g.top < t.bottom - 6
   })
   check(!ov, `${w}: the chibi does not cover the control`)
+  const inRail = await p.evaluate(() => {
+    const r = document.querySelector('[data-rail="command"]')?.getBoundingClientRect(), g = document.querySelector('[data-chibi-guide]').getBoundingClientRect()
+    return !!r && g.right > r.left + 2
+  })
+  check(!inRail, `${w}: the chibi stays outside the command panel (never covers a tab or button)`)
   await p.screenshot({ path: join(OUT, `${w}-camp.png`) })
   await p.locator('[data-panel="base"] [data-camp]').first().click()
   await p.waitForFunction(() => !window.__maesai?.busy, null, { timeout: 30000 })

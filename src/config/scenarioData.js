@@ -264,7 +264,7 @@ export const KNOWLEDGE = [
 export const BOSS_CARDS = {
   base: { th: 'ประสานจากฐาน', short: '+1 พลังสั่งการ (ครั้งเดียว)', icon: 'Building2' },
   bigbag: { th: 'บิ๊กแบ็กอุดรอยรั่ว', short: 'กันคลื่น/ทะลัก 60% · แรงดัน −6', icon: 'Package' },
-  pump: { th: 'เครื่องสูบน้ำ', short: 'ระบายมวลน้ำ แรงดัน −18', icon: 'Fan' },
+  pump: { th: 'เครื่องสูบน้ำ', short: 'ระบายมวลน้ำ แรงดัน −20', icon: 'Fan' },
   power: { th: 'ตัดไฟโซนเสี่ยง', short: 'กันไฟรั่วได้ทั้งหมด', icon: 'Zap' },
   evac: { th: 'ประกาศอพยพเร่งด่วน', short: 'ชาวบ้าน +14 × ความเชื่อมั่น', icon: 'Megaphone' },
   boat: { th: 'เรือเตรียมพร้อม', short: 'ความเสียหายตานี้ −50%', icon: 'Ship' },
