@@ -7,7 +7,7 @@ import { missionScore, decisionLedger } from '../src/lib/sim'
 import { EMBANKMENT_GAPS } from '../src/lib/embankment'
 import { DECISION, SCORE } from '../src/config/missionConfig'
 
-describe('score v2 — decision score controls the total', () => {
+describe('score v2 — performance × a multiplier that counts mistakes (at most −30%)', () => {
   it('a careful commander reaches "ดีมาก" (×1.0) with nearly full points', () => {
     for (const seed of [11, 202, 3003, 77]) {
       const { s, scn } = careful(seed)
@@ -29,12 +29,12 @@ describe('score v2 — decision score controls the total', () => {
       expect(sc.partPoints.trust).toBe(0)
       expect(sc.partPoints.evac).toBe(0)
       expect(sc.points).toBeLessThan(50)
-      expect(sc.decision.tier.id).toBe('fail')
-      expect(sc.decision.failed).toBe(true)
+      expect(sc.decision.tier.id).toBe('poor')
+      expect(sc.decision.mult).toBe(0.7)
     }
   })
 
-  it('only the easy parts (base, sandbags, satellite orders, lazy verdicts) = mission failed', () => {
+  it('only the easy parts (base, sandbags, satellite orders, lazy verdicts) scores far below a careful commander', () => {
     for (const seed of [11, 202]) {
       const scn = makeScenario(seed)
       let s = makeInitial('beginner', seed)
@@ -48,23 +48,30 @@ describe('score v2 — decision score controls the total', () => {
       s = enterAct3(s)
       for (const r of scn.roofs) { s = A.adjudicate(s, scn, r.id, 'flat'); if (A.lockVerdict) s = A.lockVerdict(s, scn, r.id) }
       const sc = missionScore(s, scn)
-      expect(sc.decision.ratio).toBeLessThan(0.5)
-      expect(sc.decision.tier.id).toBe('fail')
-      expect(sc.points).toBeLessThan(250)
+      expect(sc.decision.mistakes).toBeGreaterThanOrEqual(12)
+      expect(sc.decision.tier.id).toBe('poor')
+      expect(sc.points).toBeLessThan(missionScore(careful(seed).s, careful(seed).scn).points * 0.6)
     }
   })
 
-  it('sending boats down a hazardous route twice fails the mission', () => {
+  it('a hazardous boat route is a mistake (live power = critical) — but never costs more than the multiplier floor', () => {
     for (const seed of [11, 202, 3003, 77, 4242, 5150]) {
       const run = careful(seed, { unsafeTrips: 2 })
       if (run.unsafeLeft) continue                                   // this seed never offered two hazardous routes
       const led = decisionLedger(run.s, run.scn)
-      expect(led.items.filter((x) => x.id.startsWith('route-') && x.verdict === 'critical')).toHaveLength(2)
-      expect(led.tier.id).toBe('fail')
-      expect(missionScore(run.s, run.scn).decision.mult).toBe(DECISION.tiers.find((t) => t.id === 'fail').mult)
+      const bad = led.items.filter((x) => x.id.startsWith('route-') && x.verdict !== 'good' && x.verdict !== 'fair')
+      expect(bad).toHaveLength(2)
+      for (const x of bad) expect(x.verdict).toBe(x.why.includes('ไฟช็อต') ? 'critical' : 'bad')
+      expect(missionScore(run.s, run.scn).decision.mult).toBeGreaterThanOrEqual(0.85)
       return
     }
     throw new Error('no seed offered two hazardous routes')
+  })
+
+  it('the multiplier follows the mistake count: ≤ 7 ×1.0 · 8–11 ×0.85 · 12+ ×0.7', () => {
+    const tierFor = (m) => DECISION.tiers.find((t) => m <= t.maxMistakes)
+    expect([0, 7, 8, 11, 12, 40].map((m) => tierFor(m).mult)).toEqual([1, 1, 0.85, 0.85, 0.7, 0.7])
+    expect(Math.min(...DECISION.tiers.map((t) => t.mult))).toBe(0.7)
   })
 
   it('every decision has a verdict and a Thai reason; acts only count once they are over', () => {
@@ -90,6 +97,6 @@ describe('score v2 — decision score controls the total', () => {
     s = step(s, scn, 0)
     const fa = decisionLedger(s, scn).items.filter((x) => x.id.startsWith('false-'))
     expect(fa.map((x) => x.verdict)).toEqual(['bad', 'critical', 'critical'])
-    expect(decisionLedger(s, scn).tier.id).toBe('fail')
+    expect(decisionLedger(s, scn).mistakes).toBeGreaterThanOrEqual(3)
   })
 })

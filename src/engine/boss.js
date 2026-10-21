@@ -167,7 +167,8 @@ export function autoFight(b) {
 export function applyBoss(s, scn, b, { fought = true } = {}) {
   const n = structuredClone(s)
   n.budget.spent += b.me.spent
-  n.boss = { done: true, won: b.status === 'won', fought, turns: b.log.length, hpLeft: b.boss.hp, hpMax: b.boss.max, villagers: b.me.villagers, spent: b.me.spent }
+  n.boss = { done: true, won: b.status === 'won', fought, turns: b.log.length, hpLeft: b.boss.hp, hpMax: b.boss.max, villagers: b.me.villagers, spent: b.me.spent,
+    sealed: b.boss.sealed, nGaps: b.boss.nGaps, energy: b.me.energyMax }
   n.bossLog = fought ? b.log.map((x) => ({ turn: x.turn, moveTh: x.moveTh, verdict: x.verdict, why: x.why })) : []
   if (b.status !== 'won') {
     // the embankment gives way where the water hurts most: the deepest zone already in harm's way

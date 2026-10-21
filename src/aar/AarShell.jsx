@@ -589,7 +589,7 @@ function SummaryTab({ eng, score, onPostTest, postDone, player, onSaved, saved }
         <div className="flex items-center gap-3">
           <Trophy size={22} className="text-[#FFD066]" />
           <div>
-            <div className="font-thai text-[16px] font-bold text-white">{allDone ? `ภารกิจจบ — ${score.points} / ${DECISION.maxPoints} แต้ม · การตัดสินใจ${score.decision.tier.th}${score.decision.failed ? ' · ภารกิจล้มเหลว' : ''}` : `ยังตัดสินเยียวยาไม่ครบ (${rel.done}/${rel.total})`}</div>
+            <div className="font-thai text-[16px] font-bold text-white">{allDone ? `ภารกิจจบ — ${score.points} / ${DECISION.maxPoints} แต้ม · การตัดสินใจ${score.decision.tier.th} (ผิด ${score.decision.mistakes} ครั้ง)` : `ยังตัดสินเยียวยาไม่ครบ (${rel.done}/${rel.total})`}</div>
             <div className="font-thai text-[12px] text-slate-400">{MODES[s.modeId].th} · seed {s.seed} · ผู้เล่น {player || 'ไม่ระบุชื่อ'}{s.stress?.length > 0 && <span className="ml-1 rounded bg-[#FF8A3D]/20 px-1.5 py-[1px] text-[11px] font-bold text-[#FFB27A]">Stress Test: {s.stress.map((k) => STRESS[k].th).join(' · ')}</span>} · เวลาเล่นจริง <b className="num text-white">{mmss(eng.realMs() / 1000)}</b>
               {eng.realMs() > 0 && eng.realMs() / 1000 <= TIME.expertTargetSec && <span className="ml-1.5 rounded bg-[#FFD066]/20 px-1.5 py-[1px] text-[11px] font-bold text-[#FFE0A3]">⚡ ภายใน {TIME.expertTargetSec / 60} นาที</span>}</div>
           </div>

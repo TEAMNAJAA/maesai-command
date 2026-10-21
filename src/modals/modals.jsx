@@ -253,7 +253,8 @@ function EmbankmentSummary({ s }) {
     <div className="font-thai mt-2.5 flex items-center gap-3 rounded-lg border px-3 py-2" style={{ borderColor: `${hex}55`, background: `${hex}10` }} data-embankment-summary={b.won ? 'held' : 'breached'}>
       {b.won ? <ShieldCheck size={22} style={{ color: hex }} /> : <ShieldAlert size={22} style={{ color: hex }} />}
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-bold text-white">คืนวิกฤต T0 · {b.won ? 'แนวตลิ่งรับยอดน้ำไว้ได้' : `ตลิ่งแตก — โซน ${s.breach?.zone} น้ำสูงขึ้น ${s.breach?.extraM} ม. ตลอดองก์ 2`}</div>
+        <div className="text-[13.5px] font-bold text-white">คืนวิกฤต T0 · {b.won ? 'แนวตลิ่งรับยอดน้ำไว้ได้' : `ตลิ่งรับไม่ไหว — น้ำทะลักเข้าโซน ${s.breach?.zone} สูงขึ้นอีก ${s.breach?.extraM} ม. ตลอดองก์ 2`}</div>
+        {!b.won && <div className="text-[11.5px] text-[#FFB3C1]">ผลคือผู้ติดค้างในโซน {s.breach?.zone} จะมากขึ้น{b.sealed !== undefined ? ` · เตรียมไว้: บิ๊กแบ็ก ${b.sealed}/${b.nGaps} จุด · พลังสั่งการตาละ ${b.energy} — อุดฟันหลอให้ครบและเหลือทีมว่างจะสู้ได้ง่ายขึ้น` : ''}</div>}
         <div className="text-[11.5px] text-slate-400">
           แรงดันมวลน้ำ {b.hpMax}{b.won ? ' → 0' : ` → เหลือ ${b.hpLeft}`} · ชาวบ้านปลอดภัย {b.villagers}/100
           {b.fought ? ` · รับมือ ${b.turns} ตา · ใช้งบ ฿${fmt(b.spent)}` : ' · ประเมินจากการเตรียมตัว (อุดฟันหลอ อพยพ แปลภาพ วัด N)'}

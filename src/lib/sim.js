@@ -282,8 +282,9 @@ export function actGrade(s, scn, act) {
   const n = (v) => items.filter((x) => x.verdict === v).length
   const ratio = (n('good') + n('fair') * DECISION.fairWeight) / items.length
   const critical = n('critical')
-  const g = ACT_GRADES.find((x) => ratio >= x.minRatio && critical <= x.maxCritical) || ACT_GRADES[ACT_GRADES.length - 1]
-  return { ...g, ratio, critical, total: items.length }
+  const mistakes = n('bad') + critical + n('skip')
+  const g = ACT_GRADES.find((x) => mistakes <= x.maxMistakes) || ACT_GRADES[ACT_GRADES.length - 1]
+  return { ...g, ratio, critical, mistakes, total: items.length }
 }
 
 export function decisionLedger(s, scn) {
@@ -339,8 +340,13 @@ export function decisionLedger(s, scn) {
     })
 
     for (const b of s.bossLog || []) items.push(item(`boss-${b.turn}`, 1, `คืนวิกฤต ตาที่ ${b.turn}: ${b.moveTh}`, b.verdict, b.why))
-    if (s.boss?.done) items.push(item('boss', 1, 'คืนวิกฤต T0 — แนวตลิ่งรับยอดน้ำ', s.boss.won ? 'good' : 'bad',
-      s.boss.won ? `ตลิ่งรับมวลน้ำไว้ได้${s.boss.fought ? ` ใน ${s.boss.turns} ตา` : ' (จากการเตรียมตัว)'}` : `ตลิ่งแตก — โซน ${s.breach?.zone} น้ำสูงขึ้น ${s.breach?.extraM} ม. ตลอดองก์ 2`))
+    // the outcome of the crisis night: when the player fought, each turn is already judged above → the outcome itself is only "fair" on a loss
+    if (s.boss?.done) {
+      const why = s.boss.sealed !== undefined ? ` · เตรียมไว้: บิ๊กแบ็ก ${s.boss.sealed}/${s.boss.nGaps} จุด · พลังสั่งการตาละ ${s.boss.energy}` : ''
+      items.push(s.boss.won
+        ? item('boss', 1, 'ผลคืนวิกฤต T0: ตลิ่งรับมวลน้ำไว้ได้', 'good', `น้ำในองก์ 2 เป็นไปตามพยากรณ์${s.boss.fought ? ` · ชนะใน ${s.boss.turns} ตา` : ' (ประเมินจากการเตรียมตัว)'}`)
+        : item('boss', 1, 'ผลคืนวิกฤต T0: ตลิ่งแตก', s.boss.fought ? 'fair' : 'bad', `น้ำทะลักเข้าโซน ${s.breach?.zone} สูงขึ้นอีก ${s.breach?.extraM} ม. ตลอดองก์ 2 → ผู้ติดค้างในโซนนี้มากขึ้น${why}`))
+    }
   }
 
   /* ═════ Act 2 ═════ */
@@ -358,7 +364,7 @@ export function decisionLedger(s, scn) {
     }
     const HZ = { river: 'ริมแม่น้ำกระแสแรง', deep: 'น้ำลึกไหลเชี่ยว', power: 'ไฟรั่ว' }
     ;(s.routeLog || []).forEach((r, i) => {
-      items.push(item(`route-${i}`, 2, `เส้นทางเรือไป ${r.point} (${clockTh(r.at)})`, r.kind === 'ok' ? 'good' : r.kind === 'long' ? 'fair' : 'critical',
+      items.push(item(`route-${i}`, 2, `เส้นทางเรือไป ${r.point} (${clockTh(r.at)})`, r.kind === 'ok' ? 'good' : r.kind === 'long' ? 'fair' : r.hazards.includes('power') ? 'critical' : 'bad',
         r.kind === 'ok' ? 'ปลอดภัยและสั้นที่สุด' : r.kind === 'long' ? `ปลอดภัยแต่อ้อม +${((r.chosenM - (r.bestM || r.chosenM)) / 1000).toFixed(1)} กม.` : `ส่งเรือเข้าเส้นทางอันตราย (${r.hazards.map((h) => HZ[h] || h).join(' / ')}) → ${r.hazards.includes('power') ? 'เรือโดนไฟช็อต' : 'เรือล่ม'}`))
     })
     for (const p of s.points) {
@@ -396,8 +402,9 @@ export function decisionLedger(s, scn) {
   for (const x of items) counts[x.verdict]++
   const total = items.length
   const ratio = total ? (counts.good + counts.fair * DECISION.fairWeight) / total : 1
-  const tier = DECISION.tiers.find((t) => ratio >= t.minRatio && counts.critical <= t.maxCritical) || DECISION.tiers[DECISION.tiers.length - 1]
-  return { items, counts, total, ratio, critical: counts.critical, tier, mult: tier.mult, failed: !!tier.failed }
+  const mistakes = counts.bad + counts.critical + counts.skip
+  const tier = DECISION.tiers.find((t) => mistakes <= t.maxMistakes) || DECISION.tiers[DECISION.tiers.length - 1]
+  return { items, counts, total, ratio, mistakes, critical: counts.critical, tier, mult: tier.mult }
 }
 
 /* ── Mission score (v2): performance points × decision multiplier − hints ──

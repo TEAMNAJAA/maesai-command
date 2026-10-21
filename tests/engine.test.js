@@ -119,7 +119,7 @@ describe('engine', () => {
       expect(good.score.points).toBeGreaterThan(750)                 // score v2: points out of 1000
       expect(good.score.decision.critical).toBe(0)
       expect(idle.score.points).toBeLessThan(50)
-      expect(idle.score.decision.tier.id).toBe('fail')
+      expect(idle.score.decision.tier.id).toBe('poor')
       expect(good.s.budget.spent).toBeLessThanOrEqual(good.s.budget.total)
       expect(good.s.fuel.used).toBeLessThanOrEqual(good.s.fuel.total)
       expect(sf.L).toBeGreaterThan(0)

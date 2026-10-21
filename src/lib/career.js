@@ -19,7 +19,7 @@ export const MEDALS = [
   { id: 'found', th: 'พบผู้ติดค้างครบทุกจุด', desc: 'ใช้ THEOS-2 · โดรน · เสาสื่อสาร จนพบทุกกลุ่มที่ติดค้าง', icon: 'Search',
     test: ({ s }) => s.points.length > 0 && s.trips > 0 && s.points.every((p) => p.revealed) },
   { id: 'nohint', th: 'ไม่ใช้คำใบ้', desc: 'จบภารกิจโหมดผู้เริ่มต้นโดยไม่เปิดคำใบ้ขั้นที่ 2–3', icon: 'Brain',
-    test: ({ s, scn }) => !!MODES[s.modeId]?.tutor && hintPenalty(s).pts === 0 && !missionScore(s, scn).decision.failed },
+    test: ({ s, scn }) => !!MODES[s.modeId]?.tutor && hintPenalty(s).pts === 0 && missionScore(s, scn).decision.tier.id !== 'poor' },
   { id: 'swift', th: 'จบในราว 7 นาที', desc: `เล่นจบ 3 องก์ในเวลาจริงไม่เกิน ${TIME.expertTargetSec / 60} นาที`, icon: 'Timer',
     test: ({ realSec }) => realSec > 0 && realSec <= TIME.expertTargetSec },
   { id: 'power', th: 'ตัดไฟก่อนส่งเรือทุกครั้ง', desc: 'มีไฟรั่วในเมือง และไม่มีเรือลำไหนผ่านโซนไฟรั่ว', icon: 'Zap',

@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════════════════
    GRADE STAMP (C4) — เกรด S/A/B/C ท้ายองก์ ตราประทับกระแทกลงจอพร้อมเสียง
-   เกรดมาจาก actGrade() (sim.js) = สัดส่วนการตัดสินใจที่ดีในองก์นั้น + จำนวนผิดร้ายแรง (เกณฑ์ใน ACT_GRADES)
+   เกรดมาจาก actGrade() (sim.js) = จำนวนครั้งที่ผิดในองก์นั้น (เกณฑ์ใน ACT_GRADES)
    ══════════════════════════════════════════════════════════════════════════ */
 
 import React, { useEffect, useRef } from 'react'
@@ -20,7 +20,7 @@ export function GradeStamp({ grade, act, size = 92, quiet = false }) {
   if (!grade) return null
   const hex = grade.hex
   return (
-    <div className="pointer-events-none relative shrink-0 select-none" style={{ width: size, height: size }} data-grade={grade.id} data-grade-act={act} title={`เกรดองก์ ${act}: ${grade.id} — ${LABEL[grade.id]} · ตัดสินใจดี ${Math.round(grade.ratio * 100)}%${grade.critical ? ` · ผิดร้ายแรง ${grade.critical}` : ''}`}>
+    <div className="pointer-events-none relative shrink-0 select-none" style={{ width: size, height: size }} data-grade={grade.id} data-grade-act={act} title={`เกรดองก์ ${act}: ${grade.id} — ${LABEL[grade.id]} · ผิด ${grade.mistakes} ครั้ง (S ≤ 1 · A ≤ 3 · B ≤ 6)`}>
       <div className="absolute inset-0 grid place-items-center rounded-full border-[5px] animate-[stampIn_.42s_cubic-bezier(.2,1.6,.4,1)_both]"
         style={{ borderColor: hex, color: hex, background: `radial-gradient(circle, ${hex}22, transparent 70%)`, boxShadow: `0 0 26px -4px ${hex}, inset 0 0 0 3px ${hex}33` }}>
         <div className="absolute inset-[7px] rounded-full border-2 border-dashed" style={{ borderColor: `${hex}88` }} />

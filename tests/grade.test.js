@@ -15,12 +15,12 @@ describe('act grades S/A/B/C (C4)', () => {
     expect(actGrade({ ...early.s, clock: -60 }, early.scn, 1)).toBeNull()
   })
 
-  it('a critical error caps the grade', () => {
+  it('the grade counts the mistakes of that act (S ≤ 1 · A ≤ 3 · B ≤ 6 · C more)', () => {
     const run = careful(202, { unsafeTrips: 1 })
     if (run.unsafeLeft) return                                    // no hazardous route came up on this seed
     const g = actGrade(run.s, run.scn, 2)
-    expect(g.critical).toBeGreaterThan(0)
-    expect(['B', 'C']).toContain(g.id)
-    expect(ACT_GRADES.find((x) => x.id === g.id).maxCritical).toBeGreaterThanOrEqual(g.critical)
+    expect(g.mistakes).toBeGreaterThan(0)
+    expect(ACT_GRADES.find((x) => g.mistakes <= x.maxMistakes).id).toBe(g.id)
+    expect(['S', 'A']).toContain(g.id)                          // one wrong route is not a disaster
   })
 })

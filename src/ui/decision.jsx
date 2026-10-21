@@ -41,17 +41,12 @@ export function DecisionHeadline({ decision, compact = false }) {
         <span className="font-thai ml-auto rounded px-1.5 py-[1px] text-[11.5px] font-bold" style={{ color: '#05101e', background: hex }}>{decision.tier.th}</span>
       </div>
       <div className="mt-1 flex items-center gap-2">
-        <span className="num text-[18px] font-bold leading-none" style={{ color: hex }}>{Math.round(decision.ratio * 100)}%</span>
-        <span className="font-thai text-[10.5px] text-slate-400">ตัดสินใจถูก · ตัวคูณ</span>
+        <span className="num text-[18px] font-bold leading-none" style={{ color: hex }} data-decision-mistakes={decision.mistakes}>{decision.mistakes}</span>
+        <span className="font-thai text-[10.5px] text-slate-400">ครั้งที่ผิด · ตัวคูณ</span>
         <span className="num text-[13px] font-bold text-white">×{decision.mult.toFixed(2).replace(/0$/, '')}</span>
         {!compact && <span className="ml-auto"><DecisionCounts counts={decision.counts} /></span>}
       </div>
       {compact && <div className="mt-1"><DecisionCounts counts={decision.counts} /></div>}
-      {decision.failed && (
-        <div className="font-thai mt-1.5 flex items-center justify-center gap-1.5 rounded border-2 border-[#FF2E63] py-1 text-[13px] font-bold tracking-wide text-[#FF6B8A] [transform:rotate(-1.5deg)]" data-mission-failed>
-          <Skull size={14} />ภารกิจล้มเหลว
-        </div>
-      )}
     </div>
   )
 }
@@ -100,7 +95,7 @@ export function DecisionList({ decision, acts = [1, 2, 3], limit = 8 }) {
         </button>
       )}
       <div className="font-thai text-[10px] leading-snug text-slate-500">
-        สัดส่วนถูก = (ดี + พอใช้ × {DECISION.fairWeight}) ÷ ทั้งหมด · ข้าม = ผิด · {DECISION.tiers.map((t) => `${t.th} ≥ ${Math.round(t.minRatio * 100)}%${Number.isFinite(t.maxCritical) ? ` ร้ายแรง ≤ ${t.maxCritical}` : ''} ×${t.mult}`).join(' · ')}
+        นับครั้งที่ผิด (ผิด · ผิดร้ายแรง · ข้าม) · {DECISION.tiers.map((t, i) => `${t.th}: ${Number.isFinite(t.maxMistakes) ? `${i ? `${DECISION.tiers[i - 1].maxMistakes + 1}–` : '0–'}${t.maxMistakes}` : `${DECISION.tiers[i - 1].maxMistakes + 1} ขึ้นไป`} ครั้ง ×${t.mult}`).join(' · ')}
       </div>
     </div>
   )

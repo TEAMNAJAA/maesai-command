@@ -294,11 +294,11 @@ export const CAREER = {
 }
 
 /* ── 10b · เกรดท้ายองก์ (C4) — จากรายการตัดสินใจขององก์นั้น ────────────────── */
-export const ACT_GRADES = [
-  { id: 'S', minRatio: 0.9, maxCritical: 0, hex: '#FFD066' },
-  { id: 'A', minRatio: 0.75, maxCritical: 0, hex: '#22E36B' },
-  { id: 'B', minRatio: 0.6, maxCritical: 1, hex: '#38BDF8' },
-  { id: 'C', minRatio: 0, maxCritical: Infinity, hex: '#FF6B8A' },
+export const ACT_GRADES = [     // จำนวนครั้งที่ผิดในองก์นั้น (ผิด + ผิดร้ายแรง + ข้าม)
+  { id: 'S', maxMistakes: 1, hex: '#FFD066' },
+  { id: 'A', maxMistakes: 3, hex: '#22E36B' },
+  { id: 'B', maxMistakes: 6, hex: '#38BDF8' },
+  { id: 'C', maxMistakes: Infinity, hex: '#FF6B8A' },
 ]
 
 /* ── 10c · กลยุทธ์แนวตลิ่ง (B4) — ทุกทางเลือกมีข้อดีข้อเสียจริง ─────────────── */
@@ -399,11 +399,12 @@ export const DECISION = {
   version: 2,                     // score_version ใน Log/CSV — v1 = คะแนน % แบบเดิม (เทียบตรง ๆ ไม่ได้)
   maxPoints: 1000,
   fairWeight: 0.5,
+  // ตัวคูณนับจาก "จำนวนครั้งที่ผิด" (ผิด + ผิดร้ายแรง + ข้าม) ทั้งภารกิจ — หักมากสุด 30% (10 คะแนนเหลือ 7)
+  // ผลงานที่ทำไม่ได้หักอยู่แล้วในคะแนนผลงาน (คนตาย/ไม่อพยพ = ได้แต้มส่วนนั้นน้อย) ตัวคูณจึงไม่ต้องลงโทษซ้ำ
   tiers: [                        // ไล่จากบนลงล่าง ใช้ระดับแรกที่ผ่านเงื่อนไข
-    { id: 'excellent', th: 'ดีมาก', minRatio: 0.85, maxCritical: 0, mult: 1.0 },
-    { id: 'fair', th: 'พอใช้', minRatio: 0.65, maxCritical: 1, mult: 0.7 },
-    { id: 'poor', th: 'แย่', minRatio: 0.5, maxCritical: 1, mult: 0.4 },
-    { id: 'fail', th: 'ไม่ผ่าน', minRatio: 0, maxCritical: Infinity, mult: 0.15, failed: true },   // + ป้าย "ภารกิจล้มเหลว"
+    { id: 'excellent', th: 'ดีมาก', maxMistakes: 7, mult: 1.0 },
+    { id: 'fair', th: 'พอใช้', maxMistakes: 11, mult: 0.85 },     // ผิด 8–11 ครั้ง หัก 15%
+    { id: 'poor', th: 'ต้องปรับปรุง', maxMistakes: Infinity, mult: 0.7 },   // ผิด 12 ครั้งขึ้นไป หัก 30%
   ],
   hintPoints: 10,                 // คำใบ้: 1 คะแนนเดิม (เต็ม 100) = 10 แต้ม (เต็ม 1000)
   lateBoatMin: 60,                // พบผู้ติดค้างแล้วส่งเรือช้ากว่านี้ (หรือไม่ส่ง) จนมีผู้สูญเสีย = ผิดร้ายแรง
