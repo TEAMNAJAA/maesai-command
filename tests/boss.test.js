@@ -68,7 +68,9 @@ describe('T0 boss — cards are real measures', () => {
   })
 
   it('energy, budget and one-off cards are enforced', () => {
-    expect(cardBlock(b0, ['pump', 'pump'], 'evac')).toBe('พลังสั่งการไม่พอ')
+    const full = Array.from({ length: Math.floor(b0.me.energy / 2) }, () => 'pump').concat(b0.me.energy % 2 ? ['evac'] : [])
+    expect(cardBlock({ ...b0, me: { ...b0.me, energy: 4 } }, ['pump', 'pump'], 'evac')).toBe('พลังสั่งการไม่พอ')
+    expect(full.reduce((a, x) => a + BOSS.cards[x].energy, 0)).toBeLessThanOrEqual(b0.me.energy)
     expect(cardBlock(b0, ['pump', 'pump'], 'pump')).toBeTruthy()
     expect(cardBlock({ ...b0, me: { ...b0.me, budget: 10 } }, [], 'pump')).toBe('งบไม่พอ')
     expect(cardBlock({ ...b0, me: { ...b0.me, images: 0 } }, [], 'theos')).toBeTruthy()
@@ -137,5 +139,17 @@ describe('T0 boss — outcome', () => {
     const picks = bossBest(b)
     let acc = []
     for (const p of picks) { expect(cardBlock(b, acc, p)).toBeNull(); acc = [...acc, p] }
+  })
+})
+
+describe('T0 boss — balance (21 Oct)', () => {
+  it('a commander whose crews are still at work at T0 is not doomed; an idle one still loses; Beginner gets +1 from the chibi', () => {
+    const { s, scn } = careful(SEED, { stopAfter: 1 })
+    const busy = { ...structuredClone(s), crews: s.crews.map((c) => ({ ...c, busyUntil: 600 })) }
+    expect(autoFight(bossSetup(busy, scn)).status).toBe('won')
+    const beg = bossSetup(busy, scn), exp = bossSetup({ ...busy, modeId: 'expert' }, scn)
+    expect(beg.me.energy - exp.me.energy).toBe(BOSS.assistEnergy)
+    const lazy = step(makeInitial('beginner', SEED), makeScenario(SEED, 'beginner'), 0)
+    expect(autoFight(bossSetup(lazy, makeScenario(SEED, 'beginner'))).status).toBe('lost')
   })
 })

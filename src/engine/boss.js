@@ -32,15 +32,18 @@ export function bossSetup(s, scn) {
   const seeNext = !!MODES[s.modeId]?.tutor && evidence
   const exp = exposureSummary(s, scn)
   const villagers = Math.max(BOSS.villagersMin, Math.round(100 * exp.safeShare))
-  const freeCrews = (s.crews || []).filter((c) => c.busyUntil <= Math.max(0, s.clock)).length
-  const energy = Math.min(BOSS.energyMax, BOSS.energyBase + freeCrews)
+  // crews that went out in act 1 and are free at T0 (a crew never sent out has no post on the line)
+  const t0 = s.t0 ?? Math.min(...(s.crews || []).map((c) => c.busyUntil), 0)
+  const freeCrews = (s.crews || []).filter((c) => c.busyUntil > t0 && c.busyUntil <= Math.max(0, s.clock)).length
+  const assist = MODES[s.modeId]?.tutor ? BOSS.assistEnergy : 0         // Beginner: the chibi helps coordinate
+  const energy = Math.min(BOSS.energyMax, BOSS.energyBase + freeCrews) + assist
   const site = CAMP_SITES.find((c) => c.id === s.camp)
   const baseOk = !!site && !campFloods(s, site)
   const images = s.images.filter((i) => i.usable).length
   return {
     turn: 1, turns: BOSS.turns,
     boss: { hp, max: hp, attack, open, sealed, nGaps, damAvailable },
-    me: { villagers, villagersMax: 100, energy, energyMax: energy, budget: s.budget.total - s.budget.spent, spent: 0, trust: s.trust, baseOk, baseUsed: false, images },
+    me: { villagers, villagersMax: 100, energy, energyMax: energy, assist, budget: s.budget.total - s.budget.spent, spent: 0, trust: s.trust, baseOk, baseUsed: false, images },
     seeNext, evidence, sfvi: +sf.basin.toFixed(3),
     moves: moveSchedule(scn.seed, damAvailable),
     log: [], status: 'fight',
@@ -139,20 +142,39 @@ function judgeTurn(b, move, picks, taken) {
   return { verdict: 'bad', why: `ไม่ได้รับมือ${move.th} — เสียหาย ${taken}` }
 }
 
-/** Best cards for this turn knowing the true move — for officer mode / skipped fights and the demo bot. */
-export function bossBest(b) {
-  let best = [], bestScore = -Infinity
+/** Every legal hand for this turn. */
+function hands(b) {
+  const out = []
   const rec = (picks, from) => {
-    const sim = bossTurn({ ...b, revealed: b.revealed }, picks)
-    const last = sim.log[sim.log.length - 1]
-    const score = (sim.status === 'won' ? 1000 : 0) - (sim.status === 'lost' && sim.me.villagers <= 0 ? 1000 : 0) + last.bossDmg * 1.0 - (last.taken - last.heal) * 1.25 - picks.length * 0.01 - (last.verdict === 'bad' ? 5 : 0)
-    if (score > bestScore) { bestScore = score; best = picks }
-    for (let i = from; i < CARD_IDS.length; i++) {
-      const id = CARD_IDS[i]
-      if (!cardBlock(b, picks, id)) rec([...picks, id], i)
-    }
+    out.push(picks)
+    for (let i = from; i < CARD_IDS.length; i++) if (!cardBlock(b, picks, CARD_IDS[i])) rec([...picks, CARD_IDS[i]], i)
   }
   rec([], 0)
+  return out
+}
+
+/** This turn's value on its own (drain the water, spare the villagers). */
+function turnValue(sim, picks) {
+  const last = sim.log[sim.log.length - 1]
+  return (sim.status === 'won' ? 1000 : 0) - (sim.status === 'lost' && sim.me.villagers <= 0 ? 1000 : 0) + last.bossDmg - (last.taken - last.heal) * 1.25 - picks.length * 0.01 - (last.verdict === 'bad' ? 5 : 0)
+}
+const greedy = (b) => hands(b).reduce((m, h) => { const v = turnValue(bossTurn(b, h), h); return v > m.v ? { h, v } : m }, { h: [], v: -Infinity }).h
+const drain = (b) => { const p = []; for (const id of ['pump', 'pump', 'bigbag', 'bigbag', 'evac', 'boat']) if (!cardBlock(b, p, id)) p.push(id); return p }
+
+/**
+ * Best cards for this turn: each legal hand is played out to the end of the night with two simple follow-up
+ * plans (careful and all-out drain), and the hand with the best ending wins (won first, then villagers safe).
+ * Uses the moves in `b` as given — the Beginner advice passes a copy where moves the player cannot see are assumed surges.
+ */
+export function bossBest(b) {
+  const ending = (n) => (n.status === 'won' ? 10000 + n.me.villagers * 10 - n.me.spent / 1e5 : n.me.villagers <= 0 ? -10000 : -n.boss.hp * 10 + n.me.villagers)
+  const finish = (n, policy) => { while (n.status === 'fight') n = bossTurn(n, policy(n)); return n }
+  let best = [], bestScore = -Infinity
+  for (const h of hands(b)) {
+    const sim = bossTurn(b, h)
+    const score = Math.max(ending(finish(sim, greedy)), ending(finish(sim, drain))) + turnValue(sim, h) * 0.001
+    if (score > bestScore) { bestScore = score; best = h }
+  }
   return best
 }
 

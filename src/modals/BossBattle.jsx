@@ -117,6 +117,13 @@ export function BossBattle({ eng, player = '', onFinish }) {
   const cap = b.me.energy + (picks.includes('base') ? BOSS.cards.base.gain : 0)
   const used = picks.reduce((a, x) => a + BOSS.cards[x].energy, 0)
   const cost = picks.reduce((a, x) => a + BOSS.cards[x].baht, 0)
+  // Beginner: the chibi suggests a hand — from what the player can see (an unseen move is assumed to be the usual surge)
+  const advice = useMemo(() => {
+    if (!b.me.assist || b.status !== 'fight') return []
+    const seen = bossIntent(b)?.visible
+    return bossBest(seen ? b : { ...b, moves: b.moves.map((m, i) => (i === b.turn - 1 ? 'surge' : m)) })
+  }, [b])
+  const adviceTh = advice.length ? advice.map((x) => BOSS_CARDS[x].th).join(' + ') : 'ไม่ต้องใช้การ์ดตานี้'
 
   // D4 crisis night: peak music, the boss theme, frequent lightning with thunder
   useEffect(() => {
@@ -192,12 +199,23 @@ export function BossBattle({ eng, player = '', onFinish }) {
         <div className="mt-2 grid min-h-0 flex-1 grid-cols-[minmax(260px,30%)_1fr_minmax(300px,36%)] gap-4">
           {/* the commander */}
           <div className="flex min-h-0 flex-col justify-end gap-2.5 rounded-2xl border border-sky-400/25 bg-[#071225]/80 p-3">
-            <div className="flex flex-1 items-end justify-center" data-boss-chibi={pose}><Chibi profile={me} pose={pose} size={Math.round(Math.min(190, (typeof window !== 'undefined' ? window.innerHeight : 900) * 0.2))} /></div>
+            <div className="relative flex flex-1 items-end justify-center" data-boss-chibi={pose}>
+              {b.me.assist > 0 && phase === 'pick' && (
+                <div className="font-thai absolute left-0 right-0 top-0 z-10 rounded-xl border border-[#FFD066]/60 bg-[#1a1405]/95 px-2.5 py-2 text-[12.5px] leading-snug text-[#FFF1C2] shadow-[0_8px_24px_-8px_#000]" data-boss-advice={advice.join(',')}>
+                  <div className="font-bold text-[#FFD066]">ผู้ช่วยแนะนำ{intent?.visible ? '' : ' (ยังไม่เห็นท่าถัดไป — เผื่อคลื่นซัด)'}</div>
+                  <div className="mt-0.5">{adviceTh}</div>
+                  <button onClick={() => { setPicks(advice); audio.play('click') }} disabled={!advice.length} data-boss-advice-use
+                    className="mt-1.5 w-full rounded-md border border-[#FFD066]/70 bg-[#FFD066]/15 py-1 text-[12px] font-bold text-[#FFD066] hover:bg-[#FFD066]/30 disabled:opacity-40">ใช้ตามคำแนะนำ</button>
+                </div>
+              )}
+              <Chibi profile={me} pose={b.me.assist > 0 && phase === 'pick' ? 'point' : pose} size={Math.round(Math.min(190, (typeof window !== 'undefined' ? window.innerHeight : 900) * 0.2))} />
+            </div>
             <div className="font-thai text-center text-[13px] font-bold text-sky-100">ผบ. {player || 'ศูนย์ EOC แม่สาย'}</div>
             <Bar value={b.me.villagers} max={b.me.villagersMax} hex="#22E36B" label="ชาวบ้านปลอดภัย" icon={Users} data={{ 'data-boss-villagers': '' }} />
             <div className="grid grid-cols-2 gap-2 text-[12px]">
               <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5"><div className="font-thai text-slate-400">พลังสั่งการ</div>
-                <div className="mt-0.5 flex gap-1">{Array.from({ length: cap }, (_, i) => <span key={i} className={`h-3 w-3 rounded-full ${i < cap - used ? 'bg-[#FFD066] shadow-[0_0_8px_#FFD066]' : 'bg-white/10'}`} />)}</div></div>
+                <div className="mt-0.5 flex gap-1">{Array.from({ length: cap }, (_, i) => <span key={i} className={`h-3 w-3 rounded-full ${i < cap - used ? 'bg-[#FFD066] shadow-[0_0_8px_#FFD066]' : 'bg-white/10'}`} />)}</div>
+                {b.me.assist > 0 && <div className="font-thai mt-0.5 text-[10px] text-[#FFD066]">+{b.me.assist} ผู้ช่วยประสานงาน</div>}</div>
               <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5"><div className="font-thai flex items-center gap-1 text-slate-400"><Wallet size={11} />งบคงเหลือ</div><div className="num font-bold text-[#FFD066]">฿{fmt((b.me.budget - b.me.spent - cost) / 1e6, 2)}M</div></div>
               <div className="col-span-2 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5"><div className="font-thai flex items-center gap-1 text-slate-400"><HeartHandshake size={11} />ความเชื่อมั่นประชาชน <span className="num ml-auto font-bold" style={{ color: b.me.trust >= 75 ? '#7CFFA0' : b.me.trust >= 50 ? '#FFD066' : '#FF6B8A' }}>{Math.round(b.me.trust)}%</span></div>
                 <div className="font-thai text-[10.5px] text-slate-500">การ์ดประกาศอพยพได้ผล × ความเชื่อมั่น</div></div>
