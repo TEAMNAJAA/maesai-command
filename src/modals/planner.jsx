@@ -15,7 +15,6 @@ import { Ship, HeartPulse, Users, Package, Check, Loader2, CheckCircle2, WifiOff
 import { Modal, Btn, Src } from '../ui/atoms'
 import { ImpactHover, WhyButton } from '../ui/impact'
 import { HintLadder } from '../ui/hints'
-import { rungOf } from '../engine/hints'
 import { previewBoat } from '../engine/impact'
 import { useMode } from '../ui/label'
 import { BOAT, ACT2, COSTS, DURATIONS } from '../config/missionConfig'
@@ -30,7 +29,7 @@ import { fmt, clockLabel } from '../lib/format'
 
 const hm = (min) => { const m = Math.max(0, Math.round(min)); return m >= 60 ? `${Math.floor(m / 60)} ชม. ${m % 60} นาที` : `${m} นาที` }
 const MW = 560, MH = 400
-const COLOR = { 'sphere-c': '#38BDF8', 'sphere-d': '#2DD4BF', 'sphere-via': '#4ADE80', short: '#A78BFA', inland: '#F472B6', main: '#FBBF24' }
+const COLOR = { 'sphere-c': '#38BDF8', 'sphere-d': '#2DD4BF', 'sphere-via': '#4ADE80', short: '#A78BFA', inland: '#F472B6', main: '#FBBF24', safe: '#86EFAC', debris: '#CBD5E1' }
 const HZ = { river: { hex: '#FF8A3D', glyph: '〰' }, deep: { hex: '#3B82F6', glyph: '≈' }, power: { hex: '#FFD066', glyph: '⚡' } }
 const travel = (m) => Math.round((m / 1000 / BOAT.speedKmh) * 60)
 
@@ -111,8 +110,9 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
   const choice = options.findIndex((o) => o.variant === pickVar)
   const opt = choice >= 0 ? options[choice] : null
   const focus = options.find((o) => o.variant === hoverVar) || opt
-  // hint ladder: rung 2 ("ชี้ที่ข้อมูล") marks where the route under the pointer meets a hazard · rung 3 names them on the cards
-  const routeRung = mode.tutor ? rungOf(s, 'a2.route') : 0
+  // Beginner: every route card names its hazards and the map marks them (the user asked for the warning to be always there) ·
+  // Expert: read the hazards off the map yourself
+  const routeRung = mode.tutor ? 3 : 0
   const marks = useMemo(() => (focus && p && camp && routeRung >= 2 ? hazardMarks(s, scn, focus.coords, s.clock, [[camp.lon, camp.lat], [p.lon, p.lat], ...(destPt ? [[destPt.lon, destPt.lat]] : [[camp.lon, camp.lat]])]) : []),
     [focus, s.clock, s.pumps, s.powerCut, routeRung]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!p) return null
@@ -184,6 +184,18 @@ export function BoatPlannerModal({ eng, pointId, onClose }) {
                 <SphereStatus status={status} count={sphereOpts.length} onRetry={() => eng.requestBoatRoutes(p.id, mission, dest)} />
               </div>
               {!options.length && <div className="font-thai text-[11px] text-[#FF9DB2]">หาเส้นทางไม่ได้ — ถนนขาดทั้งหมด</div>}
+              {mode.tutor && options.length > 0 && status !== 'loading' && !plan?.best && (() => {
+                // Beginner: no route is safe yet — say what fixes it instead of letting the boat go
+                const kinds = new Set(options.flatMap((o) => o.hazards))
+                return (
+                  <div className="font-thai mb-1.5 rounded-md border border-[#FF6B8A]/50 bg-[#FF003C]/[0.08] px-2.5 py-2 text-[11.5px] leading-snug text-[#FFD1DA]" data-no-safe-route>
+                    <div className="font-bold text-[#FF9DB2]">⚠ ตอนนี้ยังไม่มีเส้นทางที่ปลอดภัย — อย่าเพิ่งส่งเรือ</div>
+                    {kinds.has('power') && <div>⚡ ไฟรั่วบนเส้นทาง → แท็บ “ภาคสนาม” สั่งตัดไฟโซนนั้นก่อน (~1 ชม.) แล้วกลับมาวางแผนใหม่</div>}
+                    {kinds.has('deep') && <div>≈ น้ำลึกไหลเชี่ยว → ติดตั้งเครื่องสูบน้ำในโซนที่เส้นทางผ่าน</div>}
+                    {kinds.has('river') && <div>〰 กระแสแรงริมแม่น้ำ → ลองปลายทางอื่น หรือรอให้ตัดไฟ/สูบน้ำเสร็จเพื่อเปิดเส้นทางเลี่ยง</div>}
+                  </div>
+                )
+              })()}
               <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
                 {(sphereOpts.length > 0 || status === 'loading') && (
                   <div>

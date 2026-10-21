@@ -3,6 +3,8 @@
    ทุกเที่ยวเรือ: ฐาน → จุดติดค้าง → ปลายทาง (จุดอพยพ/โรงพยาบาล) → กลับฐาน
    ผู้เล่นต้องเลือกเส้นทางเอง · เส้นทางที่ดีที่สุด = สั้นที่สุดในกลุ่มที่ปลอดภัย
    อันตราย: กระแสน้ำแรงริมแม่น้ำ · โซนน้ำลึกที่ยังไม่สูบ · โซนไฟฟ้ารั่วที่ยังไม่ตัดไฟ
+   โซนของจุดผู้ติดค้าง (และของฐาน/ปลายทาง) ไม่นับเป็น "น้ำลึก" — เรือต้องเข้าไปที่นั่นอยู่แล้ว (เดิมทำให้ 40% ของจุดไม่มีเส้นทางปลอดภัยเลย)
+   และมีเส้นทาง "เลี่ยงจุดอันตราย" ที่คำนวณให้หลบทุกอันตรายเสมอเมื่อหลบได้ · ไฟรั่วไม่ยกเว้น: ต้องตัดไฟก่อน
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { ACT2, BOAT } from '../config/missionConfig'
@@ -26,20 +28,40 @@ function leg(from, to, variant, blockedRoads) {
   return routeOffline(from, to, debris, (e) => (e.major ? 1 : 2.4))
 }
 
-/** Hazards met along a route at minute t (endpoints' own surroundings excluded). */
-export function routeHazards(s, scn, coords, t, ends) {
-  const hz = new Set()
+const END_CLEAR_M = 200        // right at the base / the group / the destination: no hazard counted
+const RIVER_CLEAR_M = 320      // a group on the riverbank can only be reached along the bank near it
+
+/**
+ * Hazard classifier for one trip at minute t → (lon/lat point) => ['river' | 'deep' | 'power', …].
+ * The zones the trip has to enter (the group's own zone, the base's and the destination's) are not
+ * "deep water to cross"; live power is never excused — cut it first.
+ */
+export function hazardsAt(s, scn, t, ends) {
+  const endZones = new Set(ends.map((e) => sectionAt(e)?.id).filter(Boolean))
+  const deepZone = new Map()
+  const deep = (sec) => {
+    if (!deepZone.has(sec.id)) deepZone.set(sec.id, !endZones.has(sec.id) && depthAt(s, sec, t) >= ACT2.deepWaterM)
+    return deepZone.get(sec.id)
+  }
   const powerOn = (id) => scn.powerHazards.some((p) => p.id === id && t >= p.at) && !s.powerCut[id]
-  for (let i = 1; i < coords.length - 1; i++) {
-    const p = coords[i]
-    if (ends.some((e) => metres(p, e) < 200)) continue
-    if (riverM(p) <= ACT2.riverBandM) hz.add('river')
+  return (p) => {
+    const out = []
+    if (ends.some((e) => metres(p, e) < END_CLEAR_M)) return out
+    if (!ends.some((e) => metres(p, e) < RIVER_CLEAR_M) && riverM(p) <= ACT2.riverBandM) out.push('river')
     const sec = sectionAt(p)
     if (sec && metres(p, sec.c) < 900) {
-      if (depthAt(s, sec, t) >= ACT2.deepWaterM) hz.add('deep')
-      if (powerOn(sec.id)) hz.add('power')
+      if (deep(sec)) out.push('deep')
+      if (powerOn(sec.id)) out.push('power')
     }
+    return out
   }
+}
+
+/** Hazards met along a route at minute t. */
+export function routeHazards(s, scn, coords, t, ends) {
+  const at = hazardsAt(s, scn, t, ends)
+  const hz = new Set()
+  for (let i = 1; i < coords.length - 1; i++) for (const k of at(coords[i])) hz.add(k)
   return [...hz]
 }
 
@@ -53,16 +75,19 @@ export const SPHERE_VARIANTS = [
   { id: 'sphere-d', mode: 'd', th: 'Sphere · เส้นทางสั้นที่สุด', tech: 'GISTDA Sphere · shortest' },
 ]
 export const SPHERE_DETOUR = { id: 'sphere-via', th: 'Sphere + จุดแวะเลี่ยงอันตราย', tech: 'GISTDA Sphere · via safe waypoint' }
+export const SAFE_VARIANT = { id: 'safe', th: 'เลี่ยงจุดอันตราย', tech: 'Hazard-avoiding path' }
 
-function buildOption(s, scn, t, ends, { variant, th, tech, source, via }, a, b, back) {
+const DEBRIS_SLOW = 1.5   // pushing a boat through a road choked with debris
+
+function buildOption(s, scn, t, ends, { variant, th, tech, source, via, debris = false }, a, b, back) {
   const coords = [...a.coords, ...b.coords]
   const outM = a.distanceM + b.distanceM, backM = back ? back.distanceM : 0
   const hazards = routeHazards(s, scn, coords, t, ends)
   return {
-    variant, th, tech, source, via: via || null, coords, back: back?.coords || [],
+    variant, th, tech, source, via: via || null, coords, back: back?.coords || [], debris,
     leg1M: a.distanceM, leg2M: b.distanceM, backM, splitAt: a.coords.length,
     distanceM: outM, totalM: outM + backM,
-    minutes: Math.round((outM / 1000 / BOAT.speedKmh) * 60),
+    minutes: Math.round((outM / 1000 / BOAT.speedKmh) * 60 * (debris ? DEBRIS_SLOW : 1)),
     fuelL: +(((outM + backM) / 1000) * BOAT.fuelLPerKm).toFixed(1),
     hazards, safe: hazards.length === 0, steps: [...new Set([...(a.steps || []), ...(b.steps || [])])].slice(0, 4),
   }
@@ -101,6 +126,23 @@ export function planTrip(s, scn, camp, point, dest, t, sphere = null) {
     if (!a || !b) continue
     add(buildOption(s, scn, t, ends, { ...v, variant: v.id, source: 'offline' }, a, b, offlineBack))
   }
+  // debris can cut a group off from every road route — a boat can still push through, only slower
+  if (!options.some((o) => o.source === 'offline')) {
+    const none = new Set()
+    const a = leg(from, at, 'main', none), b = a && leg(at, to, 'main', none)
+    if (a && b) add(buildOption(s, scn, t, ends, { id: 'debris', th: 'ผ่านจุดสิ่งกีดขวาง (ช้ากว่า)', tech: 'Through debris (slower)', variant: 'debris', source: 'offline', debris: true }, a, b, offlineBack || leg(to, from, 'main', none)))
+  }
+  // a route that steers around every hazard it can (roads through a hazard are closed to it)
+  if (!options.some((o) => o.safe)) {
+    const hz = hazardsAt(s, scn, t, ends)
+    const route = (p, q, debris) => routeOffline(p, q, (mid, e) => (!debris && blocked.has(e?.osm)) || hz(mid).length > 0, () => 1)
+    for (const debris of [false, true]) {
+      const a = route(from, at, debris), b = a && route(at, to, debris)
+      if (!a || !b) continue
+      add(buildOption(s, scn, t, ends, { ...SAFE_VARIANT, th: debris ? `${SAFE_VARIANT.th} (ผ่านสิ่งกีดขวาง)` : SAFE_VARIANT.th, variant: SAFE_VARIANT.id, source: 'offline', debris }, a, b, offlineBack))
+      break
+    }
+  }
   const safe = options.filter((o) => o.safe)
   const best = safe.length ? safe.reduce((m, o) => (o.distanceM < m.distanceM ? o : m)) : null
   return { options, best }
@@ -108,19 +150,13 @@ export function planTrip(s, scn, camp, point, dest, t, sphere = null) {
 
 /** Where along a route each hazard is met (for map markers), roughly one mark per 150 m of hazard. */
 export function hazardMarks(s, scn, coords, t, ends) {
-  const powerOn = (id) => scn.powerHazards.some((p) => p.id === id && t >= p.at) && !s.powerCut[id]
+  const at = hazardsAt(s, scn, t, ends)
   const out = []
   let last = null
   for (let i = 1; i < coords.length - 1; i++) {
     const p = coords[i]
-    if (ends.some((e) => metres(p, e) < 200)) continue
-    let kind = null
-    if (riverM(p) <= ACT2.riverBandM) kind = 'river'
-    const sec = sectionAt(p)
-    if (sec && metres(p, sec.c) < 900) {
-      if (powerOn(sec.id)) kind = 'power'
-      else if (!kind && depthAt(s, sec, t) >= ACT2.deepWaterM) kind = 'deep'
-    }
+    const k = at(p)
+    const kind = k.includes('power') ? 'power' : k.includes('river') ? 'river' : k.includes('deep') ? 'deep' : null
     if (!kind) continue
     if (last && last.kind === kind && metres(last.p, p) < 150) continue
     last = { p, kind }
