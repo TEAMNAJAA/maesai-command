@@ -272,6 +272,23 @@ export function previewField(s, scn, kind, id) {
   return null
 }
 
+/** Salvage team for a damaged boat (BOAT_INCIDENT.salvage). */
+export function previewSalvage(s, scn, boatId) {
+  const inc = (s.incidents || []).find((x) => x.boat === boatId && x.until > s.clock && !x.salvaged)
+  if (!inc) return null
+  const n = A.salvageBoat(s, scn, boatId)
+  const boat = n.boats.find((b) => b.id === boatId)
+  const back = boat.busyUntil
+  const saved = inc.until - back
+  const rows = [
+    row('use', 'info', `${baht(n.budget.spent - s.budget.spent)} · ${inc.kind === 'shock' ? 'ตรวจเรือ + ลูกเรือสำรอง' : 'ลากเรือขึ้นฝั่ง ตรวจเครื่อง'}`),
+    row('get', saved > 0 ? 'good' : 'warn', saved > 0 ? `เรือ ${boatId} กลับมา ${clockLabel(back)} — เร็วกว่ารอซ่อม ${hrs(saved)}` : 'เรือจะซ่อมเสร็จก่อนทีมกู้ถึงอยู่แล้ว'),
+  ]
+  const waiting = s.points.filter((p) => p.revealed && p.status === 'waiting').length
+  if (waiting && saved > 0) rows.push(row('get', 'good', `ยังมีผู้ติดค้างรอ ${waiting} จุด — ได้เรือกลับมาช่วยเร็วขึ้น`, true))
+  return { title: `ส่งทีมกู้เรือ ${boatId}`, rows }
+}
+
 export function previewBoat(s, scn, { point, mission, dest, plan, opt }) {
   if (!point || !opt || !plan) return null
   const travel = (m) => Math.round((m / 1000 / BOAT.speedKmh) * 60)

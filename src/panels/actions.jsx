@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo } from 'react'
 import {
-  ChevronRight, Satellite, ScanSearch, Ruler, ShieldCheck, Megaphone, Clock, Building2, Layers, Check, Cloud, Lock, Ship, Plane, Zap, RadioTower, Droplets, Users, HeartPulse, AlertTriangle, Loader2, Target, Package, Wallet,
+  ChevronRight, Satellite, ScanSearch, Ruler, ShieldCheck, Megaphone, Clock, Building2, Layers, Check, Cloud, Lock, Ship, Plane, Zap, RadioTower, Droplets, Users, HeartPulse, AlertTriangle, Loader2, Target, Package, Wallet, Wrench,
 } from 'lucide-react'
 import { Panel, Btn, Src, Divider } from '../ui/atoms'
 import { Lbl, useMode } from '../ui/label'
@@ -354,6 +354,19 @@ function Incidents({ eng, onPlan }) {
         <span className="font-thai text-[10px] text-slate-500">พบแล้ว {known.length} จุด</span>
         <WhyButton id="boat" />
       </div>
+      {(s.incidents || []).filter((x) => x.until > t).map((x) => (
+        <div key={`${x.boat}-${x.at}`} className="flex items-center gap-2 rounded border border-[#FF8A3D]/45 bg-[#FF8A3D]/[0.07] px-2.5 py-1.5" data-damaged-boat={x.boat}>
+          <span className="font-thai flex-1 text-[11px] leading-snug text-[#FFD6B8]">
+            <b className="text-white">เรือ {x.boat}</b> {x.kind === 'shock' ? 'โดนไฟช็อต' : 'ล่ม'} · {x.salvaged ? `ทีมกู้กำลังนำกลับ เสร็จ ${clockLabel(x.until)}` : `ซ่อมเสร็จ ${clockLabel(x.until)}`}
+          </span>
+          {!x.salvaged && t >= x.at && (
+            <ImpactHover card={I.previewSalvage(s, scn, x.boat)}>
+              <Btn size="sm" variant="warn" icon={Wrench} onClick={() => eng.salvageBoat(x.boat)} data-salvage={x.boat}><span className="font-thai normal-case tracking-normal">กู้เรือ</span></Btn>
+            </ImpactHover>
+          )}
+          <WhyButton id="salvage" />
+        </div>
+      ))}
       {open.length === 0 && <div className="font-thai rounded border border-dashed border-white/10 px-2.5 py-3 text-center text-[11px] text-slate-500">ยังไม่มีจุดที่รอความช่วยเหลือ — สั่ง THEOS-2 ถ่ายรอบถัดไป / ส่งโดรนส่องจุดอับ / ตั้งเสาสื่อสารให้คนโทรแจ้งได้</div>}
       {open.map((p) => {
         const left = p.deadline - t

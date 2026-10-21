@@ -259,6 +259,25 @@ export function buildTower(s, scn, sectionId) {
   return spend(n, scn, CMD_MIN.tower)
 }
 
+/** Salvage team for a boat out of service after an accident: back in BOAT_INCIDENT.salvage[kind] minutes instead of the full repair. */
+export function salvageBoat(s, scn, boatId) {
+  const inc = (s.incidents || []).find((x) => x.boat === boatId && x.until > s.clock && !x.salvaged)
+  const mins = inc && BOAT_INCIDENT.salvage[inc.kind]
+  if (!inc || !mins) return s
+  const n = clone(s)
+  const back = n.clock + CMD_MIN.boat + mins
+  if (back >= inc.until) { toast(n, 'warn', 'เรือจะซ่อมเสร็จก่อนทีมกู้ถึงอยู่แล้ว'); return n }
+  if (!afford(n, BOAT_INCIDENT.salvage.baht, 'ทีมกู้เรือ')) return n
+  const boat = n.boats.find((b) => b.id === boatId)
+  const x = n.incidents.find((y) => y === inc || (y.boat === inc.boat && y.at === inc.at))
+  boat.busyUntil = back
+  x.until = back
+  x.salvaged = true
+  n.jobs.push({ kind: 'salvage', boat: boatId, start: n.clock, at: back })
+  log(n, 'info', 'SALVAGE', `Salvage team sent for ${boatId}.`, `ส่งทีมกู้เรือ ${boatId} — ${inc.kind === 'shock' ? 'ตรวจเรือและเปลี่ยนลูกเรือสำรอง' : 'ลากเรือขึ้นฝั่ง ตรวจเครื่อง'} (${mins} นาที)`)
+  return spend(n, scn, CMD_MIN.boat)
+}
+
 /** Boat dispatch with the route the player chose. `plan` comes from routes.planTrip. */
 export function dispatchBoat(s, scn, { pointId, mission, dest, plan, optionIdx }) {
   const n = clone(s)

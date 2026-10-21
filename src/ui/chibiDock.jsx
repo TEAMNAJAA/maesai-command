@@ -13,7 +13,7 @@ import { fx } from '../lib/fx'
 export const ACTION_POSE = {
   camp: 'clipboard', tasking: 'point', capture: 'point', analysis: 'inspect', channel: 'ruler', seal: 'carry',
   evacuate: 'megaphone', pass2: 'point', drone: 'remote', power: 'switch', tower: 'remote', pump: 'pump',
-  boat: 'clipboard', survey: 'inspect', verdict: 'monitor', lock: 'monitor', review: 'inspect', hint: 'inspect',
+  boat: 'clipboard', salvage: 'carry', survey: 'inspect', verdict: 'monitor', lock: 'monitor', review: 'inspect', hint: 'inspect',
 }
 
 /**

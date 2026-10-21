@@ -287,6 +287,11 @@ function finishJob(n, scn, j) {
       toast(n, 'ok', `สัญญาณกลับมา · โซน ${j.section}`)
       event(n, 'tower', `เสาสื่อสารโซน ${j.section} ใช้งานได้`)
       break
+    case 'salvage':
+      log(n, 'good', 'SALVAGE', `${j.boat} is back in service.`, `กู้เรือ ${j.boat} เสร็จ — กลับมาใช้งานได้แล้ว`)
+      toast(n, 'ok', `เรือ ${j.boat} พร้อมใช้งาน`)
+      event(n, 'salvage', `กู้เรือ ${j.boat} เสร็จ`)
+      break
     case 'power':
       n.powerCut[j.section] = true
       log(n, 'good', 'กฟภ.', `Power isolated in ${j.section}.`, `กฟภ. ตัดไฟโซน ${j.section} แล้ว — ส่งทีมเข้าได้อย่างปลอดภัย`)

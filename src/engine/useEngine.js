@@ -252,6 +252,7 @@ export function useEngine() {
   const deployPump = useCallback(wrap(A.deployPump, 'pump'), [commit])
   const cutPower = useCallback(wrap(A.cutPower, 'power'), [commit])
   const buildTower = useCallback(wrap(A.buildTower, 'tower'), [commit])
+  const salvageBoat = useCallback(wrap(A.salvageBoat, 'salvage'), [commit])
   /* Boat routes from the GISTDA Sphere Routing API, per trip (base · point · destination).
      status: loading → ok | error (Sphere did not answer) | off (no key / offline) */
   const boatRoutes = useRef(new Map())
@@ -378,7 +379,7 @@ export function useEngine() {
     s, scn, mode, sfvi, world, veto1, situation, exposure, cut, advance, skipCut, realMs, realActs: real.current.acts, start, flash, toast,
     act1Over, act2Over, finishBoss, autoBoss,
     setCamp, setTasking, submitAnalysis, submitChannel, sealGaps, sealPlan, orderZones, toggleLayer, routeZone, revealHint,
-    orderPass2, droneSortie, deployPump, cutPower, buildTower, planFor, dispatchBoat, requestBoatRoutes, boatRouteStatus, boatRouteVer,
+    orderPass2, droneSortie, deployPump, cutPower, buildTower, salvageBoat, planFor, dispatchBoat, requestBoatRoutes, boatRouteStatus, boatRouteVer,
     reviewRoof, survey, adjudicate, lockVerdict, lockAll, revealRelief,
     goAct2, goAct3, ackVeto, finishMission, newGame, setMode, setStress,
   }

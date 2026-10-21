@@ -117,3 +117,30 @@ describe('boat incidents on a hazardous route (B7)', () => {
     expect(BOAT.speedKmh).toBeGreaterThan(0)
   })
 })
+
+describe('boat salvage after an accident', () => {
+  it('a salvage team brings the boat back early for money and time — no score lost', async () => {
+    const { careful } = await import('./helpers')
+    const A = await import('../src/engine/actions')
+    const { previewSalvage } = await import('../src/engine/impact')
+    const { decisionLedger } = await import('../src/lib/sim')
+    const { BOAT_INCIDENT } = await import('../src/config/missionConfig')
+    const run = careful(202, { unsafeTrips: 1, stopAfter: 2 })
+    if (run.unsafeLeft) return
+    // replay up to the accident: find it and salvage from just after it happened
+    const inc = run.s.incidents[0]
+    const s = { ...structuredClone(run.s), clock: inc.at + 1 }
+    s.incidents = s.incidents.map((x) => ({ ...x, until: inc.at + BOAT_INCIDENT[x.kind].repairMin, salvaged: false }))
+    s.boats = s.boats.map((b) => (b.id === inc.boat ? { ...b, busyUntil: inc.at + BOAT_INCIDENT[inc.kind].repairMin } : b))
+    const card = previewSalvage(s, run.scn, inc.boat)
+    expect(card.title).toContain(inc.boat)
+    const n = A.salvageBoat(s, run.scn, inc.boat)
+    const boat = n.boats.find((b) => b.id === inc.boat)
+    expect(boat.busyUntil).toBeLessThan(inc.at + BOAT_INCIDENT[inc.kind].repairMin)
+    expect(n.budget.spent - s.budget.spent).toBe(BOAT_INCIDENT.salvage.baht)
+    expect(n.incidents.find((x) => x.boat === inc.boat).salvaged).toBe(true)
+    expect(n.jobs.some((j) => j.kind === 'salvage' && j.boat === inc.boat)).toBe(true)
+    expect(A.salvageBoat(n, run.scn, inc.boat)).toBe(n)                      // once only
+    expect(decisionLedger(n, run.scn).mistakes).toBe(decisionLedger(s, run.scn).mistakes)
+  }, 60000)
+})
