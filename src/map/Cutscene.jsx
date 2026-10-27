@@ -44,8 +44,8 @@ function TheosSat({ x, y, s = 1, rot = 0, rec = false }) {
       </defs>
       {[-1, 1].map((d) => (
         <g key={d}>
-          <rect x={d < 0 ? -64 : 18} y="-3" width="4" height="6" fill="#94a3b8" />
-          <g transform={`translate(${d < 0 ? -112 : 22} -13) skewY(${d * -4})`}>
+          <rect x={d < 0 ? -22 : 18} y="-3" width="4" height="6" fill="#94a3b8" />
+          <g transform={`translate(${d < 0 ? -70 : 22} -13) skewY(${d * -4})`}>
             <rect width="48" height="26" fill="url(#sat-cell)" stroke="#93c5fd" strokeWidth="0.8" />
             {[1, 2, 3, 4, 5].map((i) => <line key={i} x1={i * 8} y1="0" x2={i * 8} y2="26" stroke="#7dd3fc" strokeOpacity="0.45" strokeWidth="0.5" />)}
             <line x1="0" y1="13" x2="48" y2="13" stroke="#7dd3fc" strokeOpacity="0.45" strokeWidth="0.5" />
