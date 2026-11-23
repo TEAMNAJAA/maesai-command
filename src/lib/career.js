@@ -49,6 +49,7 @@ export function rankFor(total) {
 /* ── A4 · the commander's file, per player name ── */
 let memory = {}
 try { memory = JSON.parse(localStorage.getItem(KEY) || '{}') } catch { /* private window */ }
+if (!memory || typeof memory !== 'object' || Array.isArray(memory)) memory = {}   // corrupt / foreign value — start empty instead of a blank screen
 const subs = new Set()
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(memory)) } catch { /* ignore */ } subs.forEach((f) => f()) }
 

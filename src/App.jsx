@@ -247,7 +247,7 @@ export default function App() {
             ) : (
               <div className="flex min-h-0 flex-col gap-2">
                 <div className="min-h-0 flex-1"><CollapsedRail side="left" label="ข้อมูล" onOpen={() => setLeftOpen(true)} /></div>
-                <ChibiDock pose={pose} name={player} compact />
+                {!officer && <ChibiDock pose={pose} name={player} compact />}
               </div>
             )}
             <div className="flex min-h-0 flex-col gap-2">
@@ -293,7 +293,7 @@ export default function App() {
         {channel && <ChannelModal eng={eng} onClose={() => setChannel(false)} />}
         {plan && <BoatPlannerModal eng={eng} pointId={plan} onClose={() => setPlan(null)} />}
         <HowToPlay open={guide} onClose={() => setGuide(false)} onStart={phase === 'title' ? () => { setGuide(false); logger.setPlayer(player); logger.briefingDone(); setPhase('pretest') } : null} />
-        <LeaderboardModal open={board} onClose={() => setBoard(false)} highlight={saved} version={saved?.at} />
+        <LeaderboardModal open={board} onClose={() => setBoard(false)} highlight={saved} version={saved?.at} modeId={s.modeId} />
         <TeacherPanel open={teacher} onClose={() => setTeacher(false)} version={logVersion} />
       </div>
     </ModeContext.Provider>

@@ -163,6 +163,7 @@ export function useEngine() {
   /* real playing time (for the leaderboard and the learning log) */
   const realMs = useCallback(() => (real.current.start ? (real.current.end || Date.now()) - real.current.start : 0), [])
   const markAct = (n) => { const r = real.current; if (r.actStart) r.acts[n] = Date.now() - r.actStart; r.actStart = Date.now() }
+  const stopClock = () => { const r = real.current; if (r.start && !r.end) { markAct(3); r.end = Date.now() } }
 
   /* ── Derived ────────────────────────────────────────────────────────────── */
   const sfvi = useMemo(() => computeSfvi(s, scn), [s, scn])
@@ -292,7 +293,8 @@ export function useEngine() {
   const survey = useCallback(wrap(A.survey, 'survey'), [commit])
   const lockVerdict = useCallback((roofId) => { const next = commit((p, sc) => A.lockVerdict(p, sc, roofId)); logger.relief(reliefSummary(next, scnRef.current)); fx.emit('action', { kind: 'lock' }) }, [commit])
   const lockAll = useCallback(() => { const next = commit((p, sc) => A.lockAll(p, sc)); logger.relief(reliefSummary(next, scnRef.current)) }, [commit])
-  const revealRelief = useCallback(() => commit((p, sc) => A.revealRelief(p, sc)), [commit])
+  // the mission is over once the relief results are open: reading the AAR, the what-if and the post-test is not play time
+  const revealRelief = useCallback(() => { stopClock(); commit((p, sc) => A.revealRelief(p, sc)) }, [commit]) // eslint-disable-line react-hooks/exhaustive-deps
   const adjudicate = useCallback((roofId, verdict) => {
     const next = commit((p, sc) => A.adjudicate(p, sc, roofId, verdict))
     logger.relief(reliefSummary(next, scnRef.current))
@@ -327,7 +329,7 @@ export function useEngine() {
   const start = useCallback(() => { if (!real.current.start) { real.current.start = Date.now(); real.current.actStart = Date.now() } }, [])
   const ackVeto = useCallback(() => commit((p) => ({ ...p, vetoAck: true })), [commit])
   const finishMission = useCallback(() => {
-    if (!real.current.acts[3]) { markAct(3); real.current.end = Date.now() }
+    stopClock()
     commit((p) => ({ ...p, act3Done: true }))
   }, [commit])
 

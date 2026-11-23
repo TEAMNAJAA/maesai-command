@@ -35,6 +35,7 @@ export function dexUnlocks(s, scn) {
 
 let memory = {}
 try { memory = JSON.parse(localStorage.getItem(KEY) || '{}') } catch { /* private window */ }
+if (!memory || typeof memory !== 'object' || Array.isArray(memory)) memory = {}   // corrupt / foreign value — start empty instead of a blank screen
 const subs = new Set()
 let ver = 0
 const emit = () => { ver++; subs.forEach((f) => f()) }

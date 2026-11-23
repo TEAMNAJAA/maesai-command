@@ -105,7 +105,7 @@ export function QuizModal({ open, kind, preScore, onDone, onSkip }) {
 
         <div className="mt-4 flex items-center justify-between">
           {result === null && onSkip
-            ? <button onClick={onSkip} className="font-thai text-[11.5px] text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline">ข้ามแบบทดสอบ (โหมดสาธิต)</button>
+            ? <button onClick={() => { setAns({}); onSkip() }} className="font-thai text-[11.5px] text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline">ข้ามแบบทดสอบ (โหมดสาธิต)</button>
             : <span />}
           {result === null
             ? <Btn variant="primary" size="lg" disabled={!all} onClick={submit}><span className="font-thai normal-case tracking-normal text-[13px]">ส่งคำตอบ ({Object.keys(ans).length}/{QUIZ.length})</span></Btn>

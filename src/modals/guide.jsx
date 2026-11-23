@@ -3,7 +3,7 @@
    คู่มือการเล่นย้ายไปอยู่ที่ modals/intro.jsx (HowToPlay)
    ══════════════════════════════════════════════════════════════════════════ */
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Trophy, Trash2, Zap } from 'lucide-react'
 import { Modal, Btn } from '../ui/atoms'
 import { MODES, TIME, DECISION } from '../config/missionConfig'
@@ -11,8 +11,9 @@ import { TIER_HEX } from '../ui/decision'
 import { leaderboard } from '../lib/leaderboard'
 import { fmt, mmss } from '../lib/format'
 
-export function LeaderboardModal({ open, onClose, highlight, version }) {
-  const [mode, setMode] = useState('beginner')
+export function LeaderboardModal({ open, onClose, highlight, version, modeId = 'beginner' }) {
+  const [mode, setMode] = useState(modeId)
+  useEffect(() => { if (open) setMode(modeId) }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const rows = useMemo(() => leaderboard.top(mode, 10), [mode, open, version]) // eslint-disable-line react-hooks/exhaustive-deps
   const [confirm, setConfirm] = useState(false)
   if (!open) return null
