@@ -3,6 +3,7 @@
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { passBoss } from './probe-kit.mjs'
 
 const OUT = process.argv[2] || 'recordings/probe-impact'
 const BASE = process.argv[3] || 'http://localhost:5173/'
@@ -23,7 +24,7 @@ const pre = MODE === 'expert' ? 'x-' : ''
 // act 1 → act 2 straight away (camp at the district office)
 await tab('base'); await page.locator('[data-camp="cmp-amp"]').click(); await idle()
 await page.evaluate(() => window.__maesai.advance({ mode: 'end' })); await idle()
-await page.waitForSelector('[data-act1-next]', { timeout: 60000 }); await page.locator('[data-act1-next]').click()
+await passBoss(page); await page.locator('[data-act1-next]').click()
 await page.waitForTimeout(800)
 // run until people are known and the storm/power events have come
 for (let i = 0; i < 12; i++) {

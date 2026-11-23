@@ -3,6 +3,7 @@
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { passBoss } from './probe-kit.mjs'
 
 const OUT = process.argv[2] || 'recordings/probe-hints'
 const BASE = process.argv[3] || 'http://localhost:5173/'
@@ -83,7 +84,7 @@ if (await meas.isEnabled().catch(() => false)) {
 
 // ── act 2: planner ladder stops at rung 2; hazard marks appear only after asking
 await page.evaluate(() => window.__maesai.advance({ mode: 'end' })); await idle()
-await page.waitForSelector('[data-act1-next]', { timeout: 60000 }); await page.locator('[data-act1-next]').click()
+await passBoss(page); await page.locator('[data-act1-next]').click()
 await page.waitForTimeout(800)
 for (let i = 0; i < 10; i++) {
   const n = await page.evaluate(() => window.__maesai.s.points.filter((p) => p.revealed && p.status === 'waiting').length)

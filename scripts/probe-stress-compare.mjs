@@ -5,6 +5,7 @@
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { passBoss } from './probe-kit.mjs'
 
 const OUT = process.argv[2] || 'recordings/probe-stress-compare'
 const BASE = process.argv[3] || 'http://localhost:5173/'
@@ -81,7 +82,7 @@ const sessions = names.flatMap((n, i) => [1, 2].map((round) => ({
   await page.waitForSelector('[data-rail="command"]')
   await page.locator('[data-rail="command"] [data-tab="base"]').click(); await page.locator('[data-camp="cmp-amp"]').click(); await idle(page)
   await page.evaluate(() => window.__maesai.advance({ mode: 'end' })); await idle(page)
-  await page.locator('[data-act1-next]').click(); await page.waitForTimeout(500)
+  await passBoss(page); await page.locator('[data-act1-next]').click(); await page.waitForTimeout(500)
   await page.evaluate(() => window.__maesai.advance({ mode: 'end' })); await idle(page)
   await page.locator('[data-act2-next]').click(); await page.waitForTimeout(800)
   for (const r of await page.locator('[data-roof]').all()) { await r.click(); const id = await r.getAttribute('data-roof'); await page.locator(`[data-verdict="${id}-reject"]`).click() }

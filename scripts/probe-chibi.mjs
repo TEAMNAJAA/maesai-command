@@ -4,6 +4,7 @@
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { passBoss } from './probe-kit.mjs'
 const OUT = process.argv[2] || 'recordings/probe-chibi'
 const BASE = process.argv[3] || 'http://localhost:5173/'
 mkdirSync(OUT, { recursive: true })
@@ -64,7 +65,7 @@ for (const [w, h] of [[1920, 1080], [1280, 720]]) {
   await page.screenshot({ path: join(OUT, `${w}-cut.png`) })
   await idle(page)
   await page.evaluate(() => window.__maesai.advance({ mode: 'end' })); await idle(page)
-  await page.locator('[data-act1-next]').click(); await page.waitForTimeout(600)
+  await passBoss(page); await page.locator('[data-act1-next]').click(); await page.waitForTimeout(600)
   o = await overlap(page); if (o) errors.push(`${w} act 2 dock overlaps: ${o}`)
   await page.screenshot({ path: join(OUT, `${w}-act2.png`) })
   await page.evaluate(() => window.__maesai.advance({ mode: 'end' })); await idle(page)
