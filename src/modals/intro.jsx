@@ -18,6 +18,7 @@ import { leaderboard } from '../lib/leaderboard'
 import { Chibi } from '../ui/chibi'
 import { useProfile } from '../lib/profile'
 import { fmt, mmss } from '../lib/format'
+import { TitleHero } from '../ui/titleHero'
 
 const ACTS = [
   {
@@ -319,6 +320,7 @@ function TitleChibi({ onChibi }) {
 
 export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, setStress, onStart, onHowTo, onBoard, onChibi, officer = false, setOfficer, onCareer, unlockAll = false, setUnlockAll }) {
   const file = useCareer(player)
+  const titleRef = useRef(null)
   if (!open) return null
   const un = unlocked(file.rank.index, unlockAll)
   const rankTh = (k) => CAREER.ranks[CAREER.unlocks[k]]?.th
@@ -326,18 +328,25 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
   const lockTh = Object.fromEntries(Object.keys(un.stress).map((k) => [k, rankTh(`stress:${k}`)]))
   const top = leaderboard.top(modeId, 3)
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[radial-gradient(120%_90%_at_50%_10%,rgba(14,40,70,.92),rgba(3,6,14,.97))] backdrop-blur-[3px] keep-blur" data-modal="briefing">
-      <div className="w-[min(980px,94vw)]">
+    <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#03060e]" data-modal="briefing">
+      <TitleHero titleRef={titleRef} />
+      <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-8">
+      <div className="w-[min(1040px,100%)]">
         <div className="text-center">
           <div className="font-mono text-[12px] tracking-[0.35em] text-sky-300/80">THE GEO QUEST 2026 · THEOS-2 GEOSPATIAL MISSION</div>
-          <h1 className="mt-2 font-mono text-[46px] font-bold tracking-[0.12em] text-white" style={{ textShadow: '0 0 36px rgba(56,189,248,.6)' }}>MAE SAI COMMAND</h1>
-          <p className="font-thai mx-auto mt-2 max-w-[760px] text-[17px] leading-relaxed text-slate-200">
+          {/* the push-broom line crossing the screen "images" the title: outline first, then the lit name */}
+          <h1 ref={titleRef} className="relative mx-auto mt-3 w-fit font-mono text-[clamp(34px,6.6vw,98px)] font-bold leading-[1.02] tracking-[0.1em]" data-title>
+            <span className="block text-transparent" style={{ WebkitTextStroke: '1px rgba(125,211,252,.38)' }}>MAE SAI COMMAND</span>
+            <span className="title-lit absolute inset-0 block text-white" data-title-lit aria-hidden
+              style={{ textShadow: '0 0 28px rgba(56,189,248,.75), 0 0 2px rgba(224,242,254,.9)' }}>MAE SAI COMMAND</span>
+          </h1>
+          <p className="font-thai mx-auto mt-3 max-w-[760px] text-[clamp(15px,1.9vw,18px)] leading-relaxed text-slate-200">
             คุณคือ <b className="text-[#FFD066]">ผู้บัญชาการศูนย์ EOC อำเภอแม่สาย</b> — ใช้ <b className="text-sky-200">ภาพดาวเทียม THEOS-2</b> และข้อมูล GISTDA
             เตือนภัย ช่วยผู้ติดค้าง และเยียวยาผู้ประสบอุทกภัยแม่สาย ก.ย. 2567
           </p>
         </div>
 
-        <div className="mt-6 grid grid-cols-3 gap-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {ACTS.map((a) => (
             <div key={a.n} className="rounded-xl border px-4 py-3" style={{ borderColor: `${a.hex}55`, background: `${a.hex}0E` }}>
               <div className="flex items-center gap-2"><a.icon size={17} style={{ color: a.hex }} /><span className="font-thai text-[15px] font-bold text-white">{a.th}</span></div>
@@ -346,9 +355,9 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
           ))}
         </div>
 
-        <div className="mt-5 grid grid-cols-[1fr_300px] gap-4">
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_300px]">
           <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-            <div className="grid grid-cols-[auto_1fr_auto] items-end gap-3">
+            <div className="grid grid-cols-[auto_1fr] items-end gap-3 md:grid-cols-[auto_1fr_auto]">
               {onChibi && !officer && <TitleChibi onChibi={onChibi} />}
               <label>
                 <span className="font-thai text-[12px] text-slate-400">ชื่อผู้เล่น / ทีม</span>
@@ -359,7 +368,7 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
                   <span className="font-thai text-[11px] text-slate-400">{player.trim() ? (file.rank.next ? `สะสม ${fmt(file.total)} · อีก ${fmt(file.rank.toNext)} แต้มถึง${file.rank.next.th}` : `สะสม ${fmt(file.total)} แต้ม · ยศสูงสุด`) : 'ใส่ชื่อเพื่อสะสมแต้มและยศ'}</span>
                 </span>
               </label>
-              <div className="flex gap-1.5">
+              <div className="col-span-2 flex gap-1.5 md:col-span-1">
                 {Object.entries(MODES).map(([id, m]) => (
                   <button key={id} onClick={() => (id !== 'expert' || un.expert) && setMode(id)} data-mode-pick={id} disabled={id === 'expert' && !un.expert && modeId !== 'expert'} data-locked={id === 'expert' && !un.expert ? 1 : 0}
                     title={id === 'expert' && !un.expert ? `ปลดล็อกเมื่อเป็น${rankTh('expert')} (สะสม ${fmt(CAREER.ranks[CAREER.unlocks.expert].min)} แต้ม)` : undefined}
@@ -371,7 +380,7 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
               </div>
             </div>
             {setStress && <StressPicker stress={stress} setStress={setStress} locked={lockedStress} lockTh={lockTh} unlockAll={unlockAll} setUnlockAll={setUnlockAll} />}
-            <div className="mt-4 flex gap-2.5">
+            <div className="mt-4 flex flex-wrap gap-2.5">
               <button onClick={onStart} data-start className="btn flex flex-1 items-center justify-center gap-2 border-[#22E36B]/70 bg-[#22E36B]/20 py-3.5 text-white hover:bg-[#22E36B]/30 shadow-[0_0_30px_-8px_#22E36B]">
                 <Play size={18} fill="currentColor" /><span className="font-thai normal-case tracking-normal text-[18px] font-bold">เริ่มภารกิจ</span>
               </button>
@@ -410,6 +419,7 @@ export function TitleScreen({ open, player, setPlayer, modeId, setMode, stress, 
           </div>
         </div>
         <div className="font-mono mt-5 text-center text-[10.5px] tracking-[0.12em] text-slate-500">DATA · THEOS-2 · SPHERE · เช็คน้ำ (RADARSAT-2) · BD_FOOTPRINT · AWAGAD — ทีม REVENGE · โรงเรียนสิงห์บุรี</div>
+      </div>
       </div>
     </div>
   )

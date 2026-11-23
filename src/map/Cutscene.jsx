@@ -35,7 +35,7 @@ const TOWN_BOX = [99.862, 20.426, 99.906, 20.454]
 
 /* ── THEOS-2 model (bus, panels, camera barrel, X-band antenna) ─────────── */
 
-function TheosSat({ x, y, s = 1, rot = 0, rec = false }) {
+export function TheosSat({ x, y, s = 1, rot = 0, rec = false }) {
   return (
     <g transform={`translate(${x} ${y}) rotate(${rot}) scale(${s})`}>
       <defs>
