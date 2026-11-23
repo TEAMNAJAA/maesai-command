@@ -1,0 +1,36 @@
+@config "../tailwind.portal.config.js";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Colours: river teal for information and calm states, the red-brown of contaminated sediment for
+   "above the standard", a plain light ground that stays readable outdoors on a phone. */
+:root {
+  --bg: #F2F6F4; --card: #FFFFFF; --ink: #10262B; --muted: #4A5E62; --line: #D2DCD8;
+  --river: #0F5E66; --river-soft: #E0EEEE; --silt: #A14E1D; --silt-soft: #F7E7DB; --ok: #2E6F3A; --ok-soft: #E2F0E4;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0C181A; --card: #12242A; --ink: #E3EDEA; --muted: #9DB1B0; --line: #24393D;
+    --river: #5CC3CA; --river-soft: #15333A; --silt: #E8915F; --silt-soft: #3A2417; --ok: #7CCB8A; --ok-soft: #173020;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0C181A; --card: #12242A; --ink: #E3EDEA; --muted: #9DB1B0; --line: #24393D;
+  --river: #5CC3CA; --river-soft: #15333A; --silt: #E8915F; --silt-soft: #3A2417; --ok: #7CCB8A; --ok-soft: #173020;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--ink); }
+body {
+  margin: 0; -webkit-text-size-adjust: 100%;
+  font-family: 'IBM Plex Sans Thai Looped', 'Noto Sans Thai Looped', 'Leelawadee UI', Tahoma, sans-serif;
+  line-height: 1.6;
+}
+.num { font-variant-numeric: tabular-nums; }
+a, button, input, select, summary { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--river); outline-offset: 2px; border-radius: 6px; }
+summary::-webkit-details-marker { display: none; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+html { scroll-behavior: smooth; scroll-padding-top: 112px; }
