@@ -178,6 +178,13 @@ export function bossBest(b) {
   return best
 }
 
+/** Beginner advice: the best hand from what the player can see. The incoming move counts only when it is shown;
+    every later move is unknown, so it is assumed to be the usual surge (the real schedule would give away a dam burst). */
+export function bossAdvice(b) {
+  const shown = (k) => k < b.turn || (k === b.turn && (b.seeNext || !!b.revealed?.[k]))
+  return bossBest({ ...b, moves: b.moves.map((m, i) => (shown(i + 1) ? m : 'surge')) })
+}
+
 /** Play the whole fight with bossBest (no player choices). */
 export function autoFight(b) {
   let n = b

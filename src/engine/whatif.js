@@ -234,7 +234,7 @@ function act2(s, scn) {
     const sec = SECTION_BY_ID[p.section]
     let title, you, alt, lesson, icon = 'find'
     if (!p.revealed) {
-      const q = scn.act2Passes.find((x) => !s.act2Orders[x.id] && x.t < p.deadline && activeAt(p, x.t) && clearSections(scn, x.t).includes(p.section) && !scn.blindSpots.includes(p.section))
+      const q = scn.act2Passes.find((x) => !s.act2Orders[x.id] && x.id !== scn.stress?.lostQ && x.t < p.deadline && activeAt(p, x.t) && clearSections(scn, x.t).includes(p.section) && !scn.blindSpots.includes(p.section))
       if (scn.blindSpots.includes(p.section)) {
         title = `ถ้าส่งโดรนไปโซน ${p.section} (จุดอับ)`
         you = `ไม่มีใครพบ ${p.id} — ดาวเทียมมองไม่เห็นคนในซอยลึก/ใต้ร่มไม้`
@@ -289,7 +289,7 @@ function act2(s, scn) {
 
   /* unordered THEOS-2 passes: who would have been found earlier */
   for (const q of scn.act2Passes) {
-    if (s.act2Orders[q.id] || q.t > s.clock) continue
+    if (s.act2Orders[q.id] || q.t > s.clock || q.id === scn.stress?.lostQ) continue   // Stress: that image is lost whatever you order
     const clear = clearSections(scn, q.t)
     const earlier = s.points.filter((p) => clear.includes(p.section) && !scn.blindSpots.includes(p.section) && activeAt(p, q.t) && (!p.revealed || p.revealedAt > q.t) && !lostOf(p))
     if (!earlier.length) continue

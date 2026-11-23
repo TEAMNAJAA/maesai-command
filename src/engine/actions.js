@@ -114,11 +114,12 @@ export function sealGaps(s, scn, ids, bag = 'bigbag') {
     const g = EMBANKMENT_GAPS.find((x) => x.id === id)
     if (!g) continue
     const bags = g.len * EMBANKMENT.bagsPerMetre
-    if (!afford(n, Math.round(bags * COSTS.bigbag * (sb ? SANDBAG.costFactor : 1)), `${sb ? 'กระสอบทราย' : 'บิ๊กแบ็ก'} ${g.id}`)) break
+    const cost = Math.round(bags * COSTS.bigbag * (sb ? SANDBAG.costFactor : 1))
+    if (!afford(n, cost, `${sb ? 'กระสอบทราย' : 'บิ๊กแบ็ก'} ${g.id}`)) break
     const crew = n.crews.reduce((m, c) => (c.busyUntil < m.busyUntil ? c : m))
     const start = Math.max(n.clock, crew.busyUntil)
     crew.busyUntil = start + Math.round(g.len * DURATIONS.bigbagPerMetre * (sb ? SANDBAG.timeFactor : 1))
-    n.jobs.push({ kind: 'seal', gap: id, crew: crew.id, start, at: crew.busyUntil, bag })
+    n.jobs.push({ kind: 'seal', gap: id, crew: crew.id, start, at: crew.busyUntil, bag, cost })
     started++
   }
   if (started) {

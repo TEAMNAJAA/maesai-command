@@ -16,7 +16,7 @@ import { audio } from '../lib/audio'
 import { fx } from '../lib/fx'
 import { BOSS } from '../config/missionConfig'
 import { BOSS_CARDS } from '../config/scenarioData'
-import { bossSetup, bossIntent, bossTurn, cardBlock, bossBest } from '../engine/boss'
+import { bossSetup, bossIntent, bossTurn, cardBlock, bossBest, bossAdvice } from '../engine/boss'
 import { fmt } from '../lib/format'
 
 const SPEED = typeof window !== 'undefined' ? Math.max(0.2, Number(new URLSearchParams(window.location.search).get('speed')) || 1) : 1
@@ -120,8 +120,7 @@ export function BossBattle({ eng, player = '', onFinish }) {
   // Beginner: the chibi suggests a hand — from what the player can see (an unseen move is assumed to be the usual surge)
   const advice = useMemo(() => {
     if (!b.me.assist || b.status !== 'fight') return []
-    const seen = bossIntent(b)?.visible
-    return bossBest(seen ? b : { ...b, moves: b.moves.map((m, i) => (i === b.turn - 1 ? 'surge' : m)) })
+    return bossAdvice(b)
   }, [b])
   const adviceTh = advice.length ? advice.map((x) => BOSS_CARDS[x].th).join(' + ') : 'ไม่ต้องใช้การ์ดตานี้'
 

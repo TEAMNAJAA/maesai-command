@@ -79,6 +79,15 @@ export function enterAct2(s, scn) {
   const n = clone(resolveBoss(s, scn))            // E: a T0 fight that was not played resolves from the preparation
   const mode = MODES[n.modeId]
   n.act = 2; n.clock = 0; n.act1Done = true; n.toasts = []
+  // gaps the crews had not finished when the crest arrived stay open — finishing them in act 2 would rewrite act 1
+  const late = n.jobs.filter((j) => j.kind === 'seal')
+  if (late.length) {
+    const back = late.filter((j) => j.start >= 0).reduce((a, j) => a + (j.cost || 0), 0)
+    n.jobs = n.jobs.filter((j) => j.kind !== 'seal')
+    n.budget.spent -= back
+    log(n, 'warn', 'EMBANKMENT', `${late.length} gap(s) were not finished before the crest — cancelled${back ? `, ฿${fmt(back)} of unused bags returned` : ''}.`,
+      `ทีมอุดตลิ่ง ${late.length} จุด (${late.map((j) => j.gap).join(', ')}) ไม่ทันก่อนยอดน้ำ — ยกเลิกงาน${back ? ` คืนงบบิ๊กแบ็กที่ยังไม่ได้ใช้ ฿${fmt(back)}` : ''}`)
+  }
   if (n.boss?.done && !n.boss.won) log(n, 'crit', 'BREACH', `Embankment breached at T0 — ${n.breach.zone} runs ${n.breach.extraM} m deeper.`, `ตลิ่งแตกคืนวิกฤต — โซน ${n.breach.zone} น้ำสูงขึ้น ${n.breach.extraM} ม. ตลอดองก์ 2`)
   else if (n.boss?.done) log(n, 'good', 'EMBANKMENT', 'The embankment held through the crest.', 'แนวตลิ่งรับยอดน้ำคืนวิกฤตไว้ได้')
   if (!n.camp) {
@@ -123,6 +132,8 @@ export function enterAct2(s, scn) {
 export function enterAct3(s) {
   const n = clone(s)
   n.act = 3; n.clock = MISSION.act2EndMin; n.act2Done = true; n.toasts = []
+  // people already on a boat are landed when the water recedes — not dropped from both counts
+  for (const j of n.jobs.filter((x) => x.kind === 'boatAtDest').sort((a, b) => a.at - b.at)) land(n, j)
   // anyone still waiting when the water recedes counts as harmed
   for (const p of n.points) if (p.left > 0 && p.status !== 'supplied' && p.status !== 'lost') { p.lost += p.type === 'critical' ? p.left : 0; p.status = p.type === 'critical' ? 'lost' : 'suffered' }
   n.boats.forEach((b) => { b.busyUntil = 0 }); n.jobs = n.jobs.filter((j) => j.kind === 'survey')
@@ -147,10 +158,22 @@ function reveal(n, p, how, at = n.clock) {
   return true
 }
 
-/** Process everything that happens between the current clock and `to`. */
+/** Minutes per internal step. Boats, deadlines and events resolve in the same order however far one call
+    jumps — a skipped cut scene or a slow frame rate (fewer, bigger animation ticks) used to change who survived. */
+const SLICE_MIN = 10
+
+/** Process everything that happens between the current clock and `to` (never past the end of the act). */
 export function advanceTo(s, scn, to) {
-  if (to <= s.clock) return s
+  const end = Math.min(to, s.act === 1 ? 0 : s.act === 2 ? MISSION.act2EndMin : to)
+  if (end <= s.clock) return s
   const n = clone(s)
+  const slice = n.act === 3 ? Infinity : SLICE_MIN          // act 3 moves in days and has no deadlines
+  while (n.clock < end) stepTo(n, scn, Math.min(end, n.clock + slice))
+  return n
+}
+
+/** One step on the working copy `n` (mutated in place). */
+function stepTo(n, scn, to) {
   const from = n.clock
   n.clock = to
   const crossed = (t) => t > from && t <= to
@@ -197,9 +220,13 @@ export function advanceTo(s, scn, to) {
   }
 
   // field jobs (crews, pumps, towers, power cuts, drones, boats)
-  const due = n.jobs.filter((j) => j.at <= to).sort((a, b) => a.at - b.at)
-  n.jobs = n.jobs.filter((j) => j.at > to)
-  for (const j of due) finishJob(n, scn, j)
+  // a job can start the next one inside the same step (pickup → landing → shuttle back): keep going until none is due
+  for (let guard = 0; guard < 50; guard++) {
+    const due = n.jobs.filter((j) => j.at <= to).sort((a, b) => a.at - b.at)
+    if (!due.length) break
+    n.jobs = n.jobs.filter((j) => j.at > to)
+    for (const j of due) finishJob(n, scn, j)
+  }
 
   if (n.act === 2) {
     if (crossed(scn.stormAt)) {
@@ -247,9 +274,9 @@ export function advanceTo(s, scn, to) {
         log(n, 'warn', '1784', `Hotline: ${p.people} people stranded in ${p.section}.`, `สายด่วน 1784 แจ้ง: ผู้ติดค้าง ${p.people} คน โซน ${p.section}`)
         event(n, 'hotline', `สายด่วน 1784: ผู้ติดค้าง ${p.people} คน โซน ${p.section}`)
       }
-      if (to >= p.deadline) {
+      if (to >= p.deadline && p.left > 0) {          // everyone already on a boat: the house deadline no longer applies
         if (p.type === 'hardship') {
-          p.type = 'critical'; p.escalated = p.deadline; p.deadline = to + 6 * 60
+          p.type = 'critical'; p.escalated = p.deadline; p.deadline = p.escalated + 6 * 60
           log(n, 'crit', 'ESCALATION', `${p.id}: supplies never arrived — now needs evacuation.`, `${p.id}: ไม่ได้รับเสบียง อาการทรุด ต้องอพยพด้วยเรือภายใน 6 ชม.`)
           event(n, 'escalate', `${p.id} ไม่ได้รับเสบียง — ต้องอพยพด่วน`)
         } else {
@@ -261,9 +288,6 @@ export function advanceTo(s, scn, to) {
       }
     }
   }
-  if (n.act === 1 && to >= 0 && from < 0) n.clock = 0
-  if (n.act === 2 && to >= MISSION.act2EndMin) n.clock = MISSION.act2EndMin
-  return n
 }
 
 /* ── Job completion ───────────────────────────────────────────────────────── */
@@ -322,21 +346,8 @@ function finishJob(n, scn, j) {
       break
     }
     case 'boatAtDest': {
-      const p = n.points.find((x) => x.id === j.point)
-      if (!p) break
-      p.rescued += j.aboard; p.injAboard = Math.max(0, (p.injAboard || 0) - j.injured)
-      if (j.dest === 'hosp') { n.hospital += j.aboard; p.toHospital += j.injured }
-      else {
-        n.sheltered += j.aboard
-        if (j.injured) {
-          n.wrongDest++
-          log(n, 'crit', 'MEDICAL', `${j.injured} injured taken to a shelter instead of hospital.`, `ส่งผู้บาดเจ็บ ${j.injured} คนไปจุดอพยพแทนโรงพยาบาล — ต้องส่งต่อ เสียคะแนน`)
-          toast(n, 'crit', 'ผู้บาดเจ็บต้องไปโรงพยาบาล')
-        }
-      }
-      if (p.left === 0 && p.status === 'waiting') p.status = 'rescued'
-      log(n, 'good', 'DELIVERED', `${j.boat} landed ${j.aboard} people at ${destOf(j.dest)?.th}.`, `เรือ ${j.boat} ส่ง ${j.aboard} คนถึง${destOf(j.dest)?.th}`)
-      shuttle(n, j, p)
+      const p = land(n, j)
+      if (p) shuttle(n, j, p)
       break
     }
     case 'boatHome':
@@ -347,6 +358,25 @@ function finishJob(n, scn, j) {
       break
     default:
   }
+}
+
+/** A boat lands its passengers at the shelter or hospital. Returns the point (null if gone). */
+function land(n, j) {
+  const p = n.points.find((x) => x.id === j.point)
+  if (!p) return null
+  p.rescued += j.aboard; p.injAboard = Math.max(0, (p.injAboard || 0) - j.injured)
+  if (j.dest === 'hosp') { n.hospital += j.aboard; p.toHospital += j.injured }
+  else {
+    n.sheltered += j.aboard
+    if (j.injured) {
+      n.wrongDest++
+      log(n, 'crit', 'MEDICAL', `${j.injured} injured taken to a shelter instead of hospital.`, `ส่งผู้บาดเจ็บ ${j.injured} คนไปจุดอพยพแทนโรงพยาบาล — ต้องส่งต่อ เสียคะแนน`)
+      toast(n, 'crit', 'ผู้บาดเจ็บต้องไปโรงพยาบาล')
+    }
+  }
+  if (p.left === 0 && p.status === 'waiting') p.status = 'rescued'
+  log(n, 'good', 'DELIVERED', `${j.boat} landed ${j.aboard} people at ${destOf(j.dest)?.th}.`, `เรือ ${j.boat} ส่ง ${j.aboard} คนถึง${destOf(j.dest)?.th}`)
+  return p
 }
 
 /** An evacuation boat keeps running destination ⇄ point on the same route until the point is clear. */
