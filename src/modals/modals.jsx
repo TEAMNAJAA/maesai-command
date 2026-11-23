@@ -417,6 +417,11 @@ export function TeacherPanel({ open, onClose, version }) {
           </div>
         </div>
         <div className="font-thai mt-1 text-[12px] text-slate-400">เก็บในเครื่องนี้ (localStorage) · {sum.sessions} รอบการเล่น{sum.demo ? ` (ไม่นับโหมดสาธิต ${sum.demo} รอบ)` : ''} · ส่งออก CSV ไปวิเคราะห์ Paired t-test ในรายงาน</div>
+        {!logger.persisted && (
+          <div data-log-unsaved className="font-thai mt-2 rounded-md border border-[#FF003C]/40 bg-[#FF003C]/10 px-3 py-2 text-[12px] text-[#FF9DB2]">
+            บันทึกลงเครื่องไม่ได้ (พื้นที่เก็บข้อมูลเต็ม หรือเบราว์เซอร์บล็อก) — ข้อมูลอยู่แค่ในหน้านี้ ส่งออก CSV ก่อนปิดหรือรีเฟรชหน้า
+          </div>
+        )}
         <div className="mt-3 flex gap-1.5 border-b border-white/10">
           {[['overview', 'ภาพรวม Sandbox Test'], ['compare', 'เทียบรอบ 1 → รอบ 2 (สถานการณ์ใหม่)']].map(([id, th]) => (
             <button key={id} onClick={() => setView(id)} data-teacher-tab={id}

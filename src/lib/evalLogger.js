@@ -8,53 +8,88 @@ import { EVAL, HINTS } from '../config/missionConfig'
 
 const KEY = EVAL.storageKey
 let memory = { sessions: [] }      // fallback when storage is blocked (private window, file:// policy)
-
-function load() {
-  try {
-    const raw = localStorage.getItem(KEY)
-    if (raw) memory = JSON.parse(raw)
-  } catch { /* storage unavailable — keep in-memory copy */ }
-  if (!Array.isArray(memory.sessions)) memory = { sessions: [] }
-  return memory
-}
-function save() {
-  if (current && !stored) { memory.sessions.push(current); stored = true }
-  try { localStorage.setItem(KEY, JSON.stringify(memory)) } catch { /* ignore */ }
-}
-
-load()            // once only — re-reading storage would detach `current` from `memory`
 let current = null
 let stored = false  // a session is only written once it holds real data
+let writable = true // the last write reached localStorage (false = quota full or storage blocked)
 const now = () => Date.now()
 const listeners = new Set()
 const emit = () => listeners.forEach((fn) => fn())
+const byStart = (a, b) => String(a.startedAt).localeCompare(String(b.startedAt))
+
+function readDisk() {
+  try {
+    const raw = localStorage.getItem(KEY)
+    const d = raw ? JSON.parse(raw) : null
+    return d && Array.isArray(d.sessions) ? d : null
+  } catch { return null }  // storage unavailable or corrupt — keep the in-memory copy
+}
+function load() {
+  memory = readDisk() || { sessions: [] }
+  return memory
+}
+/** Fold in what another tab (or another copy of the page) wrote since we loaded — a booth or classroom
+    machine often has the game open twice, and a plain write would wipe the other tab's players.
+    Our own run in progress is newer in memory; every other run is newer on disk. */
+function sync() {
+  const disk = readDisk()
+  if (!disk) return
+  if ((disk.clearedAt || 0) > (memory.clearedAt || 0)) {   // the teacher cleared the log in another tab
+    memory.sessions = memory.sessions.filter((x) => x === current)
+    memory.clearedAt = disk.clearedAt
+  }
+  const byId = new Map(memory.sessions.map((x) => [x.id, x]))
+  for (const x of disk.sessions) {
+    if (!x || !x.id || (current && x.id === current.id)) continue
+    byId.set(x.id, x)
+  }
+  memory.sessions = [...byId.values()].sort(byStart)
+}
+function write() {
+  try { localStorage.setItem(KEY, JSON.stringify(memory)); writable = true } catch { writable = false }
+}
+function save() {
+  if (current && !stored) { memory.sessions.push(current); stored = true }
+  sync()
+  write()
+}
+
+load()            // once only — `current` stays the object inside `memory`; sync() never replaces it
+
+/** A fresh session record (also used when the teacher clears the log mid-run, so this run keeps logging). */
+function blank({ hintsEnabled, demo = false, stress = [], seed = null, mode = null, officer = false }) {
+  return {
+    id: `S${new Date().toISOString().replace(/\D/g, '').slice(2, 14)}-${Math.random().toString(36).slice(2, 5)}`,
+    startedAt: new Date().toISOString(),
+    player: '',
+    hintsEnabled,
+    demo,             // presentation / recording run — excluded from Sandbox statistics
+    stress,           // Stress Test conditions chosen by the teacher
+    seed, mode,
+    officer,          // F4 officer-training mode (no chibi / boss fight / music / comic effects)
+    briefingMs: null,
+    pre: null, post: null,
+    actMs: { 1: 0, 2: 0, 3: 0 },
+    layersOpened: [],
+    hints: [],        // hint-ladder rungs the player asked for (rung 2 = pointer, rung 3 = partial answer)
+    rounds: [],
+    triage: null,
+    relief: null,
+    result: null,
+    _t0: now(), _act: null, _actAt: null, _roundAt: null,
+  }
+}
+if (typeof window !== 'undefined') {
+  // the teacher panel follows players logged in another tab
+  window.addEventListener('storage', (e) => { if (e.key === KEY) { sync(); emit() } })
+}
 
 export const logger = {
   subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
 
   /** Begin a new player session (called when the briefing opens). */
-  start({ hintsEnabled, demo = false, stress = [], seed = null, mode = null, officer = false }) {
+  start(opts) {
     stored = false
-    current = {
-      id: `S${new Date().toISOString().replace(/\D/g, '').slice(2, 14)}-${Math.random().toString(36).slice(2, 5)}`,
-      startedAt: new Date().toISOString(),
-      player: '',
-      hintsEnabled,
-      demo,             // presentation / recording run — excluded from Sandbox statistics
-      stress,           // Stress Test conditions chosen by the teacher
-      seed, mode,
-      officer,          // F4 officer-training mode (no chibi / boss fight / music / comic effects)
-      briefingMs: null,
-      pre: null, post: null,
-      actMs: { 1: 0, 2: 0, 3: 0 },
-      layersOpened: [],
-      hints: [],        // hint-ladder rungs the player asked for (rung 2 = pointer, rung 3 = partial answer)
-      rounds: [],
-      triage: null,
-      relief: null,
-      result: null,
-      _t0: now(), _act: null, _actAt: null, _roundAt: null,
-    }
+    current = blank(opts)
     emit()
     return current.id
   },
@@ -119,12 +154,25 @@ export const logger = {
     save(); emit()
   },
 
-  sessions() { return memory.sessions },
+  sessions() { sync(); return memory.sessions },
+  /** false when the last write did not reach localStorage — the teacher should export before closing. */
+  get persisted() { return writable },
 
-  clear() { memory = { sessions: [] }; current = null; stored = false; save(); emit() },
+  /** Wipe every stored session (teacher). The run in progress keeps logging from now on: a teacher
+      typically clears the test data at the title screen, right before the first student plays. */
+  clear() {
+    memory = { sessions: [], clearedAt: now() }
+    stored = false
+    if (current) {
+      const { hintsEnabled, demo, stress, seed, mode, officer, _act } = current
+      current = { ...blank({ hintsEnabled, demo, stress, seed, mode, officer }), _act, _actAt: _act ? now() : null }
+    }
+    write(); emit()
+  },
 
   /** Sandbox Test pass criteria computed across every stored session. */
   summary() {
+    sync()
     const real = memory.sessions.filter((s) => !s.demo)
     const ss = real.filter((s) => s.rounds.length > 0)
     const firstLayers = ss.map((s) => (s.rounds.find((r) => r.kind !== 'HOLD') || s.rounds[0]).layersOpened ?? 0)
@@ -150,6 +198,7 @@ export const logger = {
   },
 
   sessionsCSV() {
+    sync()
     const head = ['session_id', 'player', 'started_at', 'demo', 'hints', 'briefing_min', 'pre_score', 'post_score', 'gain_pct',
       'act1_sec', 'act2_sec', 'act3_sec', 'layers_opened_total', 'layers_before_first_decision', 'decisions',
       'first_decision', 'first_decision_clock', 'evacuated_communities', 'triage_hits', 'relief_correct',
@@ -175,6 +224,7 @@ export const logger = {
 
   /** One row per hint request — when, in which act, on which topic, how deep. */
   hintsCSV() {
+    sync()
     const head = ['session_id', 'player', 'act', 'clock_min', 'topic', 'rung', 'rung_kind', 'sec_from_start']
     const rows = []
     for (const s of memory.sessions) for (const h of s.hints || []) {
@@ -184,6 +234,7 @@ export const logger = {
   },
 
   roundsCSV() {
+    sync()
     const head = ['session_id', 'player', 'round', 'act', 'kind', 'clock', 'event_time', 'round_sec', 'water_m', 'sfvi',
       'confidence', 'justified', 'layers_opened', 'layers_active', 'swaths_tasked', 'communities_ordered',
       'sfvi_recommended', 'match_sfvi', 'outcome', 'trust_after', 'channel_measured', 'gaps_sealed']
@@ -208,8 +259,15 @@ function hintCols(s) {
   return [hs.filter((h) => h.rung === 2).length, hs.filter((h) => h.rung === 3).length, Math.min(HINTS.maxPenalty, pts), Object.keys(top).join(' ')]
 }
 
+/** One CSV cell. A player name such as =HYPERLINK(…) or +cmd would run as a formula when the teacher
+    opens the file in Excel / Sheets — text that starts with = + - @ tab or CR gets a leading ' (numbers stay numbers). */
+export function csvCell(c) {
+  let v = String(c ?? '')
+  if (v && '=+-@\t\r'.includes(v[0]) && !Number.isFinite(Number(v))) v = `'${v}`
+  return `"${v.replace(/"/g, '""')}"`
+}
 function toCSV(rows) {
-  return '﻿' + rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+  return '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\n')
 }
 
 export function downloadText(text, filename, type = 'text/csv;charset=utf-8') {
